@@ -27,3 +27,9 @@ Thumbs.db
 
 # Worktrees
 .worktrees/
+
+# Build
+dist/
+
+# Env
+.env
