@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/gnolang/gno-mcp/internal/client"
 	"github.com/gnolang/gno-mcp/internal/mcp"
 )
 
@@ -15,5 +16,6 @@ func main() {
 }
 
 func run() error {
-	return mcp.New().ServeStdio()
+	c := client.NewFake()
+	return mcp.New(c).ServeStdio()
 }
