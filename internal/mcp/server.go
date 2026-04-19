@@ -34,3 +34,13 @@ func (s *Server) Dispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 	}
 	return t.Handler(ctx, req)
 }
+
+// ListToolNames returns the names of all registered tools.
+func (s *Server) ListToolNames() []string {
+	all := s.s.ListTools()
+	names := make([]string, 0, len(all))
+	for name := range all {
+		names = append(names, name)
+	}
+	return names
+}

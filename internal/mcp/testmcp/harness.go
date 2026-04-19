@@ -28,6 +28,12 @@ func New(t *testing.T) *Harness {
 	return &Harness{Srv: gnomcp.New(f, a), Client: f, Audit: a}
 }
 
+// ListTools returns the names of all tools registered in the server.
+func (h *Harness) ListTools(t *testing.T) []string {
+	t.Helper()
+	return h.Srv.ListToolNames()
+}
+
 func (h *Harness) Call(t *testing.T, name string, args map[string]any) *mcp.CallToolResult {
 	t.Helper()
 	req := mcp.CallToolRequest{}
