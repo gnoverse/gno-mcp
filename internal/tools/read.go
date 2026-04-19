@@ -2,11 +2,12 @@ package tools
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"strconv"
 	"strings"
 
 	"github.com/gnolang/gno-mcp/internal/audit"
+	"github.com/gnolang/gno-mcp/internal/budget"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -49,12 +50,14 @@ func registerRead(s *server.MCPServer, d Deps) {
 
 		_ = d.Audit.Append(audit.Entry{Tool: "gno_read", Network: network, Result: "ok"})
 
-		if !sliceRequested && len(result) > 4096 {
-			summary := fmt.Sprintf(`{"summary":"%d bytes; request a slice via symbol/file/lines","gnoweb_url":"https://%s/%s"}`,
-				len(result), network, path)
-			return mcp.NewToolResultText(summary), nil
+		gnowebURL := "https://" + network + "/" + path
+		br := budget.Apply(result, gnowebURL, sliceRequested)
+
+		if br.Truncated {
+			summaryJSON, _ := json.Marshal(br)
+			return mcp.NewToolResultText(string(summaryJSON)), nil
 		}
 
-		return mcp.NewToolResultText(untrustedEnvelope("source", path, result)), nil
+		return mcp.NewToolResultText(untrustedEnvelope("source", path, br.Full)), nil
 	})
 }

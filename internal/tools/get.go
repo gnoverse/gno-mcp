@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gnolang/gno-mcp/internal/audit"
+	"github.com/gnolang/gno-mcp/internal/budget"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -39,16 +40,14 @@ func registerGet(s *server.MCPServer, d Deps) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		const maxLen = 4096
-		truncated := false
-		if len(result) > maxLen {
-			result = result[:maxLen]
-			truncated = true
-		}
+		gnowebURL := "https://" + network + "/" + path
+		br := budget.Apply(result, gnowebURL, false)
 
-		wrapped := untrustedEnvelope(kind, path, result)
-		if truncated {
-			wrapped += "\n[output truncated, full content at https://" + network + "/" + path + "]"
+		var wrapped string
+		if br.Truncated {
+			wrapped = "[output truncated, full content at " + gnowebURL + "]"
+		} else {
+			wrapped = untrustedEnvelope(kind, path, br.Full)
 		}
 
 		_ = d.Audit.Append(audit.Entry{Tool: "gno_get", Network: network, Result: "ok"})
