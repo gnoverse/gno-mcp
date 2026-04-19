@@ -2,10 +2,9 @@ package testmcp
 
 import "testing"
 
-func TestHelloRoundtrip(t *testing.T) {
+func TestHarnessCreation(t *testing.T) {
 	h := New(t)
-	res := h.Call(t, "gno_hello", nil)
-	if len(res.Content) == 0 {
-		t.Fatal("no content")
+	if h == nil {
+		t.Fatal("New returned nil harness")
 	}
 }

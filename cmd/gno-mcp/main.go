@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/gnolang/gno-mcp/internal/audit"
 	"github.com/gnolang/gno-mcp/internal/client"
 	"github.com/gnolang/gno-mcp/internal/mcp"
 )
@@ -16,6 +17,9 @@ func main() {
 }
 
 func run() error {
-	c := client.NewFake()
-	return mcp.New(c).ServeStdio()
+	a, err := audit.Default()
+	if err != nil {
+		return err
+	}
+	return mcp.New(client.NewFake(), a).ServeStdio()
 }

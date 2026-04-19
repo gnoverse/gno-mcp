@@ -3,8 +3,10 @@ package testmcp
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 
+	"github.com/gnolang/gno-mcp/internal/audit"
 	"github.com/gnolang/gno-mcp/internal/client"
 	gnomcp "github.com/gnolang/gno-mcp/internal/mcp"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,12 +15,17 @@ import (
 type Harness struct {
 	Srv    *gnomcp.Server
 	Client *client.Fake
+	Audit  *audit.Log
 }
 
 func New(t *testing.T) *Harness {
 	t.Helper()
 	f := client.NewFake()
-	return &Harness{Srv: gnomcp.New(f), Client: f}
+	a, err := audit.Open(filepath.Join(t.TempDir(), "audit.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Harness{Srv: gnomcp.New(f, a), Client: f, Audit: a}
 }
 
 func (h *Harness) Call(t *testing.T, name string, args map[string]any) *mcp.CallToolResult {
