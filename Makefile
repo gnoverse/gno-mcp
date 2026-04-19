@@ -1,4 +1,4 @@
-.PHONY: install test run lint clean
+.PHONY: install test run lint clean e2e
 
 install:
 	go install ./cmd/gno-mcp
@@ -15,3 +15,6 @@ lint:
 
 clean:
 	rm -rf dist/
+
+e2e: install
+	bash scripts/e2e.sh
