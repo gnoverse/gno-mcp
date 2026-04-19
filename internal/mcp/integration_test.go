@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	_ "github.com/gnolang/gno-mcp/internal/tools" // trigger all init() registrations
 	"github.com/gnolang/gno-mcp/internal/mcp/testmcp"
+	_ "github.com/gnolang/gno-mcp/internal/tools" // trigger all init() registrations
 )
 
 func TestAllToolsRegistered(t *testing.T) {

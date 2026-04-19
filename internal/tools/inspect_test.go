@@ -10,8 +10,8 @@ import (
 func TestInspect(t *testing.T) {
 	h := testmcp.New(t)
 	h.Client.Realms["gno.land/r/demo/boards"] = &client.RealmInspection{
-		Path:    "gno.land/r/demo/boards",
-		Files:   []string{"board.gno", "post.gno"},
+		Path:      "gno.land/r/demo/boards",
+		Files:     []string{"board.gno", "post.gno"},
 		GnowebURL: "https://gno.land/r/demo/boards",
 		Functions: []client.FuncSig{
 			{Name: "NewBoard", Public: true, Params: []string{"name string"}, Return: []string{"int64"}},
