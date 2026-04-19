@@ -53,3 +53,16 @@ func AsJSON(t *testing.T, r *mcp.CallToolResult, out any) {
 		t.Fatalf("unmarshal: %v\n%s", err, tc.Text)
 	}
 }
+
+// TextContent returns the first text content from a result as a string.
+func TextContent(t *testing.T, r *mcp.CallToolResult) string {
+	t.Helper()
+	if len(r.Content) == 0 {
+		t.Fatal("empty content")
+	}
+	tc, ok := r.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("first content not text: %T", r.Content[0])
+	}
+	return tc.Text
+}
