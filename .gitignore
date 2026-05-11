@@ -24,3 +24,12 @@ go.work.sum
 # OS
 .DS_Store
 Thumbs.db
+
+# Worktrees
+.worktrees/
+
+# Build
+dist/
+
+# Env
+.env
