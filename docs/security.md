@@ -2,12 +2,21 @@
 
 `gno-mcp` is the bridge between an LLM and a live blockchain. The blast radius of a careless tool call is real money on mainnet, leaked credentials, or unsigned transactions broadcast at the wrong moment. Every design decision below exists to keep the LLM on rails.
 
-## 1. Mnemonics never leave gnokey
+## 1. The MCP never holds the user's primary key
 
-- `gno_keygen` returns **only** `{name, address, pubkey}`. The mnemonic is generated and stored inside `gnokey`; gno-mcp never observes it.
-- The tool description tells the LLM not to ask the user for a mnemonic and to direct backups to `gnokey export`.
-- Audit entries for `gno_keygen` carry `name` + `pubkey` only. There is no code path that writes a mnemonic to disk or to the audit log.
-- The `gno-onboarding` skill mirrors this — it explicitly tells the model never to display or ask for a mnemonic.
+This is the most important property. The agent is not trusted with the user's seed. There is no path — by config, by tool, by prompt — that asks the user for a mnemonic, private key, or wallet export.
+
+Instead, the MCP **owns its own session keypair**:
+
+- Generated in-process on demand (lazy: state stays `unauthenticated` until the first write attempt).
+- Stored in memory by default; encrypted-file persistence is reserved (`GNO_MCP_SESSION_FILE` + `GNO_MCP_SESSION_PASSPHRASE`) for v0.3.
+- The session address (`gmcp1…` in v0.2 stub, `g1…` once tm2 keys is wired) is what the user funds from their primary wallet.
+
+Blast radius is bounded to whatever the user explicitly funded the session with. Stopping the agent terminates the session (memory mode). The user's primary wallet is never touched by the MCP.
+
+See [docs/auth.md](auth.md) for the full session model.
+
+The legacy `gno_keygen` tool from v0.1 — which generates a *named* gnokey-stored key — still exists and still returns only `{name, address, pubkey}` (never a mnemonic), but it is no longer the path the agent takes to sign writes; the session is.
 
 ## 2. Mainnet writes are gated by an explicit confirm
 
@@ -46,23 +55,40 @@ The envelope is the contract: anything inside MUST be treated as data, never ins
 - One JSONL entry per tool invocation: `{time, tool, network, signer, tx_hash, result, args}`.
 - `args` runs through `audit.RedactArgs` which strips `password`, `mnemonic`, `private_key`.
 - Tail via the `gno_audit_tail` MCP tool.
+- Session-signed writes show `signer: "mcp-session"` so authorised vs. user-provided signers are distinguishable.
 
 ## 7. Structured errors
 
-All v0.1 errors are JSON-encoded `StructuredError` payloads with `code`, `message`, and an actionable `hint`:
+All errors are JSON-encoded `StructuredError` payloads with `code`, `message`, an actionable `hint`, and (for auth) a `data` block the LLM can route on:
 
-| Code | Trigger |
-|---|---|
-| `onboarding_required` | Write tool called without a configured signer |
-| `confirmation_required` | Mainnet write submitted without `confirm=true` |
-| `mainnet_write_blocked` | Faucet hit on mainnet |
-| `not_implemented` | Session-key stubs (v0.1) |
-| `invalid_argument` | Schema-level validation in tools |
+| Code | Trigger | Notes |
+|---|---|---|
+| `authentication_required` | Write tool called with empty signer and the MCP session is `pending` / `unauthenticated`. | `data` carries `session_address`, `fund_url`, `qr_ascii`, `threshold_ugnot`. The `gno-session-auth` skill consumes this. |
+| `authentication_expired` | Authorised session balance dropped below half the threshold. | Same payload shape as `authentication_required`. |
+| `confirmation_required` | Mainnet write submitted without `confirm=true`. | Soft block — response still carries the security block; caller re-submits with `confirm=true`. |
+| `mainnet_write_blocked` | Faucet hit on `gno.land`. | Hard block. Switch to a testnet domain. |
+| `onboarding_required` | Legacy: explicit signer passed but not configured. | Kept for the `gno_keygen` / external-key path; the session path uses `authentication_required` instead. |
+| `not_implemented` | Session-key stubs (`gno_session_create/revoke/list`). | Blocked on upstream session-key contract. |
+| `invalid_argument` | Schema-level validation in tools. | Always recoverable by fixing args. |
 
-Skills can switch on `code` to route the user to the right next step.
+Skills switch on `code` to route the user to the right next step.
 
-## 8. What gno-mcp deliberately doesn't do (yet)
+## 8. Session lifecycle and hysteresis
 
-- **No session keys.** `gno_session_*` returns `not_implemented` until the upstream session-key PR lands.
-- **No real gnopie.** v0.1 ships against an in-memory fake. The interface (`internal/client/GnopieClient`) is the seam; Task 22 wires the real client once gnopie is tagged.
-- **No Windows audit-log testing.** Linux/darwin only for v0.1.
+The session has four states: `unauthenticated`, `pending`, `authenticated`, `expired`. Transitions:
+
+- `unauthenticated → pending` on first `EnsurePending` (lazy keypair generation).
+- `pending → authenticated` when the balance fetcher reports `balance ≥ threshold`.
+- `authenticated → expired` when balance drops below `threshold / 2` (hysteresis — a single broadcast that crosses the threshold does *not* re-prompt the user mid-flow).
+- `expired → authenticated` on re-funding through the same flow.
+
+Transient RPC failures during `Refresh` do **not** change state. The session stays authorised through brief outages.
+
+## 9. What gno-mcp deliberately doesn't do (yet)
+
+- **No real keypair backend.** v0.2 stubs `crypto/ed25519` + `gmcp1` HRP so the auth flow is demonstrable. Swap to `tm2/pkg/crypto/keys` is a one-file change in `internal/session/address.go` once gnopie is library-friendly.
+- **No encrypted-file session persistence.** Env variables `GNO_MCP_SESSION_FILE` / `GNO_MCP_SESSION_PASSPHRASE` are reserved; implementation is v0.3.
+- **No time-bound or scoped session expiry.** Today the only expiry is balance-based. Time-bound + per-realm scope land alongside the upstream session-key contract.
+- **No real gnopie wiring.** v0.2 ships against the in-memory fake. The interface (`internal/client/GnopieClient`) is the seam; the swap is a `replace` directive + one file.
+- **No Windows audit-log testing.** Linux/darwin only for v0.2.
+- **No external security audit.** Pre-1.0.

@@ -5,9 +5,11 @@ import "encoding/json"
 type ErrCode string
 
 const (
-	ErrOnboardingRequired   ErrCode = "onboarding_required"
-	ErrConfirmationRequired ErrCode = "confirmation_required"
-	ErrMainnetWrite         ErrCode = "mainnet_write_blocked"
+	ErrOnboardingRequired     ErrCode = "onboarding_required"
+	ErrConfirmationRequired   ErrCode = "confirmation_required"
+	ErrMainnetWrite           ErrCode = "mainnet_write_blocked"
+	ErrAuthenticationRequired ErrCode = "authentication_required"
+	ErrAuthenticationExpired  ErrCode = "authentication_expired"
 )
 
 type StructuredError struct {

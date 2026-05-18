@@ -1,6 +1,13 @@
 # Tools
 
-All 16 v0.1 tools, in stable order. Every tool is registered through `internal/tools/tools.go` with explicit annotations (`readOnlyHint`, `destructiveHint`, etc.) the MCP client can use to gate confirmations.
+17 v0.2 tools, in stable order. Every tool is registered through `internal/tools/tools.go` with explicit annotations (`readOnlyHint`, `destructiveHint`, etc.) the MCP client can use to gate confirmations.
+
+## Auth
+
+### `gno_auth_status`
+- **Args:** `ensure_pending?` (bool, default `true`)
+- **Returns:** `{state, network, session_address, balance_ugnot, threshold_ugnot, created_at, last_check, fund_url?, web_fund_url?, qr_ascii?, human_guidance?}`
+- Returns the MCP session's current authorization state. On a fresh process, the default `ensure_pending=true` lazily generates the session keypair and returns the fund payload. Use `ensure_pending=false` to read state without creating a keypair. See [docs/auth.md](auth.md) for the model.
 
 ## Read-only
 
@@ -49,9 +56,9 @@ All 16 v0.1 tools, in stable order. Every tool is registered through `internal/t
 ## Writes
 
 ### `gno_call`
-- **Args:** `network` (required), `path` (required), `func` (required), `signer?`, `args?[]`, `send?`, `confirm?`
+- **Args:** `network?` (default `gno.land`), `path` (required), `func` (required), `signer?`, `args?[]`, `send?`, `confirm?`
 - **Returns:** `{security: SecurityBlock, simulation: CallResult, broadcast: CallResult|null}`
-- Always simulates first. If `signer` is empty and config has no `default_key`, returns an `onboarding_required` structured error. On `gno.land` mainnet, a missing `confirm: true` keeps `broadcast: null` and sets `security.confirmation_required: true` — no transaction is sent. Audits the tx hash on success.
+- Always simulates first. **Signer resolution:** explicit `signer` arg → MCP session (if authenticated) → return `authentication_required` (or `authentication_expired`) with a fund payload. On `gno.land` mainnet, a missing `confirm: true` keeps `broadcast: null` and sets `security.confirmation_required: true` — no transaction is sent. Session-signed broadcasts show `signer: "mcp-session"` in the audit log.
 
 ### `gno_run`
 - **Args:** `network` (required), `code` (required), `signer?`, `send?`, `confirm?`

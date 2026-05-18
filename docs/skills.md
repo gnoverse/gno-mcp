@@ -6,7 +6,8 @@ The `skills/` directory is a Claude plugin package. Each subdirectory is a singl
 
 | Skill | Trigger |
 |---|---|
-| [`gno-onboarding`](../skills/gno-onboarding/SKILL.md) | `onboarding_required` error, or "I want to try gno", "set me up". Default network testnet. Never asks for or shows a mnemonic. |
+| [`gno-session-auth`](../skills/gno-session-auth/SKILL.md) | `authentication_required` / `authentication_expired` error, or "how do I sign in / pair this". Walks the user through funding the MCP's session address. Never asks for the user's primary key. |
+| [`gno-onboarding`](../skills/gno-onboarding/SKILL.md) | `onboarding_required` error, or "I want to try gno", "set me up". Default network testnet. Never asks for or shows a mnemonic. (Legacy v0.1 path — most users hit `gno-session-auth` first now.) |
 | [`gno-explore-realm`](../skills/gno-explore-realm/SKILL.md) | User pastes a realm path / gnoweb URL / asks "what does this realm do". Calls `gno_get` + `gno_inspect`, summarises. |
 | [`gno-read-contract`](../skills/gno-read-contract/SKILL.md) | "How does this contract work / is it safe / what does function X do". Reads in slices, surfaces invariants and risk patterns. Never dumps full source. |
 | [`gno-debug-tx`](../skills/gno-debug-tx/SKILL.md) | Failed-tx hash or error string. Classifies the failure, reads the called function, proposes a concrete fix. |

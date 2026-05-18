@@ -9,13 +9,15 @@ import (
 	"github.com/gnolang/gno-mcp/internal/audit"
 	"github.com/gnolang/gno-mcp/internal/client"
 	gnomcp "github.com/gnolang/gno-mcp/internal/mcp"
+	"github.com/gnolang/gno-mcp/internal/session"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
 type Harness struct {
-	Srv    *gnomcp.Server
-	Client *client.Fake
-	Audit  *audit.Log
+	Srv     *gnomcp.Server
+	Client  *client.Fake
+	Audit   *audit.Log
+	Session *session.Manager
 }
 
 func New(t *testing.T) *Harness {
@@ -25,7 +27,33 @@ func New(t *testing.T) *Harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Harness{Srv: gnomcp.New(f, a), Client: f, Audit: a}
+	// Tests get a session whose balance fetcher reads from the fake's
+	// Addresses map. That lets a test seed a credited address and call
+	// Refresh to flip the session to authenticated.
+	sess := session.New(session.Options{
+		Network: "staging.gno.land",
+		Balance: func(ctx context.Context, network, addr string) (int64, error) {
+			info, err := f.AddressInfo(ctx, network, addr)
+			if err != nil {
+				return 0, err
+			}
+			// Parse "1000000ugnot" → 1000000. Tolerate trailing units.
+			var ugnot int64
+			for _, c := range info.Balance {
+				if c < '0' || c > '9' {
+					break
+				}
+				ugnot = ugnot*10 + int64(c-'0')
+			}
+			return ugnot, nil
+		},
+	})
+	return &Harness{
+		Srv:     gnomcp.NewWithSession(f, a, sess),
+		Client:  f,
+		Audit:   a,
+		Session: sess,
+	}
 }
 
 // ListTools returns the names of all tools registered in the server.
