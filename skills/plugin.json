@@ -1,8 +1,9 @@
 {
   "name": "gno-skills",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Claude skills for gno.land via gno-mcp.",
   "skills": [
+    "gno-session-auth",
     "gno-onboarding",
     "gno-explore-realm",
     "gno-read-contract",
