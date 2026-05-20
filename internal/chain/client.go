@@ -15,10 +15,13 @@ type Client interface {
 	// Backed by vm/qeval.
 	Eval(ctx context.Context, realm, expr string) (string, error)
 
-	// File returns the raw source of a file in a realm.
-	// If file is empty, returns a list of file names.
-	// Backed by vm/qfile.
+	// File returns the raw source of a single file in a realm.
+	// Backed by vm/qfile with an explicit file name.
 	File(ctx context.Context, realm, file string) (string, error)
+
+	// ListFiles returns the file names that make up a realm.
+	// Backed by vm/qfile without a file name argument.
+	ListFiles(ctx context.Context, realm string) ([]string, error)
 
 	// Doc returns the realm's package + per-function godoc.
 	// Backed by vm/qdoc.

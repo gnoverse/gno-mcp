@@ -25,6 +25,15 @@ func TestFake_Render_unknownRealm(t *testing.T) {
 	}
 }
 
+func TestFake_Render_pathMismatch(t *testing.T) {
+	f := NewFake()
+	f.SetRender("gno.land/r/foo", "page-a", "body A")
+	_, err := f.Render(context.Background(), "gno.land/r/foo", "page-b")
+	if err == nil {
+		t.Fatal("expected miss when realm matches but path does not")
+	}
+}
+
 func TestFake_Eval(t *testing.T) {
 	f := NewFake()
 	f.SetEval("gno.land/r/x", "Total()", "42")
@@ -46,6 +55,26 @@ func TestFake_File(t *testing.T) {
 	}
 	if got != "package x\n" {
 		t.Errorf("File = %q", got)
+	}
+}
+
+func TestFake_ListFiles(t *testing.T) {
+	f := NewFake()
+	f.SetListing("gno.land/r/x", []string{"x.gno", "helper.gno"})
+	got, err := f.ListFiles(context.Background(), "gno.land/r/x")
+	if err != nil {
+		t.Fatalf("ListFiles: %v", err)
+	}
+	if len(got) != 2 || got[0] != "x.gno" || got[1] != "helper.gno" {
+		t.Errorf("ListFiles = %v", got)
+	}
+}
+
+func TestFake_ListFiles_unknownRealm(t *testing.T) {
+	f := NewFake()
+	_, err := f.ListFiles(context.Background(), "gno.land/r/missing")
+	if err == nil {
+		t.Fatal("expected error for unknown realm listing")
 	}
 }
 
