@@ -18,7 +18,7 @@ func DiscoverLocal(ctx context.Context, p Profile, timeout time.Duration) (bool,
 	url := p.RPCURL + "/status"
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return false, fmt.Errorf("build status request: %w", err)
 	}
@@ -27,7 +27,7 @@ func DiscoverLocal(ctx context.Context, p Profile, timeout time.Duration) (bool,
 		return false, nil // unreachable is not a hard error; profile just unavailable
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return false, nil
 	}
 	var body struct {
