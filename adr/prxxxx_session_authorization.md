@@ -27,7 +27,11 @@ gno-mcp v2 signs writes exclusively with chain-bounded session keys. The master 
 5. User reviews the proposed scope, runs the command via their own `gnokey` (or wallet), signs with their master, broadcasts `MsgCreateSession`.
 6. Agent retries the original write tool. gnomcp performs an on-demand chain query, finds the session active, signs the broadcast with the session privkey.
 
-Sessions are immutable after creation; scope expansion requires a new `MsgCreateSession`. Multiple sessions per profile are supported; gnomcp picks the most recently created session whose `AllowPaths` matches the requested realm and that has not expired or run down its `SpendLimit`. Session private keys live in process memory only; restart re-prompts authorization.
+Sessions are immutable after creation; scope expansion requires a new `MsgCreateSession`. Multiple sessions per profile are supported; gnomcp picks the most recently created session whose `AllowPaths` matches the requested realm and that has not expired or run down its `SpendLimit`.
+
+**Session private keys persist by default on a mounted volume** at `/var/lib/gnomcp/sessions/<profile>.key` (file mode `0600`). On startup, gnomcp reads existing keys and verifies each is still active on chain via ABCI query; valid sessions are reused without re-prompting. Expired or revoked sessions trigger a fresh proposal on the next write attempt.
+
+Persistence is controlled by Docker volume convention: mounting `/var/lib/gnomcp` (the default invocation) keeps sessions across container removals; not mounting it makes sessions ephemeral within the container's writable layer. Encryption-at-rest is opt-in via the `GNOMCP_SESSION_PASSPHRASE` env var; if unset, the privkey is stored plain on disk.
 
 **Scope policy** resolves `gno_session_propose` arguments through four layers (priority high to low):
 
@@ -56,7 +60,7 @@ A per-profile `bypass-hard-limits = true` escape hatch disables layer 4 for that
 
 **Per-profile manual scope without hardcoded floors.** Rejected. Most users will not edit `profiles.toml`; sensible safe defaults and a chain-type-aware ceiling must be structural, not opt-in.
 
-**Persistent on-disk session keys.** Deferred. v2 holds session privkeys in process memory only. Restart re-prompts. Encrypted-on-disk persistence will be reconsidered if 24h re-authorization friction proves significant in practice.
+**In-memory-only session keys.** Considered for v2 to keep the security posture maximally tight. Rejected as default because per-restart re-ceremony makes the UX unacceptable for both Claude (every Claude Code session re-prompts) and the `a2a --serve` mode (every spawn re-prompts). The on-disk approach matches how `gnokey` itself stores keys (file-perms-protected, opt-in passphrase) and the privkey is bounded by `AllowPaths` + `SpendLimit` + `ExpiresAt` regardless of where it lives. Users who want in-memory-only behavior can simply omit the volume mount.
 
 ## Consequences
 
@@ -67,4 +71,5 @@ A per-profile `bypass-hard-limits = true` escape hatch disables layer 4 for that
 - v1's per-call `confirm=true` mainnet gate is dropped. Chain-enforced session scope is stronger: the user reviewed the realm + spend cap + expiry at sign time, before any individual broadcast.
 - Audit log entries (still written to disk by gnomcp) record the `session_address` used to sign each write.
 - The MCP must perform on-demand chain queries (no background polling) to detect session activation and revocation. State transitions happen inside tool calls.
+- Session privkey is on disk by default; security depends on file permissions and host hygiene. Worst case (host compromise): attacker can sign within session scope until `ExpiresAt`. Master is unaffected. Users with stricter posture omit the volume mount or set `GNOMCP_SESSION_PASSPHRASE`.
 - Mainnet hard-limit calibration (1000ugnot / 1h placeholder) requires empirical follow-up. Expected to be tuned against real `MsgAddPackage` and small-call gas costs once mainnet is actively used.
