@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "gno": {
-      "command": "gno-mcp",
-      "args": []
-    }
-  }
-}
