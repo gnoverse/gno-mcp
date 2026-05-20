@@ -83,7 +83,7 @@ Transport auth uses a bearer token generated per spawn and written to `/var/lib/
 
 ### Agent card endpoint URL
 
-The card stored on chain uses a logical URI in its `url` field (e.g., `gno://r/myorg/blog`). gnomcp rewrites this at serve time when delivering the card to a2a clients, substituting `http://127.0.0.1:7777/agents/<realm>/`. The chain-stored card stays portable and host-independent; gnomcp does the local binding substitution.
+The card stored on chain uses a logical URI in its `url` field (e.g., `gno://gno.land/r/myorg/blog` — gnomcp's read tools emit the same scheme, so a single convention covers both card URLs and tool resource URIs). gnomcp rewrites this at serve time when delivering the card to a2a clients, substituting `http://127.0.0.1:7777/agents/<realm>/`. The chain-stored card stays portable and host-independent; gnomcp does the local binding substitution.
 
 ## Alternatives considered
 

@@ -1,6 +1,6 @@
 # MCP Go SDK API Notes
 
-SDK: `github.com/modelcontextprotocol/go-sdk` v1.6.0
+SDK: `github.com/modelcontextprotocol/go-sdk` v0.6.0 (current stable; the v1.x line does not yet exist on this module).
 Import: `"github.com/modelcontextprotocol/go-sdk/mcp"`
 
 ---

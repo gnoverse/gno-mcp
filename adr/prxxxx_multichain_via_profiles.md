@@ -2,7 +2,7 @@
 
 ## Context
 
-A gno developer typically works across multiple chains: a local devnet (`gnodev` or `gnoland start`), a public testnet (`test5` and successors), and occasionally mainnet (`portal-loop`). The MCP server must support all of these without forcing the user to install or configure separate MCP instances per chain.
+A gno developer typically works across multiple chains: a local devnet (`gnodev` or `gnoland start`), the current public testnet (`test11` at time of writing; successor testnets are expected on roughly the same cadence as past resets), and occasionally mainnet (`portal-loop`). The MCP server must support all of these without forcing the user to install or configure separate MCP instances per chain.
 
 The threat model treats mainnet writes as materially more dangerous than testnet writes. Any multi-chain mechanism must keep mainnet writes from being broadcast by mistake when the user intended a testnet or local target.
 
@@ -44,7 +44,7 @@ Mainnet is intentionally not shipped in the default `profiles.toml`; users add i
 
 ## Alternatives considered
 
-**One MCP server process per chain.** The user would launch `gnomcp` separately for `testnet5`, `mainnet`, etc., each with its own configuration. Rejected: the ergonomic cost compounds across the project's lifetime; cross-chain read workflows require multiple concurrent processes; the multi-profile design with per-call hard errors + structural session authorization (separate ADR) provides comparable safety with materially lower setup cost.
+**One MCP server process per chain.** The user would launch `gnomcp` separately for each chain they target (local devnet, testnet, mainnet), each with its own configuration. Rejected: the ergonomic cost compounds across the project's lifetime; cross-chain read workflows require multiple concurrent processes; the multi-profile design with per-call hard errors + structural session authorization (separate ADR) provides comparable safety with materially lower setup cost.
 
 **Active-profile state machine** with a `select_profile` tool that mutates an in-server "current chain" state. Rejected: stateful design complicates audit, tool-list caching, and concurrent access. Per-call `profile` arg with hard errors is equivalent in safety and stateless.
 
