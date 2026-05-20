@@ -1,4 +1,3 @@
-// Package server wires the MCP server scaffolding, tool Registry, and profile-conditional schema.
 package server
 
 import (
@@ -28,6 +27,15 @@ func ProfileArgSchema(cfg *profiles.Config, discoveredLocal string) ProfileSchem
 		names = append(names, n)
 	}
 	sort.Strings(names)
+
+	// Defensive: if discovery returned a name that is not actually loaded,
+	// fall back to "required" rather than emit an invalid JSON Schema with
+	// default outside enum.
+	if discoveredLocal != "" {
+		if _, ok := cfg.Profiles[discoveredLocal]; !ok {
+			discoveredLocal = ""
+		}
+	}
 
 	switch {
 	case len(names) == 1:

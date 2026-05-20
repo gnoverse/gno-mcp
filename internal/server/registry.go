@@ -1,8 +1,10 @@
+// Package server wires the MCP server scaffolding, tool Registry, and profile-conditional schema.
 package server
 
 import (
 	"context"
 	"fmt"
+	"sort"
 )
 
 // Capability classifies tools for conditional registration.
@@ -61,6 +63,7 @@ func (r *Registry) Add(t *Tool) {
 
 func (r *Registry) Count() int { return len(r.tools) }
 
+// WithCapability returns the tools matching c, sorted by Name for stable enumeration.
 func (r *Registry) WithCapability(c Capability) []*Tool {
 	var out []*Tool
 	for _, t := range r.tools {
@@ -68,14 +71,17 @@ func (r *Registry) WithCapability(c Capability) []*Tool {
 			out = append(out, t)
 		}
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 
+// All returns every registered tool, sorted by Name for stable enumeration.
 func (r *Registry) All() []*Tool {
 	out := make([]*Tool, 0, len(r.tools))
 	for _, t := range r.tools {
 		out = append(out, t)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 
@@ -83,6 +89,9 @@ func (r *Registry) Call(ctx context.Context, name string, args map[string]any) (
 	t, ok := r.tools[name]
 	if !ok {
 		return Result{}, fmt.Errorf("unknown tool: %s", name)
+	}
+	if t.Handler == nil {
+		return Result{}, fmt.Errorf("tool %q has no handler", name)
 	}
 	return t.Handler(ctx, args)
 }

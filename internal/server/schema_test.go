@@ -34,6 +34,21 @@ func TestProfileArgSchema_multipleWithLocalDiscovered_optionalDefault(t *testing
 	}
 }
 
+func TestProfileArgSchema_staleDiscoveredLocalIgnored(t *testing.T) {
+	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
+		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
+		"mainnet":  {ChainType: "mainnet", RPCURL: "y", ChainID: "portal-loop"},
+	}}
+	// Discovery returned a name that is not in the loaded config.
+	s := ProfileArgSchema(cfg, "ghost")
+	if !s.Required {
+		t.Error("stale discoveredLocal should be ignored, falling back to required")
+	}
+	if s.Default != "" {
+		t.Errorf("stale discoveredLocal should not become Default, got %q", s.Default)
+	}
+}
+
 func TestProfileArgSchema_multipleNoLocal_required(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
