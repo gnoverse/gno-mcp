@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt run
+.PHONY: build test test-integration lint fmt run
 
 build:
 	go build -o bin/gnomcp ./cmd/gnomcp

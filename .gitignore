@@ -1,10 +1,15 @@
 bin/
+vendor/
 *.test
 *.out
 .idea/
 .vscode/
 *.swp
 .DS_Store
+
+# Go workspace files (not used by this module)
+go.work
+go.work.sum
 
 # Local profiles & runtime data
 profiles.toml
