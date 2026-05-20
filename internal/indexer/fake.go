@@ -9,29 +9,25 @@ import (
 // Fake is an in-memory Client implementation for unit tests.
 // Not safe for concurrent use.
 type Fake struct {
-	lists      map[string][]Realm   // key: filter signature
-	histories  map[string][]TxEvent // key: realm
-	activities map[string][]TxEvent // key: realm
+	lists      map[ListFilter][]Realm
+	histories  map[string][]TxEvent
+	activities map[string][]TxEvent
 }
 
 func NewFake() *Fake {
 	return &Fake{
-		lists:      map[string][]Realm{},
+		lists:      map[ListFilter][]Realm{},
 		histories:  map[string][]TxEvent{},
 		activities: map[string][]TxEvent{},
 	}
 }
 
-func filterKey(f ListFilter) string {
-	return f.Namespace + "|" + f.Tag + "|" + f.Category
-}
-
-func (f *Fake) SetList(filter ListFilter, realms []Realm)  { f.lists[filterKey(filter)] = realms }
+func (f *Fake) SetList(filter ListFilter, realms []Realm)  { f.lists[filter] = realms }
 func (f *Fake) SetHistory(realm string, events []TxEvent)  { f.histories[realm] = events }
 func (f *Fake) SetActivity(realm string, events []TxEvent) { f.activities[realm] = events }
 
 func (f *Fake) List(_ context.Context, filter ListFilter) ([]Realm, error) {
-	v, ok := f.lists[filterKey(filter)]
+	v, ok := f.lists[filter]
 	if !ok {
 		return nil, fmt.Errorf("fake: no list for filter %+v", filter)
 	}

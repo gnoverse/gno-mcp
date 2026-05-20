@@ -36,7 +36,13 @@ type ListFilter struct {
 
 // Client abstracts tx-indexer GraphQL queries.
 type Client interface {
+	// List returns realms matching the filter; an empty ListFilter returns all realms.
 	List(ctx context.Context, f ListFilter) ([]Realm, error)
+
+	// History returns every transaction touching realm in chronological order.
 	History(ctx context.Context, realm string) ([]TxEvent, error)
+
+	// Activity returns events for realm within the closed interval
+	// [since, until]. A nil pointer means that bound is unconstrained.
 	Activity(ctx context.Context, realm string, since, until *time.Time) ([]TxEvent, error)
 }

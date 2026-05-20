@@ -50,3 +50,36 @@ func TestFake_Activity_filtersByTime(t *testing.T) {
 		t.Errorf("expected only 'new' after filter, got %+v", got)
 	}
 }
+
+func TestFake_Activity_filtersByUntil(t *testing.T) {
+	f := NewFake()
+	now := time.Now()
+	f.SetActivity("gno.land/r/x", []TxEvent{
+		{Hash: "old", Time: now.Add(-2 * time.Hour)},
+		{Hash: "new", Time: now.Add(-30 * time.Minute)},
+	})
+	until := now.Add(-1 * time.Hour)
+	got, err := f.Activity(context.Background(), "gno.land/r/x", nil, &until)
+	if err != nil {
+		t.Fatalf("Activity: %v", err)
+	}
+	if len(got) != 1 || got[0].Hash != "old" {
+		t.Errorf("expected only 'old' before until, got %+v", got)
+	}
+}
+
+func TestFake_Activity_unboundedReturnsAll(t *testing.T) {
+	f := NewFake()
+	now := time.Now()
+	f.SetActivity("gno.land/r/x", []TxEvent{
+		{Hash: "a", Time: now.Add(-2 * time.Hour)},
+		{Hash: "b", Time: now.Add(-30 * time.Minute)},
+	})
+	got, err := f.Activity(context.Background(), "gno.land/r/x", nil, nil)
+	if err != nil {
+		t.Fatalf("Activity: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected both events with nil/nil bounds, got %+v", got)
+	}
+}
