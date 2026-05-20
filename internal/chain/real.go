@@ -10,6 +10,11 @@ import (
 )
 
 // Real implements Client against a live gno chain via gnoclient + RPC.
+//
+// Context propagation: the gnoclient package does not accept context.Context;
+// Real's methods therefore drop the caller's ctx. Callers that need to bound
+// RPC duration must wrap the call externally (e.g., goroutine + select on ctx)
+// until gnoclient grows ctx-aware variants.
 type Real struct {
 	cli *gnoclient.Client
 }
@@ -18,7 +23,9 @@ type Real struct {
 var _ Client = (*Real)(nil)
 
 // NewReal creates a Real client connected to rpcURL.
-// rpcURL must be non-empty; chainID is stored for future Milestone B writes.
+// rpcURL must be non-empty. The chainID argument is accepted to keep the
+// constructor signature stable across milestones; it will be consumed by
+// Milestone B signing operations and is unused here.
 func NewReal(rpcURL, _ string) (*Real, error) {
 	if rpcURL == "" {
 		return nil, fmt.Errorf("rpc-url must not be empty")
@@ -56,7 +63,11 @@ func (r *Real) Eval(_ context.Context, realm, expr string) (string, error) {
 
 // File returns the raw source of a single file in a realm.
 // Backed by vm/qfile with an explicit file name appended to realm.
+// Returns an error if file is empty; use ListFiles to enumerate names.
 func (r *Real) File(_ context.Context, realm, file string) (string, error) {
+	if file == "" {
+		return "", fmt.Errorf("vm/qfile: file name must not be empty; use ListFiles for listings")
+	}
 	qres, err := r.cli.Query(gnoclient.QueryCfg{
 		Path: "vm/qfile",
 		Data: []byte(realm + "/" + file),
@@ -80,6 +91,7 @@ func (r *Real) ListFiles(_ context.Context, realm string) ([]string, error) {
 
 	var files []string
 	for _, name := range strings.Split(string(qres.Response.Data), "\n") {
+		name = strings.TrimSpace(name)
 		if name != "" {
 			files = append(files, name)
 		}
