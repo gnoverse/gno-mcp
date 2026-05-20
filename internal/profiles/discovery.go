@@ -22,8 +22,9 @@ func DiscoverLocal(ctx context.Context, p Profile, timeout time.Duration) (bool,
 	if err != nil {
 		return false, fmt.Errorf("build status request: %w", err)
 	}
-	hc := &http.Client{Timeout: timeout}
-	resp, err := hc.Do(req)
+	// Timeout is enforced by the context above; http.Client.Timeout would
+	// be a redundant identical-value ceiling here.
+	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
 		return false, nil // unreachable is not a hard error; profile just unavailable
 	}
