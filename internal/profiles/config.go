@@ -1,3 +1,5 @@
+// Package profiles parses and represents the multi-chain profile
+// configuration that drives gnomcp's connections to gno chains.
 package profiles
 
 import (

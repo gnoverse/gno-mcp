@@ -32,7 +32,13 @@ tx-indexer-url = "https://indexer.test5.gno.land/graphql/query"
 	if local.ChainType != "local" || local.ChainID != "dev" {
 		t.Errorf("local profile mis-parsed: %+v", local)
 	}
+	if local.RPCURL != "http://127.0.0.1:26657" {
+		t.Errorf("local.RPCURL mis-parsed: got %q", local.RPCURL)
+	}
 	testnet := cfg.Profiles["testnet5"]
+	if testnet.RPCURL != "https://rpc.test5.gno.land:443" {
+		t.Errorf("testnet5.RPCURL mis-parsed: got %q", testnet.RPCURL)
+	}
 	if testnet.TxIndexerURL == "" {
 		t.Error("testnet5 should have tx-indexer-url set")
 	}
