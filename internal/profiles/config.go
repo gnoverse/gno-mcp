@@ -25,8 +25,12 @@ type Config struct {
 // Load parses a profiles.toml document from r.
 func Load(r io.Reader) (*Config, error) {
 	cfg := &Config{Profiles: map[string]Profile{}}
-	if _, err := toml.NewDecoder(r).Decode(&cfg.Profiles); err != nil {
+	md, err := toml.NewDecoder(r).Decode(&cfg.Profiles)
+	if err != nil {
 		return nil, fmt.Errorf("parse profiles.toml: %w", err)
+	}
+	if undec := md.Undecoded(); len(undec) > 0 {
+		return nil, fmt.Errorf("parse profiles.toml: unknown keys: %v", undec)
 	}
 	return cfg, nil
 }
