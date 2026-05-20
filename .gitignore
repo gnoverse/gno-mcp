@@ -1,0 +1,11 @@
+bin/
+*.test
+*.out
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local profiles & runtime data
+profiles.toml
+audit.log
