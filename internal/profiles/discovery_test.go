@@ -1,0 +1,69 @@
+package profiles
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+)
+
+func TestDiscoverLocal_reachable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"result": map[string]any{
+				"node_info": map[string]any{"network": "dev"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	p := Profile{ChainType: "local", RPCURL: srv.URL, ChainID: "dev"}
+	ok, err := DiscoverLocal(context.Background(), p, 2*time.Second)
+	if err != nil {
+		t.Fatalf("DiscoverLocal: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true for reachable matching chain-id")
+	}
+}
+
+func TestDiscoverLocal_chainIDMismatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"result": map[string]any{
+				"node_info": map[string]any{"network": "actually-different"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	p := Profile{ChainType: "local", RPCURL: srv.URL, ChainID: "dev"}
+	ok, err := DiscoverLocal(context.Background(), p, 2*time.Second)
+	if err != nil {
+		t.Fatalf("DiscoverLocal: %v", err)
+	}
+	if ok {
+		t.Fatal("expected ok=false for chain-id mismatch")
+	}
+}
+
+func TestDiscoverLocal_unreachable(t *testing.T) {
+	p := Profile{ChainType: "local", RPCURL: "http://127.0.0.1:1", ChainID: "dev"}
+	ok, _ := DiscoverLocal(context.Background(), p, 250*time.Millisecond)
+	if ok {
+		t.Fatal("expected ok=false for unreachable endpoint")
+	}
+}
+
+func TestDiscoverLocal_skipsNonLocal(t *testing.T) {
+	p := Profile{ChainType: "testnet", RPCURL: "https://rpc.test5.gno.land:443", ChainID: "test5"}
+	ok, err := DiscoverLocal(context.Background(), p, 250*time.Millisecond)
+	if err != nil {
+		t.Fatalf("DiscoverLocal: %v", err)
+	}
+	if ok {
+		t.Fatal("DiscoverLocal should always return false for non-local profiles")
+	}
+}
