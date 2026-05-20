@@ -114,49 +114,107 @@ func TestGraphQL_History_MsgCall(t *testing.T) {
 	}
 }
 
-func TestGraphQL_Activity_filtersClientSide(t *testing.T) {
-	now := time.Now()
+func TestGraphQL_Activity_filtersByKind(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		// Return two events; the client should filter by time.
-		// We embed time via block_height for sorting, but actually Activity
-		// stores time in a separate field we set in the test server response.
-		// Since Transaction has no time field in the schema, we set TxEvent.Time
-		// via our internal logic; the test just checks we get back all events
-		// (client-side filtering happens on TxEvent.Time which defaults to zero).
 		_ = json.NewEncoder(w).Encode(txResponse([]any{
 			map[string]any{
-				"hash":         "old",
+				"hash":         "0xcall",
 				"block_height": 1,
-				"messages":     []any{},
+				"messages": []any{
+					map[string]any{
+						"typeUrl": "exec",
+						"route":   "vm",
+						"value": map[string]any{
+							"__typename": "MsgCall",
+							"caller":     "g1c",
+							"pkg_path":   "gno.land/r/foo",
+							"func":       "Transfer",
+							"args":       []any{},
+						},
+					},
+				},
 			},
 			map[string]any{
-				"hash":         "new",
+				"hash":         "0xaddpkg",
 				"block_height": 2,
-				"messages":     []any{},
+				"messages": []any{
+					map[string]any{
+						"typeUrl": "add_package",
+						"route":   "vm",
+						"value": map[string]any{
+							"__typename": "MsgAddPackage",
+							"creator":    "g1d",
+							"package":    map[string]any{"path": "gno.land/r/foo"},
+						},
+					},
+				},
+			},
+			map[string]any{
+				"hash":         "0xrun",
+				"block_height": 3,
+				"messages": []any{
+					map[string]any{
+						"typeUrl": "run",
+						"route":   "vm",
+						"value": map[string]any{
+							"__typename": "MsgRun",
+							"caller":     "g1r",
+						},
+					},
+				},
 			},
 		}))
 	}))
 	defer srv.Close()
 
 	c := NewGraphQL(srv.URL)
-	// With no time bounds both should come through (TxEvent.Time is zero).
 	events, err := c.Activity(context.Background(), "gno.land/r/foo", nil, nil)
 	if err != nil {
 		t.Fatalf("Activity: %v", err)
 	}
 	if len(events) != 2 {
-		t.Errorf("expected 2 events, got %d: %+v", len(events), events)
+		t.Fatalf("expected 2 events (MsgCall + MsgRun), got %d: %+v", len(events), events)
 	}
+	kinds := map[string]bool{}
+	for _, e := range events {
+		kinds[e.Kind] = true
+	}
+	if !kinds["MsgCall"] || !kinds["MsgRun"] {
+		t.Errorf("expected MsgCall and MsgRun, got kinds %v", kinds)
+	}
+	if kinds["MsgAddPackage"] {
+		t.Error("MsgAddPackage should have been filtered out")
+	}
+}
 
-	// With a since bound in the future, zero-time events are filtered out.
-	future := now.Add(time.Hour)
-	events, err = c.Activity(context.Background(), "gno.land/r/foo", &future, nil)
-	if err != nil {
-		t.Fatalf("Activity with future since: %v", err)
+func TestGraphQL_Activity_rejectsSince(t *testing.T) {
+	c := NewGraphQL("http://127.0.0.1:1") // URL won't be called
+	since := time.Now().Add(-time.Hour)
+	_, err := c.Activity(context.Background(), "gno.land/r/foo", &since, nil)
+	if err == nil {
+		t.Fatal("expected error when since is non-nil")
 	}
-	if len(events) != 0 {
-		t.Errorf("expected 0 events with future since, got %d", len(events))
+	if !strings.Contains(err.Error(), "error_unavailable") {
+		t.Errorf("error should contain 'error_unavailable', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "time filtering") {
+		t.Errorf("error should contain 'time filtering', got: %v", err)
+	}
+}
+
+func TestGraphQL_Activity_rejectsUntil(t *testing.T) {
+	c := NewGraphQL("http://127.0.0.1:1") // URL won't be called
+	until := time.Now()
+	_, err := c.Activity(context.Background(), "gno.land/r/foo", nil, &until)
+	if err == nil {
+		t.Fatal("expected error when until is non-nil")
+	}
+	if !strings.Contains(err.Error(), "error_unavailable") {
+		t.Errorf("error should contain 'error_unavailable', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "time filtering") {
+		t.Errorf("error should contain 'time filtering', got: %v", err)
 	}
 }
 

@@ -195,22 +195,31 @@ func (c *GraphQL) History(ctx context.Context, realm string) ([]TxEvent, error) 
 	return toTxEvents(data.Transactions), nil
 }
 
-// Activity returns events for realm within [since, until]. Filtering is client-side
-// because the tx-indexer Transaction type has no time field (time lives on Block).
+// Activity returns MsgCall and MsgRun events for realm.
+//
+// Time filtering (since/until) is not supported by the current tx-indexer schema:
+// the Transaction type at gnolang/tx-indexer serve/graph/schema/types/transaction.graphql
+// exposes only block_height — there is no Block relation on Transaction, and Block.time
+// is reachable only via a separate `blocks` query. Passing a non-nil since or until
+// therefore returns error_unavailable rather than silently filtering against a zero
+// TxEvent.Time. A future enhancement could batch-fetch Block.time via a follow-up
+// query and apply the time predicate; that work is deferred.
+//
+// When both since and until are nil, this method returns History filtered to
+// MsgCall/MsgRun only (MsgAddPackage is excluded per the Activity contract).
 func (c *GraphQL) Activity(ctx context.Context, realm string, since, until *time.Time) ([]TxEvent, error) {
+	if since != nil || until != nil {
+		return nil, fmt.Errorf("error_unavailable: time filtering not supported by current indexer schema (no time field on Transaction)")
+	}
 	all, err := c.History(ctx, realm)
 	if err != nil {
 		return nil, err
 	}
-	var out []TxEvent
+	out := make([]TxEvent, 0, len(all))
 	for _, e := range all {
-		if since != nil && e.Time.Before(*since) {
-			continue
+		if e.Kind == "MsgCall" || e.Kind == "MsgRun" {
+			out = append(out, e)
 		}
-		if until != nil && e.Time.After(*until) {
-			continue
-		}
-		out = append(out, e)
 	}
 	return out, nil
 }
