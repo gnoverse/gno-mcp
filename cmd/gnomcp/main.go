@@ -105,7 +105,6 @@ func main() {
 	}, nil)
 
 	for _, t := range s.Registry().All() {
-		t := t // capture for closure
 		inputSchema, err := mapToSchema(t.InputSchema)
 		if err != nil {
 			log.Fatalf("build schema for tool %q: %v", t.Name, err)
@@ -186,7 +185,7 @@ func makeHandler(t *server.Tool, s *server.Server, auditLog *audit.Log, auditRea
 				Tool:        t.Name,
 				Profile:     argString(args, "profile"),
 				ArgsSummary: argsSummary(args),
-				Duration:    dur,
+				Duration:    dur.Milliseconds(),
 			}
 			if callErr != nil {
 				entry.Result = "tool_err"
@@ -309,10 +308,8 @@ func grepAudit(pattern string) {
 // ---- discovery
 
 func discoverLocal(ctx context.Context, cfg *profiles.Config) string {
-	discoverCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
 	for name, p := range cfg.Profiles {
-		ok, err := profiles.DiscoverLocal(discoverCtx, p, 1*time.Second)
+		ok, err := profiles.DiscoverLocal(ctx, p, 2*time.Second)
 		if err != nil {
 			continue
 		}

@@ -11,13 +11,13 @@ import (
 
 // Entry is one audit record. Persisted as JSON lines.
 type Entry struct {
-	Time           time.Time     `json:"time"`
-	Tool           string        `json:"tool"`
-	Profile        string        `json:"profile,omitempty"`
-	ArgsSummary    string        `json:"args_summary,omitempty"`
-	Result         string        `json:"result"` // ok / sim / sim_err / broadcast_err / tool_err
-	Duration       time.Duration `json:"duration_ms"`
-	SessionAddress string        `json:"session_address,omitempty"` // Milestone B
+	Time           time.Time `json:"time"`
+	Tool           string    `json:"tool"`
+	Profile        string    `json:"profile,omitempty"`
+	ArgsSummary    string    `json:"args_summary,omitempty"`
+	Result         string    `json:"result"`                    // ok / sim / sim_err / broadcast_err / tool_err
+	Duration       int64     `json:"duration_ms"`               // milliseconds since the call started, populated via time.Duration.Milliseconds()
+	SessionAddress string    `json:"session_address,omitempty"` // Milestone B
 }
 
 // Log writes audit entries as JSON lines to the underlying writer.

@@ -16,7 +16,7 @@ func TestLog_appendWritesJSONLine(t *testing.T) {
 		Tool:     "gno_call",
 		Profile:  "testnet5",
 		Result:   "ok",
-		Duration: 150 * time.Millisecond,
+		Duration: 150,
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -58,5 +58,20 @@ func TestLog_appendDefaultsTimeToNow(t *testing.T) {
 	}
 	if got.Time.Before(before) || got.Time.After(after) {
 		t.Errorf("Time not auto-defaulted to now: got %v, want in [%v, %v]", got.Time, before, after)
+	}
+}
+
+func TestLog_durationMarshalsAsMilliseconds(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLog(&buf)
+	if err := l.Append(Entry{Tool: "x", Result: "ok", Duration: 150}); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte(`"duration_ms":150`)) {
+		t.Errorf("expected duration_ms=150 on wire, got: %s", buf.String())
+	}
+	// Catch the regression: nanoseconds would surface as a 9-digit number.
+	if bytes.Contains(buf.Bytes(), []byte(`"duration_ms":150000000`)) {
+		t.Error("duration_ms is being written in nanoseconds, not milliseconds")
 	}
 }

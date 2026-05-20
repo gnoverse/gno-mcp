@@ -96,7 +96,7 @@ func listInputSchema(s *server.Server) map[string]any {
 			"description": "Filter by category. Optional.",
 		},
 	}
-	required := []string{}
+	var required []string
 	addProfileArg(s, props, &required)
 	schema := map[string]any{
 		"type":                 "object",
