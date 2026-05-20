@@ -48,6 +48,13 @@ chain-id = "x"
 	}
 }
 
+func TestValidate_rejectsEmptyProfileSet(t *testing.T) {
+	cfg := &Config{Profiles: map[string]Profile{}}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for empty profile set")
+	}
+}
+
 func TestValidate_rejectsUnknownChainType(t *testing.T) {
 	cfg, err := Load(strings.NewReader(`
 [weird]
