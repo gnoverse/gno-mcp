@@ -11,11 +11,7 @@ import (
 // FormatGnokeyCreateCommand returns the gnokey shell command the user must run
 // to authorize a session key on chain.
 //
-// VERIFY: flag names (--spend-limit, --expires-at, --allow-paths) are tentative
-// against gnokey v1.1; confirm against the actual binary when the
-// maketx session subcommand lands upstream.
-//
-// Multiple allow_paths entries each get their own --allow-paths flag — gnokey
+// Multiple allow_paths entries each get their own --allow-paths flag. gnokey
 // flag parsing accumulates repeated flags into a slice.
 func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, scope Scope) string {
 	var sb strings.Builder
@@ -35,8 +31,6 @@ func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, 
 
 // FormatGnokeyRevokeCommand returns the gnokey shell command the user must run
 // to revoke a session key on chain.
-//
-// VERIFY: flag names tentative — see FormatGnokeyCreateCommand.
 func FormatGnokeyRevokeCommand(profile *profiles.Profile, sessionPubkey string) string {
 	var sb strings.Builder
 	sb.WriteString("gnokey maketx session revoke \\\n")

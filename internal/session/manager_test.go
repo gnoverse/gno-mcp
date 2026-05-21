@@ -274,6 +274,21 @@ func TestManager_concurrentAddPickNoRace(t *testing.T) {
 	wg.Wait()
 }
 
+func TestCoversRealm_doesNotMatchSiblingName(t *testing.T) {
+	if coversRealm([]string{"gno.land/r/test"}, "gno.land/r/testing") {
+		t.Error("coversRealm must not match a realm that only shares a string prefix but is not a sub-path")
+	}
+}
+
+func TestCoversRealm_matchesExactAndSubpath(t *testing.T) {
+	if !coversRealm([]string{"gno.land/r/test"}, "gno.land/r/test") {
+		t.Error("coversRealm must match exact realm")
+	}
+	if !coversRealm([]string{"gno.land/r/test"}, "gno.land/r/test/blog") {
+		t.Error("coversRealm must match a sub-path")
+	}
+}
+
 func TestManager_markActive_persistsAndUpdates(t *testing.T) {
 	m := newTestManager(t)
 	kp, _ := NewKeypair()

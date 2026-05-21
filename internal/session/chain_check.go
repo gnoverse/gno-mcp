@@ -14,15 +14,11 @@ type chainCheckResult struct {
 }
 
 // queryChain looks up the session by pubkey using the profile's chain client.
-// Returns Active=false (no error) when the session is not registered on chain,
-// has expired, has been revoked, or the chain does not support per-pubkey
-// session query (ErrSessionQueryUnsupported). Returns an error only when the
-// resolver cannot provide a client for the profile.
-//
-// Per D8 (see runlog): Real.QuerySession returns ErrSessionQueryUnsupported
-// for every non-empty pubkey today. The fall-through "any chain error =
-// inactive" branch absorbs this. The session.Manager treats inactive as
-// "trust local state until next broadcast proves otherwise."
+// Any chain error (including ErrSessionQueryUnsupported from chains that do
+// not implement per-pubkey session query) is reported as Active=false with no
+// error. The caller decides how to surface this absence (e.g., trust local
+// state until a successful chain confirmation or the next Hydrate cycle).
+// Returns a typed error only when the resolver cannot provide a client.
 func queryChain(ctx context.Context, resolver chain.Resolver, profile, sessionPubkey string) (chainCheckResult, error) {
 	client := resolver(profile)
 	if client == nil {

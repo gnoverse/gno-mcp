@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"log"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,7 +58,7 @@ func (s *signerAdapter) Sign(payload []byte) ([]byte, error) {
 // It is the single source of truth for session lifecycle. All public methods
 // are safe for concurrent use.
 type Manager struct {
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	sessions map[string]map[string]*sessionState // profile → addr → state
 	store    *Store
 }
@@ -89,7 +91,9 @@ func (m *Manager) Hydrate(ctx context.Context, resolver chain.Resolver) error {
 		for _, meta := range metas {
 			result, err := queryChain(ctx, resolver, profile, meta.SessionPubkey)
 			if err != nil || !result.Active {
-				_ = m.store.Delete(profile, meta.SessionAddress)
+				if err := m.store.Delete(profile, meta.SessionAddress); err != nil {
+					log.Printf("session/manager: hydrate: delete inactive session %q in profile %q: %v (will retry on next hydrate)", meta.SessionAddress, profile, err)
+				}
 				continue
 			}
 			// Sync chain-side scope fields into meta before loading.
@@ -143,73 +147,85 @@ func (m *Manager) AddPending(profile string, kp *Keypair, scope Scope) (*Session
 //  5. If none cover realm but usable sessions exist: return *ErrScopeMismatch.
 //  6. Among matching sessions, return the one with the greatest CreatedAt (most recent).
 func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Resolver, profile, realm string) (chain.Signer, error) {
+	// Step 1: snapshot pending sessions for promotion — no IO under lock.
+	type pending struct {
+		addr   string
+		pubkey string
+	}
+	m.mu.RLock()
+	var toPromote []pending
+	for addr, ss := range m.sessions[profile] {
+		if ss.state == StatePending {
+			toPromote = append(toPromote, pending{addr: addr, pubkey: ss.meta.SessionPubkey})
+		}
+	}
+	m.mu.RUnlock()
+
+	// Step 2: promote outside the lock — queryChain + store.Write are IO.
+	for _, p := range toPromote {
+		res, err := queryChain(ctx, resolver, profile, p.pubkey)
+		if err != nil || !res.Active {
+			continue
+		}
+		m.mu.Lock()
+		ss := m.sessions[profile][p.addr]
+		if ss != nil && ss.state == StatePending {
+			ss.meta.AllowPaths = res.Status.AllowPaths
+			ss.meta.SpendLimit = res.Status.SpendLimit
+			ss.meta.SpendRemaining = res.Status.SpendRemaining
+			ss.meta.ExpiresAt = res.Status.ExpiresAt
+			ss.meta.State = StateActive
+			ss.state = StateActive
+			if err := m.store.Write(profile, ss.meta); err != nil {
+				log.Printf("session/manager: pick: persist activated %q: %v", p.addr, err)
+			}
+		}
+		m.mu.Unlock()
+	}
+
+	// Step 3: pick under lock — pure in-memory, no IO.
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Step 1: attempt to transition any pending sessions via chain query.
 	profileSessions := m.sessions[profile]
-	if profileSessions != nil {
-		for addr, ss := range profileSessions {
-			if ss.state != StatePending {
-				continue
-			}
-			result, err := queryChain(ctx, resolver, profile, ss.meta.SessionPubkey)
-			if err != nil || !result.Active {
-				continue
-			}
-			// Transition pending → active.
-			ss.meta.AllowPaths = result.Status.AllowPaths
-			ss.meta.SpendLimit = result.Status.SpendLimit
-			ss.meta.SpendRemaining = result.Status.SpendRemaining
-			ss.meta.ExpiresAt = result.Status.ExpiresAt
-			ss.meta.State = StateActive
-			ss.state = StateActive
-			profileSessions[addr] = ss
-			_ = m.store.Write(profile, ss.meta)
-		}
-	}
-
-	// Step 2: collect usable active sessions.
-	now := time.Now().Unix()
-	var usable []*sessionState
-	for _, ss := range m.sessions[profile] {
-		if ss.state != StateActive {
-			continue
-		}
-		if ss.meta.ExpiresAt > 0 && ss.meta.ExpiresAt <= now {
-			continue // expired
-		}
-		if isZeroSpend(ss.meta.SpendRemaining) {
-			continue // zero spend
-		}
-		usable = append(usable, ss)
-	}
-
-	// Step 3: no usable sessions at all.
-	if len(usable) == 0 {
+	if len(profileSessions) == 0 {
 		return nil, ErrNoActiveSession
 	}
 
-	// Step 4: filter to sessions covering realm.
-	var matching []*sessionState
-	var allPaths []string
-	for _, ss := range usable {
-		if coversRealm(ss.meta.AllowPaths, realm) {
-			matching = append(matching, ss)
+	now := time.Now().Unix()
+	var candidates []*sessionState
+	var availablePaths []string
+
+	for _, ss := range profileSessions {
+		if ss.state != StateActive {
+			continue
 		}
-		allPaths = append(allPaths, ss.meta.AllowPaths...)
+		if ss.meta.ExpiresAt > 0 && now > ss.meta.ExpiresAt {
+			ss.state = StateExpired
+			continue
+		}
+		if isZeroSpend(ss.meta.SpendRemaining) {
+			continue
+		}
+		availablePaths = append(availablePaths, ss.meta.AllowPaths...)
+		if !coversRealm(ss.meta.AllowPaths, realm) {
+			continue
+		}
+		candidates = append(candidates, ss)
 	}
 
-	// Step 5: scope mismatch.
-	if len(matching) == 0 {
-		return nil, &ErrScopeMismatch{AvailablePaths: dedup(allPaths)}
+	if len(candidates) == 0 && len(availablePaths) == 0 {
+		return nil, ErrNoActiveSession
+	}
+	if len(candidates) == 0 {
+		return nil, &ErrScopeMismatch{AvailablePaths: dedup(availablePaths)}
 	}
 
-	// Step 6: pick most-recently created.
-	sort.Slice(matching, func(i, j int) bool {
-		return matching[i].meta.CreatedAt > matching[j].meta.CreatedAt
+	// Pick most-recently created.
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].meta.CreatedAt > candidates[j].meta.CreatedAt
 	})
-	best := matching[0]
+	best := candidates[0]
 
 	return &signerAdapter{
 		addr: best.meta.SessionAddress,
@@ -262,6 +278,8 @@ func (m *Manager) ListForProfile(profile string) []*SessionMeta {
 	out := make([]*SessionMeta, 0, len(profileSessions))
 	for _, ss := range profileSessions {
 		cp := *ss.meta
+		cp.AllowPaths = slices.Clone(ss.meta.AllowPaths)
+		cp.Privkey = slices.Clone(ss.meta.Privkey)
 		out = append(out, &cp)
 	}
 	return out
@@ -280,6 +298,8 @@ func (m *Manager) Get(profile, sessionAddr string) *SessionMeta {
 		return nil
 	}
 	cp := *ss.meta
+	cp.AllowPaths = slices.Clone(ss.meta.AllowPaths)
+	cp.Privkey = slices.Clone(ss.meta.Privkey)
 	return &cp
 }
 
@@ -345,7 +365,7 @@ func (m *Manager) getStateLocked(profile, addr string) *sessionState {
 // covers "gno.land/r/test/blog".
 func coversRealm(allowPaths []string, realm string) bool {
 	for _, p := range allowPaths {
-		if p == realm || strings.HasPrefix(realm, p+"/") || strings.HasPrefix(realm, p) {
+		if p == realm || strings.HasPrefix(realm, p+"/") {
 			return true
 		}
 	}
