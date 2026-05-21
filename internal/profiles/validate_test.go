@@ -263,6 +263,28 @@ master-address = "not-a-bech32-address"
 	}
 }
 
+func TestValidate_rejectsMalformedMasterAddressEvenWhenReadOnly(t *testing.T) {
+	cfg, err := Load(strings.NewReader(`
+[local]
+rpc-url = "http://127.0.0.1:26657"
+chain-id = "dev"
+master-address = "not-a-bech32-address"
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	_, err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error for malformed master-address on read-only profile")
+	}
+	if !strings.Contains(err.Error(), "master-address") {
+		t.Errorf("error %q should mention master-address", err)
+	}
+	if !strings.Contains(err.Error(), "not-a-bech32-address") {
+		t.Errorf("error %q should mention the offending value", err)
+	}
+}
+
 func TestValidate_acceptsEmptyMasterAddressWhenReadOnly(t *testing.T) {
 	cfg, err := Load(strings.NewReader(`
 [local]
