@@ -169,18 +169,24 @@ func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Reso
 		}
 		m.mu.Lock()
 		ss := m.sessions[profile][p.addr]
-		if ss != nil && ss.state == StatePending {
-			ss.meta.AllowPaths = res.Status.AllowPaths
-			ss.meta.SpendLimit = res.Status.SpendLimit
-			ss.meta.SpendRemaining = res.Status.SpendRemaining
-			ss.meta.ExpiresAt = res.Status.ExpiresAt
-			ss.meta.State = StateActive
-			ss.state = StateActive
-			if err := m.store.Write(profile, ss.meta); err != nil {
-				log.Printf("session/manager: pick: persist activated %q: %v", p.addr, err)
-			}
+		if ss == nil || ss.state != StatePending {
+			m.mu.Unlock()
+			continue
 		}
+		ss.meta.AllowPaths = res.Status.AllowPaths
+		ss.meta.SpendLimit = res.Status.SpendLimit
+		ss.meta.SpendRemaining = res.Status.SpendRemaining
+		ss.meta.ExpiresAt = res.Status.ExpiresAt
+		ss.meta.State = StateActive
+		ss.state = StateActive
+		metaCopy := *ss.meta
+		metaCopy.AllowPaths = slices.Clone(ss.meta.AllowPaths)
+		metaCopy.Privkey = slices.Clone(ss.meta.Privkey)
 		m.mu.Unlock()
+
+		if err := m.store.Write(profile, &metaCopy); err != nil {
+			log.Printf("session/manager: pick: persist activated %q: %v", p.addr, err)
+		}
 	}
 
 	// Step 3: pick under lock — pure in-memory, no IO.

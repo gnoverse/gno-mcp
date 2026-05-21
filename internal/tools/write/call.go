@@ -159,8 +159,7 @@ func callHandler(
 				Extra: map[string]any{"profile": profileName},
 			}
 		}
-		var scopeErr *session.ErrScopeMismatch
-		if errors.As(pickErr, &scopeErr) {
+		if scopeErr, ok := errors.AsType[*session.ErrScopeMismatch](pickErr); ok {
 			return server.Result{}, &server.ToolError{
 				Code: "scope_mismatch",
 				Message: fmt.Sprintf(

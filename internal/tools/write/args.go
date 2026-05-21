@@ -74,6 +74,9 @@ func addProfileArg(s *server.Server, props map[string]any, required *[]string) {
 			enum = append(enum, name)
 		}
 	}
+	if enum == nil {
+		enum = []string{}
+	}
 	arg := map[string]any{
 		"type":        "string",
 		"enum":        enum,

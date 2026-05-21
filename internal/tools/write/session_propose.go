@@ -138,7 +138,7 @@ func sessionProposeHandler(
 			"scope": map[string]any{
 				"allow_paths": scope.AllowPaths,
 				"spend_limit": scope.SpendLimit,
-				"expires_in":  scope.ExpiresIn,
+				"expires_in":  scope.ExpiresIn.String(),
 			},
 			"auth_command":   cmd,
 			"clamp_warnings": warnings,

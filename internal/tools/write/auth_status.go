@@ -3,6 +3,7 @@ package write
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
@@ -76,6 +77,8 @@ func authStatusHandler(
 					// Promote pending → active in the manager.
 					if markErr := sessionMgr.MarkActive(profileName, meta.SessionAddress, status); markErr == nil {
 						meta.State = session.StateActive
+					} else {
+						log.Printf("gno_auth_status: mark active %q: %v (showing pending)", meta.SessionAddress, markErr)
 					}
 				}
 			}

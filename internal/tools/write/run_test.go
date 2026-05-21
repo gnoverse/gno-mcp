@@ -117,8 +117,8 @@ func TestRun_dangerousDisabled(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected dangerous_disabled error")
 	}
-	var te *server.ToolError
-	if !errors.As(err, &te) {
+	te, ok := errors.AsType[*server.ToolError](err)
+	if !ok {
 		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
 	}
 	if te.Code != "dangerous_disabled" {
@@ -141,8 +141,8 @@ func TestRun_authenticationRequired(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected authentication_required error")
 	}
-	var te *server.ToolError
-	if !errors.As(err, &te) {
+	te, ok := errors.AsType[*server.ToolError](err)
+	if !ok {
 		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
 	}
 	if te.Code != "authentication_required" {
@@ -237,8 +237,8 @@ func TestRun_simulateUnsupported(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected simulate_unsupported error")
 	}
-	var te *server.ToolError
-	if !errors.As(err, &te) {
+	te, ok := errors.AsType[*server.ToolError](err)
+	if !ok {
 		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
 	}
 	if te.Code != "simulate_unsupported" {
@@ -328,6 +328,31 @@ func TestRun_writesAuditEntry(t *testing.T) {
 	}
 	if e.Duration < 0 {
 		t.Errorf("audit Duration=%d (negative)", e.Duration)
+	}
+}
+
+func TestRun_simulateError_auditsSimErr(t *testing.T) {
+	s := newBaseTestServer(t)
+	f := chain.NewFake()
+	f.SetRunError(testCode, errors.New("node unavailable"))
+	mgr := noSessionMgr(t)
+	var auditBuf bytes.Buffer
+	RegisterRun(s, mgr, constChainResolver(f), audit.NewLog(&auditBuf))
+
+	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "testnet5",
+		"code":     testCode,
+		"simulate": true,
+	})
+	if err == nil {
+		t.Fatal("expected simulate error to propagate")
+	}
+	entries := parseAuditEntries(t, &auditBuf)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", len(entries))
+	}
+	if entries[0].Result != "sim_err" {
+		t.Errorf("expected result=sim_err, got %q", entries[0].Result)
 	}
 }
 
