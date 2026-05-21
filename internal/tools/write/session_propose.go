@@ -98,7 +98,7 @@ func sessionProposeHandler(
 		return server.Result{}, fmt.Errorf("gno_session_propose: generate keypair: %w", err)
 	}
 
-	if _, err := sessionMgr.AddPending(profileName, kp, scope); err != nil {
+	if _, err := sessionMgr.AddPending(profileName, kp, scope, profile.MasterAddress); err != nil {
 		return server.Result{}, fmt.Errorf("gno_session_propose: persist pending session: %w", err)
 	}
 

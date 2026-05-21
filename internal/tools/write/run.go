@@ -22,7 +22,8 @@ func RegisterRun(s *server.Server, sessionMgr *session.Manager, resolver chain.R
 		Description: "Executes ad-hoc Gno code via vm/MsgRun. The code must be a valid Gno package " +
 			"(package main with a main() entry point). Requires an active gnomcp session for the " +
 			"profile (use gno_session_propose if none exists). Pass simulate=true to dry-run without " +
-			"a session or spending gas. Required args: profile, code. Optional: simulate (bool).",
+			"spending gas. Still requires an active session for the profile. Required args: profile, " +
+			"code. Optional: simulate (bool).",
 		InputSchema: runInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -96,41 +97,7 @@ func runHandler(
 
 	argsSummary := fmt.Sprintf("code_len=%d", len(code))
 
-	// ---- Simulate path
-
-	if simulate {
-		// TODO(MD-D): plumb Profile.MasterAddress through Run.
-		rr, runErr := c.Run(ctx, nil, "", code, true)
-		if runErr != nil {
-			if errors.Is(runErr, chain.ErrSimulateUnsupported) {
-				return server.Result{}, &server.ToolError{
-					Code:    "simulate_unsupported",
-					Message: "this chain client does not support simulate; retry without simulate=true",
-					Extra:   map[string]any{"profile": profileName},
-				}
-			}
-			_ = alog.Append(audit.Entry{
-				Tool:        "gno_run",
-				Profile:     profileName,
-				ArgsSummary: argsSummary,
-				Result:      "sim_err",
-				Duration:    time.Since(start).Milliseconds(),
-			})
-			return server.Result{}, fmt.Errorf("gno_run simulate: %w", runErr)
-		}
-
-		_ = alog.Append(audit.Entry{
-			Tool:        "gno_run",
-			Profile:     profileName,
-			ArgsSummary: argsSummary,
-			Result:      "sim",
-			Duration:    time.Since(start).Milliseconds(),
-		})
-
-		return buildRunResult(rr), nil
-	}
-
-	// ---- Real run path: pick any active session (realm="" = wildcard)
+	// ---- Pick session (realm="" = wildcard; same flow for simulate and broadcast)
 
 	signer, pickErr := sessionMgr.PickSessionForProfile(ctx, resolver, profileName, "")
 	if pickErr != nil {
@@ -149,31 +116,49 @@ func runHandler(
 
 	sessionAddr := signer.Address()
 
-	// ---- Broadcast
+	// ---- Run (simulate or broadcast)
 
-	// TODO(MD-D): plumb Profile.MasterAddress through Run.
-	rr, runErr := c.Run(ctx, signer, "", code, false)
+	rr, runErr := c.Run(ctx, signer, profile.MasterAddress, code, simulate)
 	if runErr != nil {
+		if simulate && errors.Is(runErr, chain.ErrSimulateUnsupported) {
+			return server.Result{}, &server.ToolError{
+				Code:    "simulate_unsupported",
+				Message: "this chain client does not support simulate; retry without simulate=true",
+				Extra:   map[string]any{"profile": profileName},
+			}
+		}
+		result := "broadcast_err"
+		errPrefix := "gno_run broadcast"
+		if simulate {
+			result = "sim_err"
+			errPrefix = "gno_run simulate"
+		}
 		_ = alog.Append(audit.Entry{
 			Tool:           "gno_run",
 			Profile:        profileName,
 			ArgsSummary:    argsSummary,
-			Result:         "broadcast_err",
+			Result:         result,
 			Duration:       time.Since(start).Milliseconds(),
 			SessionAddress: sessionAddr,
 		})
-		return server.Result{}, fmt.Errorf("gno_run broadcast: %w", runErr)
+		return server.Result{}, fmt.Errorf("%s: %w", errPrefix, runErr)
 	}
 
-	// ---- Update spend + audit
+	// ---- Update spend + audit (simulate skips spend update)
 
-	_ = sessionMgr.UpdateSpend(profileName, sessionAddr, rr.GasUsed)
+	if !simulate {
+		_ = sessionMgr.UpdateSpend(profileName, sessionAddr, rr.GasUsed)
+	}
 
+	result := "ok"
+	if simulate {
+		result = "sim"
+	}
 	_ = alog.Append(audit.Entry{
 		Tool:           "gno_run",
 		Profile:        profileName,
 		ArgsSummary:    argsSummary,
-		Result:         "ok",
+		Result:         result,
 		Duration:       time.Since(start).Milliseconds(),
 		SessionAddress: sessionAddr,
 	})
@@ -216,7 +201,7 @@ func runInputSchema(s *server.Server) map[string]any {
 		},
 		"simulate": map[string]any{
 			"type":        "boolean",
-			"description": "When true, dry-run the execution without broadcasting or spending gas. No active session required.",
+			"description": "When true, dry-run the execution without broadcasting or spending gas. Still requires an active session for the profile.",
 			"default":     false,
 		},
 	}

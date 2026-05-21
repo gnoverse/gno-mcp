@@ -41,7 +41,7 @@ func TestAuthStatus_activeSession_narrative(t *testing.T) {
 			AllowPaths: []string{"gno.land/r/test/counter"},
 			SpendLimit: "1000000ugnot",
 		}
-		meta, err := m.AddPending("testnet5", kp, scope)
+		meta, err := m.AddPending("testnet5", kp, scope, "g1master")
 		if err != nil {
 			t.Fatalf("AddPending: %v", err)
 		}
@@ -78,8 +78,7 @@ func TestAuthStatus_activeSession_narrative(t *testing.T) {
 }
 
 // TestAuthStatus_chainQueryRefreshes verifies that gno_auth_status flips a
-// pending session to active when the chain confirms it. The test seeds
-// MasterAddress directly since MD-D has not yet plumbed it through AddPending.
+// pending session to active when the chain confirms it.
 func TestAuthStatus_chainQueryRefreshes(t *testing.T) {
 	s := newBaseTestServer(t)
 	const master = "g1master"
@@ -93,14 +92,11 @@ func TestAuthStatus_chainQueryRefreshes(t *testing.T) {
 			AllowPaths: []string{"gno.land/r/test/blog"},
 			SpendLimit: "500000ugnot",
 		}
-		meta, err := m.AddPending("testnet5", kp, scope)
+		meta, err := m.AddPending("testnet5", kp, scope, master)
 		if err != nil {
 			t.Fatalf("AddPending: %v", err)
 		}
 		seededAddr = meta.SessionAddress
-		if err := m.SetMasterAddress("testnet5", seededAddr, master); err != nil {
-			t.Fatalf("SetMasterAddress: %v", err)
-		}
 	})
 
 	fake := chain.NewFake()

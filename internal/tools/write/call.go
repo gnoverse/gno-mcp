@@ -21,8 +21,9 @@ func RegisterCall(s *server.Server, sessionMgr *session.Manager, resolver chain.
 		Name: "gno_call",
 		Description: "Calls a public function in a deployed Gno realm (vm/MsgCall). Requires an " +
 			"active gnomcp session that covers the target realm (use gno_session_propose if none " +
-			"exists). Pass simulate=true to dry-run without a session or spending gas. Required " +
-			"args: profile, realm, func. Optional: args (array of strings), simulate (bool).",
+			"exists). Pass simulate=true to dry-run without spending gas. Still requires an active " +
+			"session that covers the target realm. Required args: profile, realm, func. Optional: " +
+			"args (array of strings), simulate (bool).",
 		InputSchema: callInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -112,42 +113,7 @@ func callHandler(
 
 	argsSummary := fmt.Sprintf("realm=%s func=%s args=%v", realm, fn, fnArgs)
 
-	// ---- Simulate path
-
-	if simulate {
-		// TODO(MD-D): plumb Profile.MasterAddress through Call. Fake ignores
-		// master; Real currently rejects an empty master and a nil signer.
-		cr, callErr := c.Call(ctx, nil, "", realm, fn, fnArgs, true)
-		if callErr != nil {
-			if errors.Is(callErr, chain.ErrSimulateUnsupported) {
-				return server.Result{}, &server.ToolError{
-					Code:    "simulate_unsupported",
-					Message: "this chain client does not support simulate; retry without simulate=true",
-					Extra:   map[string]any{"profile": profileName},
-				}
-			}
-			_ = alog.Append(audit.Entry{
-				Tool:        "gno_call",
-				Profile:     profileName,
-				ArgsSummary: argsSummary,
-				Result:      "sim_err",
-				Duration:    time.Since(start).Milliseconds(),
-			})
-			return server.Result{}, fmt.Errorf("gno_call simulate: %w", callErr)
-		}
-
-		_ = alog.Append(audit.Entry{
-			Tool:        "gno_call",
-			Profile:     profileName,
-			ArgsSummary: argsSummary,
-			Result:      "sim",
-			Duration:    time.Since(start).Milliseconds(),
-		})
-
-		return buildCallResult(cr), nil
-	}
-
-	// ---- Real call path: pick session
+	// ---- Pick session (same flow for simulate and broadcast)
 
 	signer, pickErr := sessionMgr.PickSessionForProfile(ctx, resolver, profileName, realm)
 	if pickErr != nil {
@@ -181,31 +147,49 @@ func callHandler(
 
 	sessionAddr := signer.Address()
 
-	// ---- Broadcast
+	// ---- Call (simulate or broadcast)
 
-	// TODO(MD-D): plumb Profile.MasterAddress through Call.
-	cr, callErr := c.Call(ctx, signer, "", realm, fn, fnArgs, false)
+	cr, callErr := c.Call(ctx, signer, profile.MasterAddress, realm, fn, fnArgs, simulate)
 	if callErr != nil {
+		if simulate && errors.Is(callErr, chain.ErrSimulateUnsupported) {
+			return server.Result{}, &server.ToolError{
+				Code:    "simulate_unsupported",
+				Message: "this chain client does not support simulate; retry without simulate=true",
+				Extra:   map[string]any{"profile": profileName},
+			}
+		}
+		result := "broadcast_err"
+		errPrefix := "gno_call broadcast"
+		if simulate {
+			result = "sim_err"
+			errPrefix = "gno_call simulate"
+		}
 		_ = alog.Append(audit.Entry{
 			Tool:           "gno_call",
 			Profile:        profileName,
 			ArgsSummary:    argsSummary,
-			Result:         "broadcast_err",
+			Result:         result,
 			Duration:       time.Since(start).Milliseconds(),
 			SessionAddress: sessionAddr,
 		})
-		return server.Result{}, fmt.Errorf("gno_call broadcast: %w", callErr)
+		return server.Result{}, fmt.Errorf("%s: %w", errPrefix, callErr)
 	}
 
-	// ---- Update spend + audit
+	// ---- Update spend + audit (simulate skips spend update)
 
-	_ = sessionMgr.UpdateSpend(profileName, sessionAddr, cr.GasUsed)
+	if !simulate {
+		_ = sessionMgr.UpdateSpend(profileName, sessionAddr, cr.GasUsed)
+	}
 
+	result := "ok"
+	if simulate {
+		result = "sim"
+	}
 	_ = alog.Append(audit.Entry{
 		Tool:           "gno_call",
 		Profile:        profileName,
 		ArgsSummary:    argsSummary,
-		Result:         "ok",
+		Result:         result,
 		Duration:       time.Since(start).Milliseconds(),
 		SessionAddress: sessionAddr,
 	})
@@ -257,7 +241,7 @@ func callInputSchema(s *server.Server) map[string]any {
 		},
 		"simulate": map[string]any{
 			"type":        "boolean",
-			"description": "When true, dry-run the call without broadcasting or spending gas. No active session required.",
+			"description": "When true, dry-run the call without broadcasting or spending gas. Still requires an active session that covers the target realm.",
 			"default":     false,
 		},
 	}

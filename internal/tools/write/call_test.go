@@ -28,7 +28,7 @@ func seedActiveSession(t *testing.T, mgr *session.Manager, profile string, allow
 		AllowPaths: allowPaths,
 		SpendLimit: spendLimit,
 	}
-	meta, err := mgr.AddPending(profile, kp, scope)
+	meta, err := mgr.AddPending(profile, kp, scope, "g1master")
 	if err != nil {
 		t.Fatalf("AddPending: %v", err)
 	}
@@ -256,7 +256,34 @@ func TestCall_scopeMismatch(t *testing.T) {
 	}
 }
 
-func TestCall_simulateBypasses_session(t *testing.T) {
+func TestCall_simulateRequiresSession(t *testing.T) {
+	s := newBaseTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+
+	fake := chain.NewFake()
+	mgr := noSessionMgr(t) // no session — simulate must still error
+	RegisterCall(s, mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"simulate": true,
+	})
+	if err == nil {
+		t.Fatal("expected authentication_required for simulate without session")
+	}
+	te, ok := errors.AsType[*server.ToolError](err)
+	if !ok {
+		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
+	}
+	if te.Code != "authentication_required" {
+		t.Errorf("expected code=authentication_required, got %q", te.Code)
+	}
+}
+
+func TestCall_simulateWithSession(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
@@ -268,7 +295,9 @@ func TestCall_simulateBypasses_session(t *testing.T) {
 		GasUsed: 1000,
 	})
 
-	mgr := noSessionMgr(t) // no session — simulate should bypass
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
+	})
 	RegisterCall(s, mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
@@ -301,7 +330,9 @@ func TestCall_simulateUnsupported(t *testing.T) {
 	fake := chain.NewFake()
 	fake.SetCallError("gno.land/r/test/counter", "Increment", chain.ErrSimulateUnsupported)
 
-	mgr := noSessionMgr(t)
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
+	})
 	RegisterCall(s, mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
@@ -419,7 +450,9 @@ func TestCall_simulateError_auditsSimErr(t *testing.T) {
 	s := newBaseTestServer(t)
 	f := chain.NewFake()
 	f.SetCallError("gno.land/r/test/counter", "Increment", errors.New("node unavailable"))
-	mgr := noSessionMgr(t)
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
+	})
 	var auditBuf bytes.Buffer
 	RegisterCall(s, mgr, constChainResolver(f), audit.NewLog(&auditBuf))
 

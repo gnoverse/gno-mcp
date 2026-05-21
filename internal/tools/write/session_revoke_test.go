@@ -19,7 +19,7 @@ func TestSessionRevoke_emitsRevokeCommand(t *testing.T) {
 			AllowPaths: []string{"gno.land/r/test/counter"},
 			SpendLimit: "1000000ugnot",
 		}
-		if _, err := m.AddPending("testnet5", kp, scope); err != nil {
+		if _, err := m.AddPending("testnet5", kp, scope, "g1master"); err != nil {
 			t.Fatalf("AddPending: %v", err)
 		}
 		// expose address to test via the manager's own list
