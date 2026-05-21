@@ -27,12 +27,34 @@ const (
 	OutputResource                   // MCP resource (untrusted realm content)
 )
 
+// Annotations carry MCP tool hints surfaced in the initialize/listTools response.
+type Annotations struct {
+	ReadOnly    bool
+	Destructive bool
+	Idempotent  bool
+	OpenWorld   bool
+}
+
 // Result is what a handler returns. Pipeline formats per OutputKind.
 type Result struct {
-	Text         string // for OutputText
-	ResourceURI  string // for OutputResource
-	ResourceBody string // for OutputResource
-	ResourceMIME string // for OutputResource (defaults to text/markdown)
+	Text              string         // for OutputText
+	ResourceURI       string         // for OutputResource
+	ResourceBody      string         // for OutputResource
+	ResourceMIME      string         // for OutputResource (defaults to text/markdown)
+	StructuredContent map[string]any // machine-readable output alongside prose text
+	IsError           bool           // true when the result represents a tool-side error
+}
+
+// ToolError is a structured error returned by a tool handler. Code/Message
+// land in the MCP wire response; Extra fields merge into structuredContent.
+type ToolError struct {
+	Code    string
+	Message string
+	Extra   map[string]any
+}
+
+func (e *ToolError) Error() string {
+	return fmt.Sprintf("tool error [%s]: %s", e.Code, e.Message)
 }
 
 // Handler is a tool's execution function. Pipeline injects schema-validated args.
@@ -45,6 +67,7 @@ type Tool struct {
 	InputSchema map[string]any // JSON Schema fragment
 	OutputKind  OutputKind
 	Capability  Capability
+	Annotations Annotations
 	Handler     Handler
 }
 
@@ -59,6 +82,12 @@ func NewRegistry() *Registry {
 
 func (r *Registry) Add(t *Tool) {
 	r.tools[t.Name] = t
+}
+
+// Get returns the tool with the given name, ok=false if not registered.
+func (r *Registry) Get(name string) (*Tool, bool) {
+	t, ok := r.tools[name]
+	return t, ok
 }
 
 func (r *Registry) Count() int { return len(r.tools) }
