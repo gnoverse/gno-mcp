@@ -48,7 +48,7 @@ func main() {
 	configPath := fs.String("config", defaultConfigPath(), "path to profiles.toml")
 	auditPath := fs.String("audit-path", defaultAuditPath(), "path to audit log file")
 	auditReads := fs.Bool("audit-reads", false, "also audit read-only tool calls")
-	sessionsPath := fs.String("sessions-path", defaultSessionsPath(), "Path to session storage directory")
+	sessionsPath := fs.String("sessions-path", defaultSessionsPath(), "path to session storage directory")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		log.Fatalf("flag parse: %v", err)
 	}

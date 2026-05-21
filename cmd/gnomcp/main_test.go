@@ -207,7 +207,7 @@ allow-dangerous-tools = true
 		}
 	}
 
-	for _, tool := range []string{"gno_session_propose", "gno_session_revoke", "gno_auth_status"} {
+	for _, tool := range []string{"gno_call", "gno_run", "gno_session_propose", "gno_session_revoke", "gno_auth_status"} {
 		if !strings.Contains(out, tool) {
 			t.Errorf("write tool %q missing from initialize response when allow-dangerous-tools=true; response:\n%s", tool, out)
 		}
@@ -250,7 +250,9 @@ allow-dangerous-tools = true
 		out, _ = io.ReadAll(stdout)
 	}()
 
-	io.WriteString(stdin, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`+"\n")
+	if _, err := io.WriteString(stdin, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`+"\n"); err != nil {
+		t.Fatalf("write init: %v", err)
+	}
 	time.Sleep(500 * time.Millisecond)
 	stdin.Close()
 	cmd.Wait()
