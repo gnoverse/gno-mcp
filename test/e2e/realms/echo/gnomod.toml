@@ -1,0 +1,2 @@
+module = "gno.land/r/test/echo"
+gno = "0.9"

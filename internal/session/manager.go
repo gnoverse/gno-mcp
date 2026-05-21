@@ -90,9 +90,19 @@ func (m *Manager) Hydrate(ctx context.Context, resolver chain.Resolver) error {
 		}
 		for _, meta := range metas {
 			result, err := queryChain(ctx, resolver, profile, meta.SessionPubkey)
-			if err != nil || !result.Active {
-				if err := m.store.Delete(profile, meta.SessionAddress); err != nil {
-					log.Printf("session/manager: hydrate: delete inactive session %q in profile %q: %v (will retry on next hydrate)", meta.SessionAddress, profile, err)
+			if err != nil {
+				log.Printf("session/manager: hydrate: query chain for session %q in profile %q: %v (keeping local state)", meta.SessionAddress, profile, err)
+				m.insertState(profile, meta, meta.State)
+				continue
+			}
+			if result.Unsupported {
+				// Chain build cannot confirm or deny — keep local state as-is.
+				m.insertState(profile, meta, meta.State)
+				continue
+			}
+			if !result.Active {
+				if delErr := m.store.Delete(profile, meta.SessionAddress); delErr != nil {
+					log.Printf("session/manager: hydrate: delete inactive session %q in profile %q: %v (will retry on next hydrate)", meta.SessionAddress, profile, delErr)
 				}
 				continue
 			}

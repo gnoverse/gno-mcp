@@ -151,8 +151,10 @@ func (r *Real) Call(_ context.Context, signer Signer, realm, fn string, args []s
 		Args:    args,
 	}
 	baseCfg := gnoclient.BaseTxCfg{
-		GasFee:    "1ugnot",
-		GasWanted: 5_000_000,
+		// Chain requires 1ugnot per 1000 gas; 5M gas → 5000ugnot minimum.
+		// Padded to 10000000ugnot at 10M gas for headroom on realm calls.
+		GasFee:    "10000000ugnot",
+		GasWanted: 10_000_000,
 	}
 
 	// Attach the gnoclient.Signer for this call.
@@ -216,8 +218,10 @@ func (r *Real) Run(_ context.Context, signer Signer, code string, simulate bool)
 	files := []*std.MemFile{{Name: "main.gno", Body: code}}
 	msg := vm.NewMsgRun(caller, nil, files)
 	baseCfg := gnoclient.BaseTxCfg{
-		GasFee:    "1ugnot",
-		GasWanted: 5_000_000,
+		// Chain requires 1ugnot per 1000 gas; 5M gas → 5000ugnot minimum.
+		// Padded to 10000000ugnot at 10M gas for headroom on realm calls.
+		GasFee:    "10000000ugnot",
+		GasWanted: 10_000_000,
 	}
 
 	// Attach the gnoclient.Signer for this call.
