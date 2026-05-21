@@ -54,62 +54,31 @@ chain-type = "local"
 	}
 }
 
-func TestLoad_parsesAllowDangerousTools(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
+func TestLoad_parsesWriteAuthFields(t *testing.T) {
+	src := `
 [local]
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 allow-dangerous-tools = true
-`))
+default-spend-limit = "1000000ugnot"
+default-expires-in = "4h"
+bypass-hard-limits = true
+`
+	cfg, err := Load(strings.NewReader(src))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if !cfg.Profiles["local"].AllowDangerousTools {
+	p := cfg.Profiles["local"]
+	if !p.AllowDangerousTools {
 		t.Error("expected allow-dangerous-tools=true")
 	}
-}
-
-func TestLoad_parsesDefaultSpendLimit(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
-[local]
-rpc-url = "http://127.0.0.1:26657"
-chain-id = "dev"
-default-spend-limit = "1000000ugnot"
-`))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got := cfg.Profiles["local"].DefaultSpendLimit; got != "1000000ugnot" {
+	if got := p.DefaultSpendLimit; got != "1000000ugnot" {
 		t.Errorf("expected default-spend-limit=1000000ugnot, got %q", got)
 	}
-}
-
-func TestLoad_parsesDefaultExpiresIn(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
-[local]
-rpc-url = "http://127.0.0.1:26657"
-chain-id = "dev"
-default-expires-in = "4h"
-`))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got := cfg.Profiles["local"].DefaultExpiresIn; got != "4h" {
+	if got := p.DefaultExpiresIn; got != "4h" {
 		t.Errorf("expected default-expires-in=4h, got %q", got)
 	}
-}
-
-func TestLoad_parsesBypassHardLimits(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
-[local]
-rpc-url = "http://127.0.0.1:26657"
-chain-id = "dev"
-bypass-hard-limits = true
-`))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if !cfg.Profiles["local"].BypassHardLimits {
+	if !p.BypassHardLimits {
 		t.Error("expected bypass-hard-limits=true")
 	}
 }
