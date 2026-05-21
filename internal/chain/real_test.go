@@ -78,6 +78,51 @@ func TestNewReal_emptyRPCURL(t *testing.T) {
 	}
 }
 
+// ---- Real.Run tests
+
+func TestReal_Run_simulateRequiresSigner(t *testing.T) {
+	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	if err != nil {
+		t.Fatalf("NewReal: %v", err)
+	}
+	_, err = r.Run(context.Background(), nil, "package main\nfunc main() {}", true)
+	if err == nil {
+		t.Fatal("expected error for nil signer (even with simulate=true)")
+	}
+	if !strings.Contains(err.Error(), "signer") {
+		t.Errorf("error should mention signer, got: %v", err)
+	}
+}
+
+func TestReal_Run_broadcastRequiresSigner(t *testing.T) {
+	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	if err != nil {
+		t.Fatalf("NewReal: %v", err)
+	}
+	_, err = r.Run(context.Background(), nil, "package main\nfunc main() {}", false)
+	if err == nil {
+		t.Fatal("expected error for nil signer in broadcast mode")
+	}
+	if !strings.Contains(err.Error(), "signer") {
+		t.Errorf("error should mention signer, got: %v", err)
+	}
+}
+
+func TestReal_Run_signerMustProvideGnoclientSigner(t *testing.T) {
+	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	if err != nil {
+		t.Fatalf("NewReal: %v", err)
+	}
+	stub := &minimalSigner{addr: "g1notreal"}
+	_, err = r.Run(context.Background(), stub, "package main\nfunc main() {}", false)
+	if err == nil {
+		t.Fatal("expected error for signer missing gnoclient.Signer provider")
+	}
+	if !strings.Contains(err.Error(), "gnoclient.Signer") && !strings.Contains(err.Error(), "session keypair") {
+		t.Errorf("error should mention gnoclient.Signer requirement, got: %v", err)
+	}
+}
+
 func TestReal_File_rejectsEmptyFile(t *testing.T) {
 	r, err := NewReal("https://rpc.test5.gno.land:443", "test5")
 	if err != nil {

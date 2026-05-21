@@ -10,6 +10,7 @@ import (
 	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
 	"github.com/gnolang/gno/tm2/pkg/crypto"
+	"github.com/gnolang/gno/tm2/pkg/std"
 )
 
 // gnoclientSignerProvider is satisfied by session-managed keys. Real.Call/Run
@@ -191,8 +192,78 @@ func (r *Real) Call(_ context.Context, signer Signer, realm, fn string, args []s
 	}, nil
 }
 
-func (r *Real) Run(_ context.Context, _ Signer, _ string, _ bool) (RunResult, error) {
-	return RunResult{}, fmt.Errorf("not implemented")
+// Run broadcasts (or simulates) a vm/MsgRun transaction through gnoclient.
+// The code string is wrapped in a single-file MemPackage with package name
+// "main". signer must be non-nil and must implement gnoclientSignerProvider.
+func (r *Real) Run(_ context.Context, signer Signer, code string, simulate bool) (RunResult, error) {
+	if signer == nil {
+		return RunResult{}, fmt.Errorf("run: signer required (got nil)")
+	}
+	provider, ok := signer.(gnoclientSignerProvider)
+	if !ok {
+		return RunResult{}, fmt.Errorf("run: signer does not provide a gnoclient.Signer (session keypair required)")
+	}
+	gsigner := provider.GnoclientSigner()
+	if gsigner == nil {
+		return RunResult{}, fmt.Errorf("run: gnoclientSignerProvider returned nil Signer")
+	}
+
+	caller, err := crypto.AddressFromBech32(signer.Address())
+	if err != nil {
+		return RunResult{}, fmt.Errorf("run: invalid signer address %q: %w", signer.Address(), err)
+	}
+
+	pkg := &std.MemPackage{
+		Name: "main",
+		Path: "gno.land/r/" + signer.Address(),
+		Files: []*std.MemFile{
+			{Name: "main.gno", Body: code},
+		},
+	}
+	msg := vm.MsgRun{
+		Caller:  caller,
+		Package: pkg,
+	}
+	baseCfg := gnoclient.BaseTxCfg{
+		GasFee:    "1ugnot",
+		GasWanted: 5_000_000,
+	}
+
+	// Attach the gnoclient.Signer for this call.
+	// NOTE: not goroutine-safe across concurrent Real.Run invocations;
+	// the session manager must serialize per-client access.
+	r.cli.Signer = gsigner
+
+	if simulate {
+		unsignedTx, err := gnoclient.NewRunTx(baseCfg, msg)
+		if err != nil {
+			return RunResult{}, fmt.Errorf("run: build unsigned tx: %w", err)
+		}
+		signedTx, err := r.cli.SignTx(*unsignedTx, 0, 0)
+		if err != nil {
+			return RunResult{}, fmt.Errorf("run: sign tx for simulate: %w", err)
+		}
+		deliver, err := r.cli.Simulate(signedTx)
+		if err != nil {
+			return RunResult{}, fmt.Errorf("run: simulate: %w", err)
+		}
+		return RunResult{
+			Simulated: true,
+			GasUsed:   deliver.GasUsed,
+			Output:    string(deliver.Data),
+		}, nil
+	}
+
+	res, err := r.cli.Run(baseCfg, msg)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("run: %w", err)
+	}
+	return RunResult{
+		TxHash:  hex.EncodeToString(res.Hash),
+		Height:  res.Height,
+		Output:  string(res.DeliverTx.Data),
+		GasUsed: res.DeliverTx.GasUsed,
+	}, nil
 }
 
 func (r *Real) QuerySession(_ context.Context, _ string) (SessionStatus, error) {
