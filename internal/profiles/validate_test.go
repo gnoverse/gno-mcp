@@ -75,14 +75,14 @@ func TestLoad_rejectsUnknownKey(t *testing.T) {
 [local]
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
-allow-dangerous-tools = true
+foo-bar = true
 `
 	_, err := Load(strings.NewReader(src))
 	if err == nil {
-		t.Fatal("expected error for unknown key allow-dangerous-tools, got nil")
+		t.Fatal("expected error for unknown key foo-bar, got nil")
 	}
 	// Must mention the offending key so users can fix their config.
-	if !strings.Contains(err.Error(), "allow-dangerous-tools") {
+	if !strings.Contains(err.Error(), "foo-bar") {
 		t.Errorf("error %q should mention the offending key", err)
 	}
 }

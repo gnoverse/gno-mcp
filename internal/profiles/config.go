@@ -11,10 +11,17 @@ import (
 
 // Profile is a single chain profile loaded from profiles.toml.
 type Profile struct {
+	// Connection (Milestone A)
 	ChainType    string `toml:"chain-type"`
 	RPCURL       string `toml:"rpc-url"`
 	ChainID      string `toml:"chain-id"`
 	TxIndexerURL string `toml:"tx-indexer-url"`
+
+	// Write authorization (Milestone B)
+	AllowDangerousTools bool   `toml:"allow-dangerous-tools"` // default false; gates write tools
+	DefaultSpendLimit   string `toml:"default-spend-limit"`   // optional; clamped at use
+	DefaultExpiresIn    string `toml:"default-expires-in"`    // optional; Go duration string
+	BypassHardLimits    bool   `toml:"bypass-hard-limits"`    // default false; disables per-chain clamps
 }
 
 // Config is the root of profiles.toml.
