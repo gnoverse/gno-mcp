@@ -17,6 +17,7 @@ type Fake struct {
 	calls      map[string]CallResult
 	callErrors map[string]error
 	runs       map[string]RunResult
+	runErrors  map[string]error
 	sessions   map[string]SessionStatus
 }
 
@@ -30,6 +31,7 @@ func NewFake() *Fake {
 		calls:      map[string]CallResult{},
 		callErrors: map[string]error{},
 		runs:       map[string]RunResult{},
+		runErrors:  map[string]error{},
 		sessions:   map[string]SessionStatus{},
 	}
 }
@@ -95,6 +97,9 @@ func (f *Fake) Call(_ context.Context, _ Signer, realm, fn string, args []string
 }
 
 func (f *Fake) Run(_ context.Context, _ Signer, code string, simulate bool) (RunResult, error) {
+	if err, ok := f.runErrors[code]; ok {
+		return RunResult{}, err
+	}
 	r, ok := f.runs[code]
 	if !ok {
 		return RunResult{}, fmt.Errorf("fake: no run for code (%d chars)", len(code))
@@ -124,11 +129,21 @@ func (f *Fake) SetRun(code string, result RunResult) {
 	f.runs[code] = result
 }
 
+// SetRunError seeds an error returned by Run for the given code string.
+// Checked before the runs map. Use with ErrSimulateUnsupported to exercise
+// the simulate_unsupported error path in tool tests.
+func (f *Fake) SetRunError(code string, err error) {
+	f.runErrors[code] = err
+}
+
 func (f *Fake) SetSession(pubkey string, status SessionStatus) {
 	f.sessions[pubkey] = status
 }
 
 func callKey(realm, fn string, args []string) string {
+	if args == nil {
+		args = []string{}
+	}
 	return realm + "|" + fn + "|" + strings.Join(args, ",")
 }
 

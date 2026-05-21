@@ -213,17 +213,8 @@ func (r *Real) Run(_ context.Context, signer Signer, code string, simulate bool)
 		return RunResult{}, fmt.Errorf("run: invalid signer address %q: %w", signer.Address(), err)
 	}
 
-	pkg := &std.MemPackage{
-		Name: "main",
-		Path: "gno.land/r/" + signer.Address(),
-		Files: []*std.MemFile{
-			{Name: "main.gno", Body: code},
-		},
-	}
-	msg := vm.MsgRun{
-		Caller:  caller,
-		Package: pkg,
-	}
+	files := []*std.MemFile{{Name: "main.gno", Body: code}}
+	msg := vm.NewMsgRun(caller, nil, files)
 	baseCfg := gnoclient.BaseTxCfg{
 		GasFee:    "1ugnot",
 		GasWanted: 5_000_000,

@@ -183,6 +183,21 @@ func TestFake_Run_unseededReturnsError(t *testing.T) {
 	}
 }
 
+func TestFake_Run_setRunErrorTakesPriority(t *testing.T) {
+	f := NewFake()
+	code := "package main\nfunc main() {}"
+	f.SetRun(code, RunResult{Output: "ok"})
+	f.SetRunError(code, ErrSimulateUnsupported)
+
+	_, err := f.Run(context.Background(), fakeSignerStub{}, code, true)
+	if err == nil {
+		t.Fatal("expected error from SetRunError")
+	}
+	if !errors.Is(err, ErrSimulateUnsupported) {
+		t.Errorf("error = %v, want ErrSimulateUnsupported", err)
+	}
+}
+
 func TestFake_Run_simulateSetSimulatedTrue(t *testing.T) {
 	f := NewFake()
 	code := "package main\nfunc main() {}"
