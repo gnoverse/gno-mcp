@@ -2,12 +2,22 @@ package chain
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
+	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
+	"github.com/gnolang/gno/tm2/pkg/crypto"
 )
+
+// gnoclientSignerProvider is satisfied by session-managed keys. Real.Call/Run
+// type-asserts the Signer to this interface to acquire a tx-signing gnoclient.Signer.
+// Keeps gnoclient.Signer out of the chain.Signer interface (avoids leakage).
+type gnoclientSignerProvider interface {
+	GnoclientSigner() gnoclient.Signer
+}
 
 // Real implements Client against a live gno chain via gnoclient + RPC.
 //
@@ -112,8 +122,73 @@ func (r *Real) Doc(_ context.Context, realm string) (string, error) {
 	return string(qres.Response.Data), nil
 }
 
-func (r *Real) Call(_ context.Context, _ Signer, _, _ string, _ []string, _ bool) (CallResult, error) {
-	return CallResult{}, fmt.Errorf("not implemented")
+// Call broadcasts (or simulates) a vm/MsgCall transaction through gnoclient.
+// signer must be non-nil and must implement gnoclientSignerProvider (the
+// session.Keypair satisfies this).
+func (r *Real) Call(_ context.Context, signer Signer, realm, fn string, args []string, simulate bool) (CallResult, error) {
+	if signer == nil {
+		return CallResult{}, fmt.Errorf("call: signer required (got nil)")
+	}
+	provider, ok := signer.(gnoclientSignerProvider)
+	if !ok {
+		return CallResult{}, fmt.Errorf("call: signer does not provide a gnoclient.Signer (session keypair required)")
+	}
+	gsigner := provider.GnoclientSigner()
+	if gsigner == nil {
+		return CallResult{}, fmt.Errorf("call: gnoclientSignerProvider returned nil Signer")
+	}
+
+	caller, err := crypto.AddressFromBech32(signer.Address())
+	if err != nil {
+		return CallResult{}, fmt.Errorf("call: invalid signer address %q: %w", signer.Address(), err)
+	}
+
+	msg := vm.MsgCall{
+		Caller:  caller,
+		PkgPath: realm,
+		Func:    fn,
+		Args:    args,
+	}
+	baseCfg := gnoclient.BaseTxCfg{
+		GasFee:    "1ugnot",
+		GasWanted: 5_000_000,
+	}
+
+	// Attach the gnoclient.Signer for this call.
+	// NOTE: not goroutine-safe across concurrent Real.Call invocations;
+	// the session manager must serialize per-client access.
+	r.cli.Signer = gsigner
+
+	if simulate {
+		unsignedTx, err := gnoclient.NewCallTx(baseCfg, msg)
+		if err != nil {
+			return CallResult{}, fmt.Errorf("call: build unsigned tx: %w", err)
+		}
+		signedTx, err := r.cli.SignTx(*unsignedTx, 0, 0)
+		if err != nil {
+			return CallResult{}, fmt.Errorf("call: sign tx for simulate: %w", err)
+		}
+		deliver, err := r.cli.Simulate(signedTx)
+		if err != nil {
+			return CallResult{}, fmt.Errorf("call: simulate: %w", err)
+		}
+		return CallResult{
+			Simulated: true,
+			GasUsed:   deliver.GasUsed,
+			Result:    string(deliver.Data),
+		}, nil
+	}
+
+	res, err := r.cli.Call(baseCfg, msg)
+	if err != nil {
+		return CallResult{}, fmt.Errorf("call: %w", err)
+	}
+	return CallResult{
+		TxHash:  hex.EncodeToString(res.Hash),
+		Height:  res.Height,
+		Result:  string(res.DeliverTx.Data),
+		GasUsed: res.DeliverTx.GasUsed,
+	}, nil
 }
 
 func (r *Real) Run(_ context.Context, _ Signer, _ string, _ bool) (RunResult, error) {
