@@ -1,9 +1,7 @@
 package profiles
 
 import (
-	"bytes"
-	"io"
-	"os"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -16,7 +14,7 @@ chain-id = "dev"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := cfg.Validate(); err == nil {
+	if _, err := cfg.Validate(); err == nil {
 		t.Fatal("expected error for missing rpc-url")
 	}
 }
@@ -29,7 +27,7 @@ rpc-url = "http://127.0.0.1:26657"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := cfg.Validate(); err == nil {
+	if _, err := cfg.Validate(); err == nil {
 		t.Fatal("expected error for missing chain-id")
 	}
 }
@@ -43,7 +41,7 @@ chain-id = "x"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := cfg.Validate(); err != nil {
+	if _, err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
 	if got := cfg.Profiles["mystery"].ChainType; got != "testnet" {
@@ -53,7 +51,7 @@ chain-id = "x"
 
 func TestValidate_rejectsEmptyProfileSet(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{}}
-	if err := cfg.Validate(); err == nil {
+	if _, err := cfg.Validate(); err == nil {
 		t.Fatal("expected error for empty profile set")
 	}
 }
@@ -68,7 +66,7 @@ chain-id = "x"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := cfg.Validate(); err == nil {
+	if _, err := cfg.Validate(); err == nil {
 		t.Fatal("expected error for unknown chain-type")
 	}
 }
@@ -100,7 +98,7 @@ default-expires-in = "forever"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	err = cfg.Validate()
+	_, err = cfg.Validate()
 	if err == nil {
 		t.Fatal("expected error for malformed default-expires-in")
 	}
@@ -113,47 +111,30 @@ default-expires-in = "forever"
 }
 
 func TestValidate_rejectsMalformedDefaultSpendLimit(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
+	cases := map[string]string{
+		"letters only (no magnitude)": "abc",
+		"denom only (no magnitude)":   "ugnot",
+		"digits only (no denom)":      "100",
+	}
+	for name, val := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg, err := Load(strings.NewReader(fmt.Sprintf(`
 [local]
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
-default-spend-limit = "abc"
-`))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for malformed default-spend-limit")
-	}
-}
-
-func TestValidate_rejectsMalformedDefaultSpendLimitNoMagnitude(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
-[local]
-rpc-url = "http://127.0.0.1:26657"
-chain-id = "dev"
-default-spend-limit = "ugnot"
-`))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for spend-limit missing numeric magnitude")
-	}
-}
-
-func TestValidate_rejectsMalformedDefaultSpendLimitNoDenom(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
-[local]
-rpc-url = "http://127.0.0.1:26657"
-chain-id = "dev"
-default-spend-limit = "100"
-`))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for spend-limit missing denomination")
+default-spend-limit = %q
+`, val)))
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			_, err = cfg.Validate()
+			if err == nil {
+				t.Fatalf("expected error for spend-limit %q", val)
+			}
+			if !strings.Contains(err.Error(), "default-spend-limit") {
+				t.Errorf("error %q should mention field name", err)
+			}
+		})
 	}
 }
 
@@ -168,7 +149,7 @@ allow-dangerous-tools = false
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	err = cfg.Validate()
+	_, err = cfg.Validate()
 	if err == nil {
 		t.Fatal("expected error for bypass-hard-limits without allow-dangerous-tools")
 	}
@@ -189,29 +170,36 @@ allow-dangerous-tools = true
 		t.Fatalf("Load: %v", err)
 	}
 
-	r, w, pipeErr := os.Pipe()
-	if pipeErr != nil {
-		t.Fatalf("os.Pipe: %v", pipeErr)
-	}
-	old := os.Stderr
-	os.Stderr = w
-
-	validateErr := cfg.Validate()
-
-	w.Close()
-	os.Stderr = old
-
-	var buf bytes.Buffer
-	if _, copyErr := io.Copy(&buf, r); copyErr != nil {
-		t.Fatalf("io.Copy: %v", copyErr)
-	}
-	r.Close()
+	warn, validateErr := cfg.Validate()
 
 	if validateErr != nil {
 		t.Fatalf("Validate returned unexpected error: %v", validateErr)
 	}
-	if !strings.Contains(buf.String(), "mainnet with allow-dangerous-tools") {
-		t.Errorf("expected mainnet warning on stderr, got: %q", buf.String())
+	if warn == nil {
+		t.Fatal("expected non-nil warning for mainnet+allow-dangerous-tools")
+	}
+	if !strings.Contains(warn.Error(), "mainnet with allow-dangerous-tools") {
+		t.Errorf("warning %q should mention mainnet with allow-dangerous-tools", warn)
+	}
+}
+
+func TestValidate_acceptsValidExpiresIn(t *testing.T) {
+	cases := []string{"0s", "500ms", "2h", "72h30m", "168h"}
+	for _, val := range cases {
+		t.Run(val, func(t *testing.T) {
+			cfg, err := Load(strings.NewReader(fmt.Sprintf(`
+[local]
+rpc-url = "http://127.0.0.1:26657"
+chain-id = "dev"
+default-expires-in = %q
+`, val)))
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if _, err := cfg.Validate(); err != nil {
+				t.Errorf("Validate rejected valid duration %q: %v", val, err)
+			}
+		})
 	}
 }
 
@@ -229,7 +217,7 @@ bypass-hard-limits = true
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := cfg.Validate(); err != nil {
+	if _, err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate: unexpected error: %v", err)
 	}
 }

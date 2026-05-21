@@ -2,7 +2,6 @@ package profiles
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"time"
 )
@@ -27,44 +26,46 @@ var (
 )
 
 // Validate checks required fields and applies defaults in place.
-// Returns the first encountered error.
-func (c *Config) Validate() error {
+// The returned warning is non-nil when a valid but potentially dangerous
+// configuration is detected (e.g. mainnet with allow-dangerous-tools=true).
+// The caller decides how to surface the warning (log, stderr, ignore).
+func (c *Config) Validate() (warn error, err error) {
 	if len(c.Profiles) == 0 {
-		return fmt.Errorf("no profiles loaded")
+		return nil, fmt.Errorf("no profiles loaded")
 	}
 	for name, p := range c.Profiles {
 		if p.RPCURL == "" {
-			return fmt.Errorf("profile %q: missing required rpc-url", name)
+			return nil, fmt.Errorf("profile %q: missing required rpc-url", name)
 		}
 		if p.ChainID == "" {
-			return fmt.Errorf("profile %q: missing required chain-id", name)
+			return nil, fmt.Errorf("profile %q: missing required chain-id", name)
 		}
 		if p.ChainType == "" {
 			p.ChainType = ChainTypeTestnet
 		}
 		if !validChainTypes[p.ChainType] {
-			return fmt.Errorf("profile %q: unknown chain-type %q (must be local/testnet/mainnet)", name, p.ChainType)
+			return nil, fmt.Errorf("profile %q: unknown chain-type %q (must be local/testnet/mainnet)", name, p.ChainType)
 		}
 
 		if p.DefaultExpiresIn != "" {
 			if _, err := time.ParseDuration(p.DefaultExpiresIn); err != nil {
-				return fmt.Errorf("profile %q: invalid default-expires-in %q: %w", name, p.DefaultExpiresIn, err)
+				return nil, fmt.Errorf("profile %q: invalid default-expires-in %q: %w", name, p.DefaultExpiresIn, err)
 			}
 		}
 		if p.DefaultSpendLimit != "" {
 			if !spendLimitRE.MatchString(p.DefaultSpendLimit) {
-				return fmt.Errorf("profile %q: invalid default-spend-limit %q (expected like \"1000ugnot\")", name, p.DefaultSpendLimit)
+				return nil, fmt.Errorf("profile %q: invalid default-spend-limit %q (expected like \"1000ugnot\")", name, p.DefaultSpendLimit)
 			}
 		}
 		if p.BypassHardLimits && !p.AllowDangerousTools {
-			return fmt.Errorf("profile %q: bypass-hard-limits requires allow-dangerous-tools=true (bypass is meaningless without write tools)", name)
+			return nil, fmt.Errorf("profile %q: bypass-hard-limits requires allow-dangerous-tools=true (bypass is meaningless without write tools)", name)
 		}
 
 		c.Profiles[name] = p
 
 		if p.ChainType == ChainTypeMainnet && p.AllowDangerousTools {
-			fmt.Fprintf(os.Stderr, "WARNING: Profile %q: mainnet with allow-dangerous-tools=true. Real funds at stake.\n", name)
+			warn = fmt.Errorf("profile %q: mainnet with allow-dangerous-tools=true. Real funds at stake", name)
 		}
 	}
-	return nil
+	return warn, nil
 }

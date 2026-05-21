@@ -21,7 +21,7 @@ func newBaseTestServer(t *testing.T) *server.Server {
 			TxIndexerURL: "https://indexer.test5/graphql",
 		},
 	}}
-	if err := cfg.Validate(); err != nil {
+	if _, err := cfg.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
 	return server.NewServer(cfg, "")

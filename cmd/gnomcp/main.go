@@ -63,8 +63,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
-	if err := cfg.Validate(); err != nil {
+	warn, err := cfg.Validate()
+	if err != nil {
 		log.Fatalf("validate config: %v", err)
+	}
+	if warn != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: %v\n", warn)
 	}
 
 	// ---- local-gnodev discovery

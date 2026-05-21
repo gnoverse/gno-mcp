@@ -15,7 +15,7 @@ func newBaseTestServer(t *testing.T) *server.Server {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
 	}}
-	if err := cfg.Validate(); err != nil {
+	if _, err := cfg.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
 	return server.NewServer(cfg, "")
