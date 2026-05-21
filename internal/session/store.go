@@ -132,6 +132,25 @@ func (s *Store) List(profile string) ([]*SessionMeta, error) {
 	return metas, nil
 }
 
+// listProfiles returns the names of all subdirectories in rootDir (each
+// corresponds to a profile). Returns nil, nil when rootDir does not exist yet.
+func (s *Store) listProfiles() ([]string, error) {
+	entries, err := os.ReadDir(s.rootDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("list profiles: %w", err)
+	}
+	var ps []string
+	for _, e := range entries {
+		if e.IsDir() {
+			ps = append(ps, e.Name())
+		}
+	}
+	return ps, nil
+}
+
 func (s *Store) decode(data []byte, path string) (*SessionMeta, error) {
 	var m SessionMeta
 	if err := json.Unmarshal(data, &m); err != nil {
