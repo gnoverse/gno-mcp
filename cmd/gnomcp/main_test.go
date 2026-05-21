@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -210,5 +211,52 @@ allow-dangerous-tools = true
 		if !strings.Contains(out, tool) {
 			t.Errorf("write tool %q missing from initialize response when allow-dangerous-tools=true; response:\n%s", tool, out)
 		}
+	}
+}
+
+func TestInitialize_instructions_mentionsSessions_whenDangerous(t *testing.T) {
+	toml := `
+[testnet5]
+chain-type = "testnet"
+rpc-url = "https://rpc.test5.gno.land:443"
+chain-id = "test5"
+allow-dangerous-tools = true
+`
+	cfgDir := t.TempDir()
+	cfgFile := filepath.Join(cfgDir, "profiles.toml")
+	if err := os.WriteFile(cfgFile, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sessDir := t.TempDir()
+
+	cmd := exec.Command("go", "run", ".", "-config", cfgFile, "-sessions-path", sessDir)
+	cmd.Dir = srcDir()
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	var out []byte
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		out, _ = io.ReadAll(stdout)
+	}()
+
+	io.WriteString(stdin, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`+"\n")
+	time.Sleep(500 * time.Millisecond)
+	stdin.Close()
+	cmd.Wait()
+	<-done
+
+	if !strings.Contains(string(out), "gno_session_propose") {
+		t.Errorf("expected instructions to mention gno_session_propose; response:\n%s", string(out))
 	}
 }

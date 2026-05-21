@@ -121,10 +121,19 @@ func main() {
 	}
 
 	// ---- build MCP SDK server
+	instructions := "gnomcp serves Gno realm reads via the official MCP Go SDK. " +
+		"Tools are registered conditionally based on profile capabilities (see profiles.toml)."
+	if s.AnyProfileAllowsDangerous() {
+		instructions += " Write tools (gno_call, gno_run) require an active " +
+			"chain-bounded session — call gno_session_propose first to authorize " +
+			"one via your own gnokey."
+	}
 	mcpServer := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "gnomcp",
 		Version: version,
-	}, nil)
+	}, &mcpsdk.ServerOptions{
+		Instructions: instructions,
+	})
 
 	for _, t := range s.Registry().All() {
 		inputSchema, err := mapToSchema(t.InputSchema)
