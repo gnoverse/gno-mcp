@@ -35,14 +35,22 @@ type sessionState struct {
 // ---- signerAdapter
 
 // signerAdapter reconstructs chain.Signer from a stored SessionMeta.
-// It reads Address and Pubkey from meta fields and signs using the raw
-// ed25519 private key stored in meta.Privkey (seed||pubkey, 64 bytes).
+// It reads Address from meta and signs using the raw ed25519 private key
+// stored in meta.Privkey (seed||pubkey, 64 bytes). The trailing 32 bytes
+// of the private key are the public key (per RFC 8032).
 type signerAdapter struct {
 	addr string
 	priv []byte
 }
 
 func (s *signerAdapter) Address() string { return s.addr }
+
+func (s *signerAdapter) Pubkey() []byte {
+	pub := ed25519.PrivateKey(s.priv).Public().(ed25519.PublicKey)
+	out := make([]byte, len(pub))
+	copy(out, pub)
+	return out
+}
 
 func (s *signerAdapter) Sign(payload []byte) ([]byte, error) {
 	if len(s.priv) != ed25519.PrivateKeySize {
@@ -89,7 +97,7 @@ func (m *Manager) Hydrate(ctx context.Context, resolver chain.Resolver) error {
 			return fmt.Errorf("session/manager: hydrate list %q: %w", profile, err)
 		}
 		for _, meta := range metas {
-			result, err := queryChain(ctx, resolver, profile, meta.SessionPubkey)
+			result, err := queryChain(ctx, resolver, profile, meta.MasterAddress, meta.SessionAddress)
 			if err != nil {
 				log.Printf("session/manager: hydrate: query chain for session %q in profile %q: %v (keeping local state)", meta.SessionAddress, profile, err)
 				m.insertState(profile, meta, meta.State)
@@ -160,20 +168,20 @@ func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Reso
 	// Step 1: snapshot pending sessions for promotion — no IO under lock.
 	type pending struct {
 		addr   string
-		pubkey string
+		master string
 	}
 	m.mu.RLock()
 	var toPromote []pending
 	for addr, ss := range m.sessions[profile] {
 		if ss.state == StatePending {
-			toPromote = append(toPromote, pending{addr: addr, pubkey: ss.meta.SessionPubkey})
+			toPromote = append(toPromote, pending{addr: addr, master: ss.meta.MasterAddress})
 		}
 	}
 	m.mu.RUnlock()
 
 	// Step 2: promote outside the lock — queryChain + store.Write are IO.
 	for _, p := range toPromote {
-		res, err := queryChain(ctx, resolver, profile, p.pubkey)
+		res, err := queryChain(ctx, resolver, profile, p.master, p.addr)
 		if err != nil || !res.Active {
 			continue
 		}
@@ -341,6 +349,26 @@ func (m *Manager) MarkActive(profile, sessionAddr string, status chain.SessionSt
 
 	if err := m.store.Write(profile, ss.meta); err != nil {
 		return fmt.Errorf("session/manager: MarkActive: persist: %w", err)
+	}
+	return nil
+}
+
+// ---- SetMasterAddress
+
+// SetMasterAddress stamps the master address onto an existing session's meta
+// and persists it. Used by the tool layer to attach the profile's master at
+// session-propose time. Returns an error if the session is not found.
+func (m *Manager) SetMasterAddress(profile, sessionAddr, master string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ss := m.getStateLocked(profile, sessionAddr)
+	if ss == nil {
+		return fmt.Errorf("session/manager: SetMasterAddress: session %q not found for profile %q", sessionAddr, profile)
+	}
+	ss.meta.MasterAddress = master
+	if err := m.store.Write(profile, ss.meta); err != nil {
+		return fmt.Errorf("session/manager: SetMasterAddress: persist: %w", err)
 	}
 	return nil
 }

@@ -8,8 +8,12 @@ import (
 
 // Signer is the chain-bound session key abstraction used by write methods.
 // Implemented by the in-memory session keypair in internal/session/.
+// Pubkey returns the raw ed25519 public key bytes; Real.Call/Run wraps these
+// into a std.Signature alongside a non-zero SessionAddr so the ante handler
+// loads the matching session record from auth/accounts/<master>/session/<addr>.
 type Signer interface {
 	Address() string                     // bech32 g1...
+	Pubkey() []byte                      // raw ed25519 public key (32 bytes)
 	Sign(payload []byte) ([]byte, error) // ed25519
 }
 
@@ -18,11 +22,11 @@ type Signer interface {
 // simulate_unsupported ToolError.
 var ErrSimulateUnsupported = errors.New("chain: simulate not supported by current gnoclient")
 
-// ErrSessionQueryUnsupported is returned by Real.QuerySession when the
-// underlying chain does not expose a per-pubkey session ABCI path.
-// The session.Manager falls back to local-authoritative state and
-// surfaces this to tools as session_query_unsupported.
-var ErrSessionQueryUnsupported = errors.New("chain: per-pubkey session query not supported by current gnoclient")
+// ErrSessionQueryUnsupported is returned when a chain client cannot resolve
+// a session — for example, when the caller could not supply a master address.
+// The session.Manager catches this and falls back to local-authoritative state
+// instead of wiping sessions on hydrate.
+var ErrSessionQueryUnsupported = errors.New("chain: session query not supported")
 
 // CallResult is the outcome of a vm/MsgCall broadcast (or simulation).
 type CallResult struct {
@@ -76,15 +80,22 @@ type Client interface {
 	Doc(ctx context.Context, realm string) (string, error)
 
 	// Call broadcasts (or simulates) a vm/MsgCall for the given realm function.
-	// signer must be non-nil when simulate is false.
-	Call(ctx context.Context, signer Signer, realm, fn string, args []string, simulate bool) (CallResult, error)
+	// master is the bech32 master address (g1...) the session was registered
+	// under; the broadcast MsgCall.Caller is set to master and the tx is signed
+	// by the session keypair (via signer) with Signature.SessionAddr pointing
+	// at signer.Address(). signer must be non-nil when simulate is false.
+	Call(ctx context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error)
 
 	// Run broadcasts (or simulates) a vm/MsgRun for ad-hoc gno code execution.
+	// master is the bech32 master address the session is registered under.
 	// signer must be non-nil when simulate is false.
-	Run(ctx context.Context, signer Signer, code string, simulate bool) (RunResult, error)
+	Run(ctx context.Context, signer Signer, master, code string, simulate bool) (RunResult, error)
 
-	// QuerySession returns the chain-side state for a session identified by its
-	// bech32 pubkey (gpub1...). Returns SessionStatus{Active: false} (no error)
-	// when the pubkey has no on-chain session record.
-	QuerySession(ctx context.Context, sessionPubkey string) (SessionStatus, error)
+	// QuerySession returns the chain-side state for the session at
+	// auth/accounts/<master>/session/<sessionAddr>. Both arguments are bech32
+	// (g1...) addresses. Returns SessionStatus{Active: false} (no error) when
+	// the chain has no record. Returns ErrSessionQueryUnsupported when the
+	// query cannot be made (e.g. master is unknown to the caller); the
+	// session.Manager handles this by keeping local state authoritative.
+	QuerySession(ctx context.Context, master, sessionAddr string) (SessionStatus, error)
 }

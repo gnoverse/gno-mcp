@@ -8,27 +8,33 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/chain"
 )
 
-// chainCheckResult is the outcome of querying the chain for a session pubkey.
-// Unsupported=true means the chain build does not expose a per-pubkey session
-// query path; callers should keep local state as authoritative.
+// chainCheckResult is the outcome of querying the chain for a session.
+// Unsupported=true means the chain client could not be asked (e.g. master
+// address unknown); callers should keep local state as authoritative.
 type chainCheckResult struct {
 	Active      bool
 	Unsupported bool
 	Status      chain.SessionStatus
 }
 
-// queryChain looks up the session by pubkey using the profile's chain client.
-// When the chain returns ErrSessionQueryUnsupported, the result has
+// queryChain looks up the session at auth/accounts/<master>/session/<sessionAddr>
+// using the profile's chain client. When the chain returns
+// ErrSessionQueryUnsupported (e.g. master is empty), the result has
 // Unsupported=true and a nil error so callers can distinguish "chain says
 // inactive" (delete) from "chain doesn't know" (keep).
 // Other chain errors are reported as Active=false with no error.
 // Returns a typed error only when the resolver cannot provide a client.
-func queryChain(ctx context.Context, resolver chain.Resolver, profile, sessionPubkey string) (chainCheckResult, error) {
+func queryChain(ctx context.Context, resolver chain.Resolver, profile, master, sessionAddr string) (chainCheckResult, error) {
 	client := resolver(profile)
 	if client == nil {
 		return chainCheckResult{}, fmt.Errorf("session: no chain client for profile %q", profile)
 	}
-	status, err := client.QuerySession(ctx, sessionPubkey)
+	if master == "" {
+		// No master yet (e.g. older session created before MasterAddress was
+		// plumbed). Don't wipe — let local state govern.
+		return chainCheckResult{Unsupported: true}, nil
+	}
+	status, err := client.QuerySession(ctx, master, sessionAddr)
 	if err != nil {
 		if errors.Is(err, chain.ErrSessionQueryUnsupported) {
 			return chainCheckResult{Unsupported: true}, nil

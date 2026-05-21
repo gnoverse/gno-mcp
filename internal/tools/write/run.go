@@ -99,7 +99,8 @@ func runHandler(
 	// ---- Simulate path
 
 	if simulate {
-		rr, runErr := c.Run(ctx, nil, code, true)
+		// TODO(MD-D): plumb Profile.MasterAddress through Run.
+		rr, runErr := c.Run(ctx, nil, "", code, true)
 		if runErr != nil {
 			if errors.Is(runErr, chain.ErrSimulateUnsupported) {
 				return server.Result{}, &server.ToolError{
@@ -150,7 +151,8 @@ func runHandler(
 
 	// ---- Broadcast
 
-	rr, runErr := c.Run(ctx, signer, code, false)
+	// TODO(MD-D): plumb Profile.MasterAddress through Run.
+	rr, runErr := c.Run(ctx, signer, "", code, false)
 	if runErr != nil {
 		_ = alog.Append(audit.Entry{
 			Tool:           "gno_run",

@@ -9,7 +9,7 @@ import (
 
 func TestQueryChain_active(t *testing.T) {
 	fake := chain.NewFake()
-	fake.SetSession("gpub1active", chain.SessionStatus{
+	fake.SetSession("g1master", "g1session", chain.SessionStatus{
 		Active:         true,
 		AllowPaths:     []string{"gno.land/r/test/blog"},
 		SpendLimit:     "1000000ugnot",
@@ -18,7 +18,7 @@ func TestQueryChain_active(t *testing.T) {
 	})
 	var resolver chain.Resolver = func(profile string) chain.Client { return fake }
 
-	res, err := queryChain(context.Background(), resolver, "testnet", "gpub1active")
+	res, err := queryChain(context.Background(), resolver, "testnet", "g1master", "g1session")
 	if err != nil {
 		t.Fatalf("queryChain: %v", err)
 	}
@@ -32,12 +32,12 @@ func TestQueryChain_active(t *testing.T) {
 
 func TestQueryChain_inactive(t *testing.T) {
 	fake := chain.NewFake()
-	fake.SetSession("gpub1expired", chain.SessionStatus{
+	fake.SetSession("g1master", "g1expired", chain.SessionStatus{
 		Active: false,
 	})
 	var resolver chain.Resolver = func(profile string) chain.Client { return fake }
 
-	res, err := queryChain(context.Background(), resolver, "testnet", "gpub1expired")
+	res, err := queryChain(context.Background(), resolver, "testnet", "g1master", "g1expired")
 	if err != nil {
 		t.Fatalf("queryChain: %v", err)
 	}
@@ -46,10 +46,26 @@ func TestQueryChain_inactive(t *testing.T) {
 	}
 }
 
+func TestQueryChain_emptyMasterIsUnsupported(t *testing.T) {
+	fake := chain.NewFake()
+	var resolver chain.Resolver = func(profile string) chain.Client { return fake }
+
+	res, err := queryChain(context.Background(), resolver, "testnet", "", "g1session")
+	if err != nil {
+		t.Fatalf("queryChain: %v", err)
+	}
+	if !res.Unsupported {
+		t.Error("expected Unsupported=true when master is empty")
+	}
+	if res.Active {
+		t.Error("expected Active=false when master is empty")
+	}
+}
+
 func TestQueryChain_unknownProfileError(t *testing.T) {
 	var resolver chain.Resolver = func(profile string) chain.Client { return nil }
 
-	_, err := queryChain(context.Background(), resolver, "missing-profile", "gpub1anything")
+	_, err := queryChain(context.Background(), resolver, "missing-profile", "g1master", "g1session")
 	if err == nil {
 		t.Fatal("expected error for nil client, got nil")
 	}

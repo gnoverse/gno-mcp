@@ -9,4 +9,5 @@ func TestSignerInterfaceCompile(t *testing.T) {
 type signerStub struct{}
 
 func (signerStub) Address() string               { return "g1stub" }
+func (signerStub) Pubkey() []byte                { return make([]byte, 32) }
 func (signerStub) Sign(_ []byte) ([]byte, error) { return nil, nil }

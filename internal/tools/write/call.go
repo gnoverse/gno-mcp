@@ -115,7 +115,9 @@ func callHandler(
 	// ---- Simulate path
 
 	if simulate {
-		cr, callErr := c.Call(ctx, nil, realm, fn, fnArgs, true)
+		// TODO(MD-D): plumb Profile.MasterAddress through Call. Fake ignores
+		// master; Real currently rejects an empty master and a nil signer.
+		cr, callErr := c.Call(ctx, nil, "", realm, fn, fnArgs, true)
 		if callErr != nil {
 			if errors.Is(callErr, chain.ErrSimulateUnsupported) {
 				return server.Result{}, &server.ToolError{
@@ -181,7 +183,8 @@ func callHandler(
 
 	// ---- Broadcast
 
-	cr, callErr := c.Call(ctx, signer, realm, fn, fnArgs, false)
+	// TODO(MD-D): plumb Profile.MasterAddress through Call.
+	cr, callErr := c.Call(ctx, signer, "", realm, fn, fnArgs, false)
 	if callErr != nil {
 		_ = alog.Append(audit.Entry{
 			Tool:           "gno_call",

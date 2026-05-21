@@ -77,9 +77,12 @@ func TestAuthStatus_activeSession_narrative(t *testing.T) {
 	}
 }
 
+// TestAuthStatus_chainQueryRefreshes verifies that gno_auth_status flips a
+// pending session to active when the chain confirms it. The test seeds
+// MasterAddress directly since MD-D has not yet plumbed it through AddPending.
 func TestAuthStatus_chainQueryRefreshes(t *testing.T) {
 	s := newBaseTestServer(t)
-	var seededPubkey string
+	const master = "g1master"
 	var seededAddr string
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		kp, err := session.NewKeypair()
@@ -94,13 +97,14 @@ func TestAuthStatus_chainQueryRefreshes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("AddPending: %v", err)
 		}
-		seededPubkey = meta.SessionPubkey
 		seededAddr = meta.SessionAddress
+		if err := m.SetMasterAddress("testnet5", seededAddr, master); err != nil {
+			t.Fatalf("SetMasterAddress: %v", err)
+		}
 	})
 
 	fake := chain.NewFake()
-	// Chain reports this pubkey as active.
-	fake.SetSession(seededPubkey, chain.SessionStatus{
+	fake.SetSession(master, seededAddr, chain.SessionStatus{
 		Active:         true,
 		AllowPaths:     []string{"gno.land/r/test/blog"},
 		SpendLimit:     "500000ugnot",

@@ -97,6 +97,7 @@ func TestFake_Doc(t *testing.T) {
 type fakeSignerStub struct{}
 
 func (fakeSignerStub) Address() string               { return "g1stub" }
+func (fakeSignerStub) Pubkey() []byte                { return make([]byte, 32) }
 func (fakeSignerStub) Sign(_ []byte) ([]byte, error) { return nil, nil }
 
 // ---- Call tests
@@ -106,7 +107,7 @@ func TestFake_Call_returnsSeededResult(t *testing.T) {
 	want := CallResult{TxHash: "0xabc", Result: "ok"}
 	f.SetCall("gno.land/r/x", "Foo", []string{"hi"}, want)
 
-	got, err := f.Call(context.Background(), fakeSignerStub{}, "gno.land/r/x", "Foo", []string{"hi"}, false)
+	got, err := f.Call(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, false)
 	if err != nil {
 		t.Fatalf("Call: %v", err)
 	}
@@ -117,7 +118,7 @@ func TestFake_Call_returnsSeededResult(t *testing.T) {
 
 func TestFake_Call_unseededReturnsError(t *testing.T) {
 	f := NewFake()
-	_, err := f.Call(context.Background(), fakeSignerStub{}, "gno.land/r/x", "Bar", nil, false)
+	_, err := f.Call(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Bar", nil, false)
 	if err == nil {
 		t.Fatal("expected error for unseeded call")
 	}
@@ -130,7 +131,7 @@ func TestFake_Call_simulateReturnsSeededWithSimulatedTrue(t *testing.T) {
 	f := NewFake()
 	f.SetCall("gno.land/r/x", "Foo", []string{"hi"}, CallResult{TxHash: "0xabc", Result: "ok", Simulated: false})
 
-	got, err := f.Call(context.Background(), fakeSignerStub{}, "gno.land/r/x", "Foo", []string{"hi"}, true)
+	got, err := f.Call(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, true)
 	if err != nil {
 		t.Fatalf("Call: %v", err)
 	}
@@ -147,7 +148,7 @@ func TestFake_Call_setCallErrorTakesPriority(t *testing.T) {
 	f.SetCall("gno.land/r/x", "Foo", []string{}, CallResult{TxHash: "0xok"})
 	f.SetCallError("gno.land/r/x", "Foo", ErrSimulateUnsupported)
 
-	_, err := f.Call(context.Background(), fakeSignerStub{}, "gno.land/r/x", "Foo", []string{}, true)
+	_, err := f.Call(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{}, true)
 	if err == nil {
 		t.Fatal("expected error from SetCallError")
 	}
@@ -163,7 +164,7 @@ func TestFake_Run_returnsSeededResult(t *testing.T) {
 	want := RunResult{TxHash: "0xdef", Output: "hello"}
 	f.SetRun("package main\nfunc main() {}", want)
 
-	got, err := f.Run(context.Background(), fakeSignerStub{}, "package main\nfunc main() {}", false)
+	got, err := f.Run(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", false)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -174,7 +175,7 @@ func TestFake_Run_returnsSeededResult(t *testing.T) {
 
 func TestFake_Run_unseededReturnsError(t *testing.T) {
 	f := NewFake()
-	_, err := f.Run(context.Background(), fakeSignerStub{}, "package main\nfunc main() {}", false)
+	_, err := f.Run(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", false)
 	if err == nil {
 		t.Fatal("expected error for unseeded run")
 	}
@@ -189,7 +190,7 @@ func TestFake_Run_setRunErrorTakesPriority(t *testing.T) {
 	f.SetRun(code, RunResult{Output: "ok"})
 	f.SetRunError(code, ErrSimulateUnsupported)
 
-	_, err := f.Run(context.Background(), fakeSignerStub{}, code, true)
+	_, err := f.Run(context.Background(), fakeSignerStub{}, "", code, true)
 	if err == nil {
 		t.Fatal("expected error from SetRunError")
 	}
@@ -203,7 +204,7 @@ func TestFake_Run_simulateSetSimulatedTrue(t *testing.T) {
 	code := "package main\nfunc main() {}"
 	f.SetRun(code, RunResult{Output: "hi", Simulated: false})
 
-	got, err := f.Run(context.Background(), fakeSignerStub{}, code, true)
+	got, err := f.Run(context.Background(), fakeSignerStub{}, "", code, true)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -217,9 +218,9 @@ func TestFake_Run_simulateSetSimulatedTrue(t *testing.T) {
 func TestFake_QuerySession_returnsSeededStatus(t *testing.T) {
 	f := NewFake()
 	want := SessionStatus{Active: true, AllowPaths: []string{"gno.land/r/x"}}
-	f.SetSession("gpub1abc", want)
+	f.SetSession("g1master", "g1session", want)
 
-	got, err := f.QuerySession(context.Background(), "gpub1abc")
+	got, err := f.QuerySession(context.Background(), "g1master", "g1session")
 	if err != nil {
 		t.Fatalf("QuerySession: %v", err)
 	}
@@ -231,11 +232,11 @@ func TestFake_QuerySession_returnsSeededStatus(t *testing.T) {
 func TestFake_QuerySession_unknownReturnsInactive(t *testing.T) {
 	f := NewFake()
 
-	got, err := f.QuerySession(context.Background(), "gpub1unknown")
+	got, err := f.QuerySession(context.Background(), "g1master", "g1unknown")
 	if err != nil {
 		t.Fatalf("QuerySession: unexpected error %v", err)
 	}
 	if got.Active {
-		t.Error("expected Active=false for unknown pubkey")
+		t.Error("expected Active=false for unknown session")
 	}
 }

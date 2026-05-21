@@ -3,22 +3,19 @@ package chain
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
+	"github.com/gnolang/gno/gno.land/pkg/gnoland"
 	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
 	"github.com/gnolang/gno/tm2/pkg/crypto"
+	tmed25519 "github.com/gnolang/gno/tm2/pkg/crypto/ed25519"
 	"github.com/gnolang/gno/tm2/pkg/std"
 )
-
-// gnoclientSignerProvider is satisfied by session-managed keys. Real.Call/Run
-// type-asserts the Signer to this interface to acquire a tx-signing gnoclient.Signer.
-// Keeps gnoclient.Signer out of the chain.Signer interface (avoids leakage).
-type gnoclientSignerProvider interface {
-	GnoclientSigner() gnoclient.Signer
-}
 
 // Real implements Client against a live gno chain via gnoclient + RPC.
 //
@@ -27,19 +24,23 @@ type gnoclientSignerProvider interface {
 // RPC duration must wrap the call externally (e.g., goroutine + select on ctx)
 // until gnoclient grows ctx-aware variants.
 type Real struct {
-	cli *gnoclient.Client
+	cli     *gnoclient.Client
+	chainID string
 }
 
 // Assert Real satisfies Client at compile time.
 var _ Client = (*Real)(nil)
 
-// NewReal creates a Real client connected to rpcURL.
-// rpcURL must be non-empty. The chainID argument is accepted to keep the
-// constructor signature stable across milestones; it will be consumed by
-// Milestone B signing operations and is unused here.
-func NewReal(rpcURL, _ string) (*Real, error) {
+// NewReal creates a Real client connected to rpcURL with the given chainID.
+// Both must be non-empty: chainID is part of every signed tx's signature
+// payload, so a mismatch with the node's chainID produces an opaque
+// verification failure at broadcast time.
+func NewReal(rpcURL, chainID string) (*Real, error) {
 	if rpcURL == "" {
 		return nil, fmt.Errorf("rpc-url must not be empty")
+	}
+	if chainID == "" {
+		return nil, fmt.Errorf("chain-id must not be empty")
 	}
 
 	rpc, err := rpcclient.NewHTTPClient(rpcURL)
@@ -48,7 +49,8 @@ func NewReal(rpcURL, _ string) (*Real, error) {
 	}
 
 	return &Real{
-		cli: &gnoclient.Client{RPCClient: rpc},
+		cli:     &gnoclient.Client{RPCClient: rpc},
+		chainID: chainID,
 	}, nil
 }
 
@@ -123,54 +125,44 @@ func (r *Real) Doc(_ context.Context, realm string) (string, error) {
 	return string(qres.Response.Data), nil
 }
 
-// Call broadcasts (or simulates) a vm/MsgCall transaction through gnoclient.
-// signer must be non-nil and must implement gnoclientSignerProvider (the
-// session.Keypair satisfies this).
-func (r *Real) Call(_ context.Context, signer Signer, realm, fn string, args []string, simulate bool) (CallResult, error) {
+// Call broadcasts (or simulates) a session-signed vm/MsgCall through gnoclient.
+// MsgCall.Caller is the master address; the signature carries the session's
+// pubkey and SessionAddr so the chain's ante handler verifies against the
+// session record at auth/accounts/<master>/session/<sessionAddr>.
+func (r *Real) Call(_ context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error) {
 	if signer == nil {
 		return CallResult{}, fmt.Errorf("call: signer required (got nil)")
 	}
-	provider, ok := signer.(gnoclientSignerProvider)
-	if !ok {
-		return CallResult{}, fmt.Errorf("call: signer does not provide a gnoclient.Signer (session keypair required)")
-	}
-	gsigner := provider.GnoclientSigner()
-	if gsigner == nil {
-		return CallResult{}, fmt.Errorf("call: gnoclientSignerProvider returned nil Signer")
+	if master == "" {
+		return CallResult{}, fmt.Errorf("call: master address required for session-signed tx")
 	}
 
-	caller, err := crypto.AddressFromBech32(signer.Address())
+	masterAddr, err := crypto.AddressFromBech32(master)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call: invalid signer address %q: %w", signer.Address(), err)
+		return CallResult{}, fmt.Errorf("call: invalid master address %q: %w", master, err)
+	}
+	sessionAddr, err := crypto.AddressFromBech32(signer.Address())
+	if err != nil {
+		return CallResult{}, fmt.Errorf("call: invalid session address %q: %w", signer.Address(), err)
 	}
 
 	msg := vm.MsgCall{
-		Caller:  caller,
+		Caller:  masterAddr,
 		PkgPath: realm,
 		Func:    fn,
 		Args:    args,
 	}
-	baseCfg := gnoclient.BaseTxCfg{
-		// Chain requires 1ugnot per 1000 gas; 5M gas → 5000ugnot minimum.
-		// Padded to 10000000ugnot at 10M gas for headroom on realm calls.
-		GasFee:    "10000000ugnot",
-		GasWanted: 10_000_000,
+	unsignedTx, err := gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
+	if err != nil {
+		return CallResult{}, fmt.Errorf("call: build unsigned tx: %w", err)
 	}
 
-	// Attach the gnoclient.Signer for this call.
-	// NOTE: not goroutine-safe across concurrent Real.Call invocations;
-	// the session manager must serialize per-client access.
-	r.cli.Signer = gsigner
+	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
+	if err != nil {
+		return CallResult{}, fmt.Errorf("call: %w", err)
+	}
 
 	if simulate {
-		unsignedTx, err := gnoclient.NewCallTx(baseCfg, msg)
-		if err != nil {
-			return CallResult{}, fmt.Errorf("call: build unsigned tx: %w", err)
-		}
-		signedTx, err := r.cli.SignTx(*unsignedTx, 0, 0)
-		if err != nil {
-			return CallResult{}, fmt.Errorf("call: sign tx for simulate: %w", err)
-		}
 		deliver, err := r.cli.Simulate(signedTx)
 		if err != nil {
 			return CallResult{}, fmt.Errorf("call: simulate: %w", err)
@@ -182,7 +174,7 @@ func (r *Real) Call(_ context.Context, signer Signer, realm, fn string, args []s
 		}, nil
 	}
 
-	res, err := r.cli.Call(baseCfg, msg)
+	res, err := r.cli.BroadcastTxCommit(signedTx)
 	if err != nil {
 		return CallResult{}, fmt.Errorf("call: %w", err)
 	}
@@ -194,50 +186,38 @@ func (r *Real) Call(_ context.Context, signer Signer, realm, fn string, args []s
 	}, nil
 }
 
-// Run broadcasts (or simulates) a vm/MsgRun transaction through gnoclient.
-// The code string is wrapped in a single-file MemPackage with package name
-// "main". signer must be non-nil and must implement gnoclientSignerProvider.
-func (r *Real) Run(_ context.Context, signer Signer, code string, simulate bool) (RunResult, error) {
+// Run broadcasts (or simulates) a session-signed vm/MsgRun. The code is
+// wrapped in a single-file MemPackage with package name "main".
+func (r *Real) Run(_ context.Context, signer Signer, master, code string, simulate bool) (RunResult, error) {
 	if signer == nil {
 		return RunResult{}, fmt.Errorf("run: signer required (got nil)")
 	}
-	provider, ok := signer.(gnoclientSignerProvider)
-	if !ok {
-		return RunResult{}, fmt.Errorf("run: signer does not provide a gnoclient.Signer (session keypair required)")
-	}
-	gsigner := provider.GnoclientSigner()
-	if gsigner == nil {
-		return RunResult{}, fmt.Errorf("run: gnoclientSignerProvider returned nil Signer")
+	if master == "" {
+		return RunResult{}, fmt.Errorf("run: master address required for session-signed tx")
 	}
 
-	caller, err := crypto.AddressFromBech32(signer.Address())
+	masterAddr, err := crypto.AddressFromBech32(master)
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run: invalid signer address %q: %w", signer.Address(), err)
+		return RunResult{}, fmt.Errorf("run: invalid master address %q: %w", master, err)
+	}
+	sessionAddr, err := crypto.AddressFromBech32(signer.Address())
+	if err != nil {
+		return RunResult{}, fmt.Errorf("run: invalid session address %q: %w", signer.Address(), err)
 	}
 
 	files := []*std.MemFile{{Name: "main.gno", Body: code}}
-	msg := vm.NewMsgRun(caller, nil, files)
-	baseCfg := gnoclient.BaseTxCfg{
-		// Chain requires 1ugnot per 1000 gas; 5M gas → 5000ugnot minimum.
-		// Padded to 10000000ugnot at 10M gas for headroom on realm calls.
-		GasFee:    "10000000ugnot",
-		GasWanted: 10_000_000,
+	msg := vm.NewMsgRun(masterAddr, nil, files)
+	unsignedTx, err := gnoclient.NewRunTx(defaultBaseTxCfg(), msg)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("run: build unsigned tx: %w", err)
 	}
 
-	// Attach the gnoclient.Signer for this call.
-	// NOTE: not goroutine-safe across concurrent Real.Run invocations;
-	// the session manager must serialize per-client access.
-	r.cli.Signer = gsigner
+	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("run: %w", err)
+	}
 
 	if simulate {
-		unsignedTx, err := gnoclient.NewRunTx(baseCfg, msg)
-		if err != nil {
-			return RunResult{}, fmt.Errorf("run: build unsigned tx: %w", err)
-		}
-		signedTx, err := r.cli.SignTx(*unsignedTx, 0, 0)
-		if err != nil {
-			return RunResult{}, fmt.Errorf("run: sign tx for simulate: %w", err)
-		}
 		deliver, err := r.cli.Simulate(signedTx)
 		if err != nil {
 			return RunResult{}, fmt.Errorf("run: simulate: %w", err)
@@ -249,7 +229,7 @@ func (r *Real) Run(_ context.Context, signer Signer, code string, simulate bool)
 		}, nil
 	}
 
-	res, err := r.cli.Run(baseCfg, msg)
+	res, err := r.cli.BroadcastTxCommit(signedTx)
 	if err != nil {
 		return RunResult{}, fmt.Errorf("run: %w", err)
 	}
@@ -261,19 +241,111 @@ func (r *Real) Run(_ context.Context, signer Signer, code string, simulate bool)
 	}, nil
 }
 
-// QuerySession returns the chain-side SessionStatus for the given bech32 pubkey.
-//
-// Per the Task 2.3 research (see internal/chain/README.md), no per-pubkey session
-// ABCI path exists in the current chain build. This implementation returns
-// ErrSessionQueryUnsupported for any non-empty pubkey. The session.Manager
-// catches this sentinel and degrades to local-authoritative session state.
-//
-// When a per-pubkey session ABCI path lands in gnoclient (post-PR #5307), this
-// method will be replaced with a real implementation. The chain.Client interface
-// stays correct in the meantime.
-func (r *Real) QuerySession(_ context.Context, sessionPubkey string) (SessionStatus, error) {
-	if sessionPubkey == "" {
-		return SessionStatus{}, fmt.Errorf("querysession: pubkey must not be empty")
+// QuerySession looks up a session account at auth/accounts/<master>/session/<sessionAddr>.
+// The chain returns the GnoSessionAccount JSON-marshaled. An absent record
+// yields SessionStatus{Active: false}, nil.
+func (r *Real) QuerySession(_ context.Context, master, sessionAddr string) (SessionStatus, error) {
+	if master == "" || sessionAddr == "" {
+		return SessionStatus{}, ErrSessionQueryUnsupported
 	}
-	return SessionStatus{}, ErrSessionQueryUnsupported
+
+	path := fmt.Sprintf("auth/accounts/%s/session/%s", master, sessionAddr)
+	qres, err := r.cli.Query(gnoclient.QueryCfg{Path: path})
+	if err != nil {
+		// "session not found" surfaces here as an RPC error. Treat any
+		// query failure as "no session" rather than propagating — callers
+		// already encode chain unreachability as ErrSessionQueryUnsupported
+		// elsewhere if they need to distinguish.
+		return SessionStatus{Active: false}, nil
+	}
+	if len(qres.Response.Data) == 0 {
+		return SessionStatus{Active: false}, nil
+	}
+
+	var acc gnoland.GnoSessionAccount
+	if err := json.Unmarshal(qres.Response.Data, &acc); err != nil {
+		return SessionStatus{}, fmt.Errorf("querysession: unmarshal session account: %w", err)
+	}
+
+	return SessionStatus{
+		Active:         true,
+		AllowPaths:     acc.AllowPaths,
+		SpendLimit:     acc.SpendLimit.String(),
+		SpendRemaining: spendRemaining(acc.SpendLimit, acc.SpendUsed).String(),
+		ExpiresAt:      acc.ExpiresAt,
+	}, nil
+}
+
+// signTxForSession runs the session-signing flow: query the session account
+// for its (account_number, sequence), compute sign-bytes, sign with the
+// session keypair, then inject Signature.SessionAddr.
+func (r *Real) signTxForSession(unsignedTx *std.Tx, signer Signer, masterAddr, sessionAddr crypto.Address) (*std.Tx, error) {
+	accNum, seq, err := r.querySessionSequence(masterAddr, sessionAddr)
+	if err != nil {
+		return nil, fmt.Errorf("query session sequence: %w", err)
+	}
+
+	signBytes, err := unsignedTx.GetSignBytes(r.chainID, accNum, seq)
+	if err != nil {
+		return nil, fmt.Errorf("get sign bytes: %w", err)
+	}
+
+	sig, err := signer.Sign(signBytes)
+	if err != nil {
+		return nil, fmt.Errorf("session sign: %w", err)
+	}
+
+	pubBytes := signer.Pubkey()
+	if len(pubBytes) != tmed25519.PubKeyEd25519Size {
+		return nil, fmt.Errorf("invalid session pubkey length %d", len(pubBytes))
+	}
+	var pk tmed25519.PubKeyEd25519
+	copy(pk[:], pubBytes)
+
+	signedTx := *unsignedTx
+	signedTx.Signatures = []std.Signature{{
+		PubKey:      pk,
+		Signature:   sig,
+		SessionAddr: sessionAddr,
+	}}
+	return &signedTx, nil
+}
+
+// querySessionSequence returns the session account's (AccountNumber, Sequence)
+// from auth/accounts/<master>/session/<sessionAddr>.
+func (r *Real) querySessionSequence(master, sessionAddr crypto.Address) (uint64, uint64, error) {
+	path := fmt.Sprintf("auth/accounts/%s/session/%s", master.String(), sessionAddr.String())
+	qres, err := r.cli.Query(gnoclient.QueryCfg{Path: path})
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(qres.Response.Data) == 0 {
+		return 0, 0, errors.New("session not found")
+	}
+	var acc gnoland.GnoSessionAccount
+	if err := json.Unmarshal(qres.Response.Data, &acc); err != nil {
+		return 0, 0, fmt.Errorf("unmarshal session account: %w", err)
+	}
+	return acc.AccountNumber, acc.Sequence, nil
+}
+
+// defaultBaseTxCfg returns the gas/fee defaults for write txs.
+// Chain requires 1ugnot per 1000 gas; padded to 10000000ugnot @ 10M gas.
+func defaultBaseTxCfg() gnoclient.BaseTxCfg {
+	return gnoclient.BaseTxCfg{
+		GasFee:    "10000000ugnot",
+		GasWanted: 10_000_000,
+	}
+}
+
+// spendRemaining returns limit - used, dropping any zero/negative denoms.
+func spendRemaining(limit, used std.Coins) std.Coins {
+	diff := limit.SubUnsafe(used)
+	out := make(std.Coins, 0, len(diff))
+	for _, c := range diff {
+		if c.Amount > 0 {
+			out = append(out, c)
+		}
+	}
+	return out
 }

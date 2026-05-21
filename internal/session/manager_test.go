@@ -20,6 +20,7 @@ func activeSession(addr, pubkey string, allowPaths []string, createdAt int64) *S
 		Version:        1,
 		SessionAddress: addr,
 		SessionPubkey:  pubkey,
+		MasterAddress:  "g1master",
 		Privkey:        make([]byte, 64),
 		AllowPaths:     allowPaths,
 		SpendLimit:     "1000000ugnot",
@@ -158,8 +159,15 @@ func TestManager_pickActivatesPendingFromChain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddPending: %v", err)
 	}
+	// Set MasterAddress on the stored meta so PickSessionForProfile can
+	// query the chain by (master, sessionAddr). MD-D will plumb this through
+	// AddPending; until then tests inject it directly.
+	m.mu.Lock()
+	m.sessions["testnet"][meta.SessionAddress].meta.MasterAddress = "g1master"
+	m.mu.Unlock()
+
 	fake := chain.NewFake()
-	fake.SetSession(meta.SessionPubkey, chain.SessionStatus{
+	fake.SetSession("g1master", meta.SessionAddress, chain.SessionStatus{
 		Active:         true,
 		AllowPaths:     []string{"gno.land/r/test/blog"},
 		SpendLimit:     "500000ugnot",
@@ -223,14 +231,14 @@ func TestManager_hydrateLoadsActiveSkipsInactive(t *testing.T) {
 		t.Fatalf("Write inactive: %v", err)
 	}
 	fake := chain.NewFake()
-	fake.SetSession(activeKP.PubkeyBech32(), chain.SessionStatus{
+	fake.SetSession("g1master", activeKP.Address(), chain.SessionStatus{
 		Active:         true,
 		AllowPaths:     []string{"gno.land/r/test/blog"},
 		SpendLimit:     "1000000ugnot",
 		SpendRemaining: "1000000ugnot",
 		ExpiresAt:      time.Now().Add(time.Hour).Unix(),
 	})
-	fake.SetSession(inactiveKP.PubkeyBech32(), chain.SessionStatus{Active: false})
+	fake.SetSession("g1master", inactiveKP.Address(), chain.SessionStatus{Active: false})
 	if err := m.Hydrate(context.Background(), resolverFor(fake)); err != nil {
 		t.Fatalf("Hydrate: %v", err)
 	}

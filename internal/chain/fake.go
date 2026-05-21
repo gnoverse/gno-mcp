@@ -18,7 +18,7 @@ type Fake struct {
 	callErrors map[string]error
 	runs       map[string]RunResult
 	runErrors  map[string]error
-	sessions   map[string]SessionStatus
+	sessions   map[string]SessionStatus // key: master+"|"+sessionAddr
 }
 
 func NewFake() *Fake {
@@ -82,7 +82,10 @@ func (f *Fake) Doc(_ context.Context, realm string) (string, error) {
 	return v, nil
 }
 
-func (f *Fake) Call(_ context.Context, _ Signer, realm, fn string, args []string, simulate bool) (CallResult, error) {
+// Call ignores master; the in-memory map is keyed by (realm, fn, args) only.
+// Tools tests don't assert on master because Fake is meant for tool-layer
+// integration where master plumbing is exercised separately.
+func (f *Fake) Call(_ context.Context, _ Signer, _, realm, fn string, args []string, simulate bool) (CallResult, error) {
 	if err, ok := f.callErrors[callKey(realm, fn, nil)]; ok {
 		return CallResult{}, err
 	}
@@ -96,7 +99,8 @@ func (f *Fake) Call(_ context.Context, _ Signer, realm, fn string, args []string
 	return r, nil
 }
 
-func (f *Fake) Run(_ context.Context, _ Signer, code string, simulate bool) (RunResult, error) {
+// Run ignores master; the in-memory map is keyed by code only.
+func (f *Fake) Run(_ context.Context, _ Signer, _, code string, simulate bool) (RunResult, error) {
 	if err, ok := f.runErrors[code]; ok {
 		return RunResult{}, err
 	}
@@ -110,11 +114,11 @@ func (f *Fake) Run(_ context.Context, _ Signer, code string, simulate bool) (Run
 	return r, nil
 }
 
-// QuerySession returns the seeded SessionStatus for pubkey. If no seed is set,
-// it returns the zero value (Active=false) without error — matching chain semantics
-// where an unknown pubkey returns "not found" rather than an error.
-func (f *Fake) QuerySession(_ context.Context, pubkey string) (SessionStatus, error) {
-	return f.sessions[pubkey], nil
+// QuerySession returns the seeded SessionStatus for (master, sessionAddr).
+// If no seed is set, returns the zero value (Active=false) without error —
+// matching chain semantics where an unknown session is "not found".
+func (f *Fake) QuerySession(_ context.Context, master, sessionAddr string) (SessionStatus, error) {
+	return f.sessions[sessionKey(master, sessionAddr)], nil
 }
 
 func (f *Fake) SetCall(realm, fn string, args []string, result CallResult) {
@@ -136,8 +140,10 @@ func (f *Fake) SetRunError(code string, err error) {
 	f.runErrors[code] = err
 }
 
-func (f *Fake) SetSession(pubkey string, status SessionStatus) {
-	f.sessions[pubkey] = status
+// SetSession seeds the SessionStatus returned by QuerySession for the given
+// (master, sessionAddr) pair.
+func (f *Fake) SetSession(master, sessionAddr string, status SessionStatus) {
+	f.sessions[sessionKey(master, sessionAddr)] = status
 }
 
 func callKey(realm, fn string, args []string) string {
@@ -145,6 +151,10 @@ func callKey(realm, fn string, args []string) string {
 		args = []string{}
 	}
 	return realm + "|" + fn + "|" + strings.Join(args, ",")
+}
+
+func sessionKey(master, sessionAddr string) string {
+	return master + "|" + sessionAddr
 }
 
 // Assert Fake satisfies the interface at compile time.

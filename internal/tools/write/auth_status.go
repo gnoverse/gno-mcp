@@ -69,8 +69,8 @@ func authStatusHandler(
 	for _, meta := range metas {
 		info := sessionInfo{meta: meta}
 
-		if client != nil {
-			status, queryErr := client.QuerySession(ctx, meta.SessionPubkey)
+		if client != nil && meta.MasterAddress != "" {
+			status, queryErr := client.QuerySession(ctx, meta.MasterAddress, meta.SessionAddress)
 			if queryErr == nil {
 				// Chain answered — apply transitions.
 				if status.Active && meta.State == session.StatePending {
