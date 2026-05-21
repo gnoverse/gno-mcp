@@ -111,3 +111,15 @@ func (r *Real) Doc(_ context.Context, realm string) (string, error) {
 	}
 	return string(qres.Response.Data), nil
 }
+
+func (r *Real) Call(_ context.Context, _ Signer, _, _ string, _ []string, _ bool) (CallResult, error) {
+	return CallResult{}, fmt.Errorf("not implemented")
+}
+
+func (r *Real) Run(_ context.Context, _ Signer, _ string, _ bool) (RunResult, error) {
+	return RunResult{}, fmt.Errorf("not implemented")
+}
+
+func (r *Real) QuerySession(_ context.Context, _ string) (SessionStatus, error) {
+	return SessionStatus{}, fmt.Errorf("not implemented")
+}

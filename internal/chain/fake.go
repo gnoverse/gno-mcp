@@ -71,5 +71,17 @@ func (f *Fake) Doc(_ context.Context, realm string) (string, error) {
 	return v, nil
 }
 
+func (f *Fake) Call(_ context.Context, _ Signer, _, _ string, _ []string, _ bool) (CallResult, error) {
+	return CallResult{}, fmt.Errorf("not implemented")
+}
+
+func (f *Fake) Run(_ context.Context, _ Signer, _ string, _ bool) (RunResult, error) {
+	return RunResult{}, fmt.Errorf("not implemented")
+}
+
+func (f *Fake) QuerySession(_ context.Context, _ string) (SessionStatus, error) {
+	return SessionStatus{}, fmt.Errorf("not implemented")
+}
+
 // Assert Fake satisfies the interface at compile time.
 var _ Client = (*Fake)(nil)
