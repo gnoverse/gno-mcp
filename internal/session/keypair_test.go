@@ -37,15 +37,18 @@ func TestPubkeyBech32_roundTrip(t *testing.T) {
 	if !strings.HasPrefix(encoded, "gpub1") {
 		t.Fatalf("PubkeyBech32() = %q, want prefix \"gpub1\"", encoded)
 	}
-	hrp, decoded, err := bech32.Decode(encoded)
+	// The encoded form must round-trip through crypto.PubKeyFromBech32 (the
+	// chain's inverse), which amino-decodes the bytes into a typed PubKey.
+	pk, err := crypto.PubKeyFromBech32(encoded)
 	if err != nil {
-		t.Fatalf("bech32.Decode(%q): %v", encoded, err)
+		t.Fatalf("crypto.PubKeyFromBech32(%q): %v", encoded, err)
 	}
-	if hrp != "gpub" {
-		t.Fatalf("decoded hrp = %q, want \"gpub\"", hrp)
+	tmpk, ok := pk.(tmed25519.PubKeyEd25519)
+	if !ok {
+		t.Fatalf("decoded pubkey type = %T, want tmed25519.PubKeyEd25519", pk)
 	}
-	if string(decoded) != string(kp.Pub) {
-		t.Fatalf("decoded pubkey bytes do not match original:\n got  %x\n want %x", decoded, kp.Pub)
+	if string(tmpk[:]) != string(kp.Pub) {
+		t.Fatalf("decoded pubkey bytes do not match original:\n got  %x\n want %x", tmpk[:], kp.Pub)
 	}
 }
 

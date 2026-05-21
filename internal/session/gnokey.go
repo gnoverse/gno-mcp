@@ -11,14 +11,16 @@ import (
 // FormatGnokeyCreateCommand returns the gnokey shell command the user must run
 // to authorize a session key on chain.
 //
-// Multiple allow_paths entries each get their own --allow-paths flag. gnokey
-// flag parsing accumulates repeated flags into a slice.
+// Each entry in scope.AllowPaths (a bare realm path like "gno.land/r/foo") is
+// emitted as "--allow-paths vm/exec:<realm>" — the chain's session permission
+// format for MsgCall is "<route>/<type>:<resource>". Multiple --allow-paths
+// flags accumulate into a slice in gnokey's flag parser.
 func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, scope Scope) string {
 	var sb strings.Builder
 	sb.WriteString("gnokey maketx session create \\\n")
 	sb.WriteString(fmt.Sprintf("  --pubkey %s \\\n", sessionPubkey))
 	for _, p := range scope.AllowPaths {
-		sb.WriteString(fmt.Sprintf("  --allow-paths %s \\\n", p))
+		sb.WriteString(fmt.Sprintf("  --allow-paths vm/exec:%s \\\n", p))
 	}
 	sb.WriteString(fmt.Sprintf("  --spend-limit %s \\\n", scope.SpendLimit))
 	expiresAt := time.Now().Add(scope.ExpiresIn).Unix()

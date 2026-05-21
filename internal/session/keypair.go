@@ -45,8 +45,15 @@ func NewKeypair() (*Keypair, error) {
 }
 
 // PubkeyBech32 encodes the public key as a gpub1... bech32 string.
+// Mirrors crypto.PubKeyToBech32: the pubkey is amino-marshaled to its
+// typed wire form (which includes the ed25519 type prefix) and that byte
+// string is bech32-encoded with HRP "gpub". This is the form the chain
+// expects on flags like `gnokey maketx session create --pubkey gpub1...`
+// and is the inverse of crypto.PubKeyFromBech32.
 func (kp *Keypair) PubkeyBech32() string {
-	encoded, err := bech32.Encode(pubkeyPrefix, kp.Pub)
+	var pk tmed25519.PubKeyEd25519
+	copy(pk[:], kp.Pub)
+	encoded, err := bech32.Encode(pubkeyPrefix, pk.Bytes())
 	if err != nil {
 		panic(fmt.Sprintf("session: bech32 encode pubkey: %v", err))
 	}

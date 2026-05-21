@@ -271,11 +271,24 @@ func (r *Real) QuerySession(_ context.Context, master, sessionAddr string) (Sess
 
 	return SessionStatus{
 		Active:         true,
-		AllowPaths:     acc.AllowPaths,
+		AllowPaths:     stripVMExecPrefix(acc.AllowPaths),
 		SpendLimit:     acc.SpendLimit.String(),
 		SpendRemaining: spendRemaining(acc.SpendLimit, acc.SpendUsed).String(),
 		ExpiresAt:      acc.ExpiresAt,
 	}, nil
+}
+
+// stripVMExecPrefix translates chain-native permission entries
+// ("vm/exec:<realm>") back to the bare realm paths gnomcp uses internally.
+// Entries that do not carry the vm/exec prefix (e.g. bank/send) pass through
+// unchanged; they will not match gno_call's realm-based picker but are kept
+// so other tooling can see them.
+func stripVMExecPrefix(paths []string) []string {
+	out := make([]string, len(paths))
+	for i, p := range paths {
+		out[i] = strings.TrimPrefix(p, "vm/exec:")
+	}
+	return out
 }
 
 // signTxForSession runs the session-signing flow: query the session account

@@ -32,7 +32,7 @@ func TestFormatCreate_includesAllExpectedFlags(t *testing.T) {
 	checks := []string{
 		"gnokey maketx session create",
 		"--pubkey gpub1",
-		"--allow-paths gno.land/r/test/blog",
+		"--allow-paths vm/exec:gno.land/r/test/blog",
 		"--spend-limit 1000000ugnot",
 		"--remote http://",
 		"--chainid dev",
