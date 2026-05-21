@@ -29,7 +29,7 @@ func TestRun_happyPath(t *testing.T) {
 	})
 
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot")
+		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
 	RegisterRun(s, mgr, constChainResolver(fake), alog)
@@ -166,7 +166,7 @@ func TestRun_picksAnySessionWhenNoRealm(t *testing.T) {
 	// Session covers a specific realm — gno_run should still pick it because
 	// realm="" is a wildcard (MsgRun scoping is chain-side per AllowPaths).
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot")
+		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
 	RegisterRun(s, mgr, constChainResolver(fake), alog)
@@ -221,7 +221,7 @@ func TestRun_simulateWithSession(t *testing.T) {
 	})
 
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot")
+		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 	RegisterRun(s, mgr, constChainResolver(fake), alog)
 
@@ -255,7 +255,7 @@ func TestRun_simulateUnsupported(t *testing.T) {
 	fake.SetRunError(testCode, chain.ErrSimulateUnsupported)
 
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot")
+		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 	RegisterRun(s, mgr, constChainResolver(fake), alog)
 
@@ -290,7 +290,7 @@ func TestRun_updatesSessionSpend(t *testing.T) {
 
 	var sessionAddr string
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot")
+		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
 	RegisterRun(s, mgr, constChainResolver(fake), alog)
@@ -326,7 +326,7 @@ func TestRun_writesAuditEntry(t *testing.T) {
 
 	var sessionAddr string
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot")
+		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
 	RegisterRun(s, mgr, constChainResolver(fake), alog)
@@ -366,7 +366,7 @@ func TestRun_simulateError_auditsSimErr(t *testing.T) {
 	f := chain.NewFake()
 	f.SetRunError(testCode, errors.New("node unavailable"))
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot")
+		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 	var auditBuf bytes.Buffer
 	RegisterRun(s, mgr, constChainResolver(f), audit.NewLog(&auditBuf))
@@ -397,7 +397,7 @@ func TestRun_broadcastError_auditsResult(t *testing.T) {
 	fake.SetRunError(testCode, errors.New("broadcast failed"))
 
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot")
+		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
 	RegisterRun(s, mgr, constChainResolver(fake), alog)

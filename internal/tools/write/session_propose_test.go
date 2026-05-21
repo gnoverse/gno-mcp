@@ -114,6 +114,64 @@ func TestSessionPropose_rejectsNonStringAllowPaths(t *testing.T) {
 	}
 }
 
+func TestSessionPropose_allowRunOnly(t *testing.T) {
+	s := newBaseTestServer(t)
+	mgr := noSessionMgr(t)
+	RegisterSessionPropose(s, mgr)
+
+	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
+		"profile":   "testnet5",
+		"allow_run": true,
+	})
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if !strings.Contains(res.Text, "vm/run") {
+		t.Errorf("expected vm/run in auth_command:\n%s", res.Text)
+	}
+	sessions := mgr.ListForProfile("testnet5")
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 pending session, got %d", len(sessions))
+	}
+	if !sessions[0].AllowRun {
+		t.Errorf("pending session AllowRun=false, want true")
+	}
+}
+
+func TestSessionPropose_allowRunAndAllowPaths(t *testing.T) {
+	s := newBaseTestServer(t)
+	mgr := noSessionMgr(t)
+	RegisterSessionPropose(s, mgr)
+
+	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
+		"profile":     "testnet5",
+		"allow_paths": []any{"gno.land/r/test/counter"},
+		"allow_run":   true,
+	})
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if !strings.Contains(res.Text, "vm/run") {
+		t.Errorf("expected vm/run in auth_command:\n%s", res.Text)
+	}
+	if !strings.Contains(res.Text, "vm/exec:gno.land/r/test/counter") {
+		t.Errorf("expected vm/exec:realm in auth_command:\n%s", res.Text)
+	}
+}
+
+func TestSessionPropose_emptyAllowPathsAndNoRunErrors(t *testing.T) {
+	s := newBaseTestServer(t)
+	mgr := noSessionMgr(t)
+	RegisterSessionPropose(s, mgr)
+
+	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
+		"profile": "testnet5",
+	})
+	if err == nil {
+		t.Fatal("expected error when both allow_paths and allow_run are absent")
+	}
+}
+
 // Verify that after a propose call, the manager holds a pending session.
 func TestSessionPropose_addsPendingSession(t *testing.T) {
 	s := newBaseTestServer(t)

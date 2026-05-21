@@ -269,26 +269,33 @@ func (r *Real) QuerySession(_ context.Context, master, sessionAddr string) (Sess
 		return SessionStatus{}, fmt.Errorf("querysession: decode session account: %w", err)
 	}
 
+	realmPaths, allowRun := splitAllowPaths(acc.AllowPaths)
 	return SessionStatus{
 		Active:         true,
-		AllowPaths:     stripVMExecPrefix(acc.AllowPaths),
+		AllowPaths:     realmPaths,
+		AllowRun:       allowRun,
 		SpendLimit:     acc.SpendLimit.String(),
 		SpendRemaining: spendRemaining(acc.SpendLimit, acc.SpendUsed).String(),
 		ExpiresAt:      acc.ExpiresAt,
 	}, nil
 }
 
-// stripVMExecPrefix translates chain-native permission entries
-// ("vm/exec:<realm>") back to the bare realm paths gnomcp uses internally.
-// Entries that do not carry the vm/exec prefix (e.g. bank/send) pass through
-// unchanged; they will not match gno_call's realm-based picker but are kept
-// so other tooling can see them.
-func stripVMExecPrefix(paths []string) []string {
-	out := make([]string, len(paths))
-	for i, p := range paths {
-		out[i] = strings.TrimPrefix(p, "vm/exec:")
+// splitAllowPaths translates chain-native permission entries into gnomcp's
+// internal representation: "vm/exec:<realm>" becomes a bare realm path,
+// "vm/run" sets allowRun=true. Tokens outside the MVP grammar (e.g.
+// bank/send) are dropped silently — future versions may surface them.
+func splitAllowPaths(chainPaths []string) (realmPaths []string, allowRun bool) {
+	for _, p := range chainPaths {
+		if stripped, ok := strings.CutPrefix(p, "vm/exec:"); ok {
+			realmPaths = append(realmPaths, stripped)
+			continue
+		}
+		if p == "vm/run" {
+			allowRun = true
+			continue
+		}
 	}
-	return out
+	return realmPaths, allowRun
 }
 
 // signTxForSession runs the session-signing flow: query the session account

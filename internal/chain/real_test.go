@@ -204,7 +204,7 @@ func TestDecodeSessionAccount_aminoJSON_roundTrip(t *testing.T) {
 			SpendUsed:     std.NewCoins(std.NewCoin("ugnot", 250_000)),
 			SpendReset:    1735600000,
 		},
-		AllowPaths: []string{"gno.land/r/test/blog", "gno.land/r/test/forum"},
+		AllowPaths: []string{"vm/exec:gno.land/r/test/blog", "vm/exec:gno.land/r/test/forum", "vm/run"},
 	}
 
 	data, err := amino.MarshalJSONIndent(original, "", "  ")
@@ -238,7 +238,68 @@ func TestDecodeSessionAccount_aminoJSON_roundTrip(t *testing.T) {
 	if got.SpendPeriod != 3600 {
 		t.Errorf("SpendPeriod = %d, want 3600", got.SpendPeriod)
 	}
-	if len(got.AllowPaths) != 2 || got.AllowPaths[0] != "gno.land/r/test/blog" || got.AllowPaths[1] != "gno.land/r/test/forum" {
-		t.Errorf("AllowPaths = %v, want [gno.land/r/test/blog gno.land/r/test/forum]", got.AllowPaths)
+	if len(got.AllowPaths) != 3 ||
+		got.AllowPaths[0] != "vm/exec:gno.land/r/test/blog" ||
+		got.AllowPaths[1] != "vm/exec:gno.land/r/test/forum" ||
+		got.AllowPaths[2] != "vm/run" {
+		t.Errorf("AllowPaths = %v, want [vm/exec:gno.land/r/test/blog vm/exec:gno.land/r/test/forum vm/run]", got.AllowPaths)
+	}
+}
+
+// TestSplitAllowPaths verifies the chain → internal translation:
+// "vm/exec:<realm>" → realmPaths; "vm/run" → allowRun=true; other tokens dropped.
+func TestSplitAllowPaths(t *testing.T) {
+	cases := []struct {
+		name      string
+		in        []string
+		wantPaths []string
+		wantAllow bool
+	}{
+		{
+			name:      "vm/exec entries only",
+			in:        []string{"vm/exec:gno.land/r/foo", "vm/exec:gno.land/r/bar"},
+			wantPaths: []string{"gno.land/r/foo", "gno.land/r/bar"},
+			wantAllow: false,
+		},
+		{
+			name:      "vm/run only",
+			in:        []string{"vm/run"},
+			wantPaths: nil,
+			wantAllow: true,
+		},
+		{
+			name:      "mixed vm/exec and vm/run",
+			in:        []string{"vm/exec:gno.land/r/foo", "vm/run"},
+			wantPaths: []string{"gno.land/r/foo"},
+			wantAllow: true,
+		},
+		{
+			name:      "unknown token dropped",
+			in:        []string{"vm/exec:gno.land/r/foo", "bank/send"},
+			wantPaths: []string{"gno.land/r/foo"},
+			wantAllow: false,
+		},
+		{
+			name:      "empty input",
+			in:        nil,
+			wantPaths: nil,
+			wantAllow: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			paths, allowRun := splitAllowPaths(tc.in)
+			if allowRun != tc.wantAllow {
+				t.Errorf("allowRun = %v, want %v", allowRun, tc.wantAllow)
+			}
+			if len(paths) != len(tc.wantPaths) {
+				t.Fatalf("paths len = %d, want %d (got %v)", len(paths), len(tc.wantPaths), paths)
+			}
+			for i, p := range paths {
+				if p != tc.wantPaths[i] {
+					t.Errorf("paths[%d] = %q, want %q", i, p, tc.wantPaths[i])
+				}
+			}
+		})
 	}
 }

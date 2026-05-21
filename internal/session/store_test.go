@@ -146,6 +146,25 @@ func TestStore_filePermsAre0600(t *testing.T) {
 	}
 }
 
+func TestStore_allowRunRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	s := NewStore(dir, "")
+
+	m := makeTestMeta("g1runallowed")
+	m.AllowRun = true
+	if err := s.Write("p", m); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	got, err := s.Read("p", "g1runallowed")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if !got.AllowRun {
+		t.Errorf("AllowRun = false, want true")
+	}
+}
+
 func TestStore_masterAddressRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(dir, "")

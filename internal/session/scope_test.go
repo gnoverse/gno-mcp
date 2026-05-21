@@ -183,17 +183,74 @@ func TestResolveScope_bypassSkipsClamps(t *testing.T) {
 	}
 }
 
-// ---- Error: empty allow_paths
+// ---- Error: empty allow_paths and allow_run=false
 
-func TestResolveScope_emptyAllowPathsError(t *testing.T) {
+func TestResolveScope_emptyAllowPathsAndNoRunError(t *testing.T) {
 	p := testProfile(profiles.ChainTypeTestnet)
 	args := ScopeArgs{}
 	_, _, err := ResolveScope(args, p)
 	if err == nil {
-		t.Fatal("expected error for empty allow_paths")
+		t.Fatal("expected error for empty allow_paths + allow_run=false")
 	}
-	if !strings.Contains(err.Error(), "allow_paths") {
-		t.Errorf("error should mention allow_paths: %v", err)
+	if !strings.Contains(err.Error(), "allow_paths") || !strings.Contains(err.Error(), "allow_run") {
+		t.Errorf("error should mention allow_paths and allow_run: %v", err)
+	}
+}
+
+// ---- AllowRun-only is accepted (empty allow_paths is fine)
+
+func TestResolveScope_allowRunOnlyOK(t *testing.T) {
+	p := testProfile(profiles.ChainTypeTestnet)
+	args := ScopeArgs{AllowRun: true}
+	scope, _, err := ResolveScope(args, p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !scope.AllowRun {
+		t.Error("scope.AllowRun should be true")
+	}
+	if len(scope.AllowPaths) != 0 {
+		t.Errorf("expected empty AllowPaths, got %v", scope.AllowPaths)
+	}
+}
+
+// ---- Both allow_paths and allow_run are accepted
+
+func TestResolveScope_allowPathsPlusAllowRun(t *testing.T) {
+	p := testProfile(profiles.ChainTypeTestnet)
+	args := ScopeArgs{
+		AllowPaths: []string{"gno.land/r/myorg/blog"},
+		AllowRun:   true,
+	}
+	scope, _, err := ResolveScope(args, p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !scope.AllowRun {
+		t.Error("scope.AllowRun should be true")
+	}
+	if len(scope.AllowPaths) != 1 {
+		t.Errorf("AllowPaths: got %v", scope.AllowPaths)
+	}
+}
+
+// ---- AllowPaths-only with allow_run=false still works
+
+func TestResolveScope_allowPathsOnlyWorks(t *testing.T) {
+	p := testProfile(profiles.ChainTypeTestnet)
+	args := ScopeArgs{
+		AllowPaths: []string{"gno.land/r/myorg/blog"},
+		AllowRun:   false,
+	}
+	scope, _, err := ResolveScope(args, p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if scope.AllowRun {
+		t.Error("scope.AllowRun should be false")
+	}
+	if len(scope.AllowPaths) != 1 {
+		t.Errorf("AllowPaths: got %v", scope.AllowPaths)
 	}
 }
 

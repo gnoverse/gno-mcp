@@ -66,6 +66,50 @@ func TestFormatCreate_multipleAllowPaths(t *testing.T) {
 	}
 }
 
+func TestFormatCreate_allowRunAppendsVMRun(t *testing.T) {
+	profile := testGnokeyProfile()
+	scope := testGnokeyScope([]string{"gno.land/r/test/blog"})
+	scope.AllowRun = true
+	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
+
+	if !strings.Contains(cmd, "--allow-paths vm/run") {
+		t.Errorf("expected --allow-paths vm/run line when AllowRun=true:\n%s", cmd)
+	}
+	// vm/exec entries should come before vm/run.
+	execIdx := strings.Index(cmd, "--allow-paths vm/exec:")
+	runIdx := strings.Index(cmd, "--allow-paths vm/run")
+	if execIdx < 0 || runIdx < 0 || execIdx > runIdx {
+		t.Errorf("vm/exec must come before vm/run; execIdx=%d runIdx=%d", execIdx, runIdx)
+	}
+}
+
+func TestFormatCreate_allowRunOnly(t *testing.T) {
+	profile := testGnokeyProfile()
+	scope := Scope{
+		SpendLimit: "1000000ugnot",
+		ExpiresIn:  time.Hour,
+		AllowRun:   true,
+	}
+	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
+
+	if !strings.Contains(cmd, "--allow-paths vm/run") {
+		t.Errorf("expected --allow-paths vm/run:\n%s", cmd)
+	}
+	if strings.Contains(cmd, "vm/exec:") {
+		t.Errorf("unexpected vm/exec entry when AllowPaths empty:\n%s", cmd)
+	}
+}
+
+func TestFormatCreate_noAllowRunOmitsVMRun(t *testing.T) {
+	profile := testGnokeyProfile()
+	scope := testGnokeyScope([]string{"gno.land/r/test/blog"})
+	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
+
+	if strings.Contains(cmd, "vm/run") {
+		t.Errorf("unexpected vm/run entry when AllowRun=false:\n%s", cmd)
+	}
+}
+
 func TestFormatRevoke_includesPubkey(t *testing.T) {
 	profile := testGnokeyProfile()
 	cmd := FormatGnokeyRevokeCommand(profile, "gpub1abcdef")

@@ -21,9 +21,10 @@ func RegisterRun(s *server.Server, sessionMgr *session.Manager, resolver chain.R
 		Name: "gno_run",
 		Description: "Executes ad-hoc Gno code via vm/MsgRun. The code must be a valid Gno package " +
 			"(package main with a main() entry point). Requires an active gnomcp session for the " +
-			"profile (use gno_session_propose if none exists). Pass simulate=true to dry-run without " +
-			"spending gas. Still requires an active session for the profile. Required args: profile, " +
-			"code. Optional: simulate (bool).",
+			"profile WITH allow_run=true (use gno_session_propose with allow_run=true if no such " +
+			"session exists). Pass simulate=true to dry-run without spending gas. Still requires an " +
+			"active session with allow_run for the profile. Required args: profile, code. Optional: " +
+			"simulate (bool).",
 		InputSchema: runInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -97,15 +98,26 @@ func runHandler(
 
 	argsSummary := fmt.Sprintf("code_len=%d", len(code))
 
-	// ---- Pick session (realm="" = wildcard; same flow for simulate and broadcast)
+	// ---- Pick session (requires AllowRun=true; same flow for simulate and broadcast)
 
-	signer, pickErr := sessionMgr.PickSessionForProfile(ctx, resolver, profileName, "")
+	signer, pickErr := sessionMgr.PickSessionForRun(ctx, resolver, profileName)
 	if pickErr != nil {
 		if errors.Is(pickErr, session.ErrNoActiveSession) {
 			return server.Result{}, &server.ToolError{
 				Code: "authentication_required",
 				Message: fmt.Sprintf(
-					"no active session for profile %q — use gno_session_propose to create one",
+					"no active session with allow_run=true for profile %q — use gno_session_propose with allow_run=true",
+					profileName,
+				),
+				Extra: map[string]any{"profile": profileName},
+			}
+		}
+		var scopeMismatch *session.ErrScopeMismatch
+		if errors.As(pickErr, &scopeMismatch) {
+			return server.Result{}, &server.ToolError{
+				Code: "authentication_required",
+				Message: fmt.Sprintf(
+					"active sessions for profile %q do not authorize MsgRun — use gno_session_propose with allow_run=true",
 					profileName,
 				),
 				Extra: map[string]any{"profile": profileName},

@@ -122,6 +122,7 @@ func (m *Manager) Hydrate(ctx context.Context, resolver chain.Resolver) error {
 			}
 			// Sync chain-side scope fields into meta before loading.
 			meta.AllowPaths = result.Status.AllowPaths
+			meta.AllowRun = result.Status.AllowRun
 			meta.SpendLimit = result.Status.SpendLimit
 			meta.SpendRemaining = result.Status.SpendRemaining
 			meta.ExpiresAt = result.Status.ExpiresAt
@@ -148,6 +149,7 @@ func (m *Manager) AddPending(profile string, kp *Keypair, scope Scope, master st
 		MasterAddress:  master,
 		Privkey:        kp.Priv,
 		AllowPaths:     scope.AllowPaths,
+		AllowRun:       scope.AllowRun,
 		SpendLimit:     scope.SpendLimit,
 		SpendRemaining: scope.SpendLimit,
 		ExpiresAt:      now.Add(scope.ExpiresIn).Unix(),
@@ -174,6 +176,27 @@ func (m *Manager) AddPending(profile string, kp *Keypair, scope Scope, master st
 //  5. If none cover realm but usable sessions exist: return *ErrScopeMismatch.
 //  6. Among matching sessions, return the one with the greatest CreatedAt (most recent).
 func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Resolver, profile, realm string) (chain.Signer, error) {
+	match := func(ss *sessionState) bool {
+		return realm == "" || coversRealm(ss.meta.AllowPaths, realm)
+	}
+	return m.pickSession(ctx, resolver, profile, match)
+}
+
+// PickSessionForRun returns a chain.Signer for the best usable session that
+// authorizes MsgRun (i.e. has vm/run in its chain-side AllowPaths, persisted
+// locally as AllowRun=true). Same lifecycle rules as PickSessionForProfile:
+// promote pending → active, skip expired and spend-exhausted, return
+// ErrNoActiveSession when nothing usable exists. Returns *ErrScopeMismatch
+// when sessions exist but none have AllowRun=true.
+func (m *Manager) PickSessionForRun(ctx context.Context, resolver chain.Resolver, profile string) (chain.Signer, error) {
+	return m.pickSession(ctx, resolver, profile, func(ss *sessionState) bool {
+		return ss.meta.AllowRun
+	})
+}
+
+// pickSession is the shared body for the public pickers. match decides which
+// active, unexpired, non-zero-spend sessions are eligible.
+func (m *Manager) pickSession(ctx context.Context, resolver chain.Resolver, profile string, match func(*sessionState) bool) (chain.Signer, error) {
 	// Step 1: snapshot pending sessions for promotion — no IO under lock.
 	type pending struct {
 		addr   string
@@ -201,6 +224,7 @@ func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Reso
 			continue
 		}
 		ss.meta.AllowPaths = res.Status.AllowPaths
+		ss.meta.AllowRun = res.Status.AllowRun
 		ss.meta.SpendLimit = res.Status.SpendLimit
 		ss.meta.SpendRemaining = res.Status.SpendRemaining
 		ss.meta.ExpiresAt = res.Status.ExpiresAt
@@ -241,7 +265,7 @@ func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Reso
 			continue
 		}
 		availablePaths = append(availablePaths, ss.meta.AllowPaths...)
-		if realm != "" && !coversRealm(ss.meta.AllowPaths, realm) {
+		if !match(ss) {
 			continue
 		}
 		candidates = append(candidates, ss)
@@ -350,6 +374,7 @@ func (m *Manager) MarkActive(profile, sessionAddr string, status chain.SessionSt
 		return fmt.Errorf("session/manager: MarkActive: session %q not found for profile %q", sessionAddr, profile)
 	}
 	ss.meta.AllowPaths = status.AllowPaths
+	ss.meta.AllowRun = status.AllowRun
 	ss.meta.SpendLimit = status.SpendLimit
 	ss.meta.SpendRemaining = status.SpendRemaining
 	ss.meta.ExpiresAt = status.ExpiresAt

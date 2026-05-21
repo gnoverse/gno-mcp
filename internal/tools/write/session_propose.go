@@ -18,11 +18,12 @@ func RegisterSessionPropose(s *server.Server, sessionMgr *session.Manager) {
 		Description: "Proposes a new chain-bounded session for the given profile by generating " +
 			"an ephemeral session keypair locally and emitting the gnokey command the user must " +
 			"run to authorize it. Use when an agent needs to perform a write but no active session " +
-			"covers the target realm. Returns the proposed scope, the bech32 session address, and " +
-			"a copy-paste-ready gnokey command. Does NOT broadcast anything — the user's gnokey " +
-			"signs the MsgCreateSession from their own machine. Required args: profile, allow_paths " +
-			"(non-empty array). Optional: spend_limit (string like \"1000000ugnot\"), expires_in " +
-			"(Go duration string like \"24h\").",
+			"covers the target realm or MsgRun. Returns the proposed scope, the bech32 session " +
+			"address, and a copy-paste-ready gnokey command. Does NOT broadcast anything — the " +
+			"user's gnokey signs the MsgCreateSession from their own machine. Required: profile, " +
+			"plus at least one of allow_paths (non-empty array of realm paths) or allow_run=true. " +
+			"Optional: spend_limit (string like \"1000000ugnot\"), expires_in (Go duration string " +
+			"like \"24h\").",
 		InputSchema: sessionProposeInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWritePrep,
@@ -56,10 +57,9 @@ func sessionProposeHandler(
 	if err != nil {
 		return server.Result{}, err
 	}
-	if len(allowPaths) == 0 {
-		return server.Result{}, fmt.Errorf(
-			"allow_paths: at least one realm path required (e.g. [\"gno.land/r/myorg/blog\"])",
-		)
+	allowRun, err := boolArg(args, "allow_run")
+	if err != nil {
+		return server.Result{}, err
 	}
 
 	spendLimit, err := stringArg(args, "spend_limit")
@@ -85,6 +85,7 @@ func sessionProposeHandler(
 
 	scopeArgs := session.ScopeArgs{
 		AllowPaths: allowPaths,
+		AllowRun:   allowRun,
 		SpendLimit: spendLimit,
 		ExpiresIn:  expiresIn,
 	}
@@ -108,6 +109,7 @@ func sessionProposeHandler(
 	fmt.Fprintf(&b, "Session proposed for profile %q.\n\n", profileName)
 	fmt.Fprintf(&b, "Proposed scope:\n")
 	fmt.Fprintf(&b, "  - allow_paths: %s\n", strings.Join(scope.AllowPaths, ", "))
+	fmt.Fprintf(&b, "  - allow_run: %t\n", scope.AllowRun)
 	if scope.SpendLimit != "" {
 		fmt.Fprintf(&b, "  - spend_limit: %s\n", scope.SpendLimit)
 	}
@@ -137,6 +139,7 @@ func sessionProposeHandler(
 			"session_pubkey":  kp.PubkeyBech32(),
 			"scope": map[string]any{
 				"allow_paths": scope.AllowPaths,
+				"allow_run":   scope.AllowRun,
 				"spend_limit": scope.SpendLimit,
 				"expires_in":  scope.ExpiresIn.String(),
 			},
@@ -151,8 +154,13 @@ func sessionProposeInputSchema(s *server.Server) map[string]any {
 		"allow_paths": map[string]any{
 			"type":        "array",
 			"items":       map[string]any{"type": "string"},
-			"description": "Realm paths the session may sign for (e.g. [\"gno.land/r/myorg/blog\"]). Required, non-empty.",
+			"description": "Realm paths the session may sign vm/MsgCall for (e.g. [\"gno.land/r/myorg/blog\"]). Optional if allow_run=true; otherwise required and non-empty. When present, must contain at least one entry.",
 			"minItems":    1,
+		},
+		"allow_run": map[string]any{
+			"type":        "boolean",
+			"description": "When true, the session can broadcast MsgRun (ad-hoc gno scripts) in addition to any realm calls in allow_paths. Optional; default false. At least one of allow_paths (non-empty) or allow_run=true must be requested.",
+			"default":     false,
 		},
 		"spend_limit": map[string]any{
 			"type":        "string",
@@ -163,7 +171,7 @@ func sessionProposeInputSchema(s *server.Server) map[string]any {
 			"description": "Session lifetime as a Go duration string (e.g. \"24h\"). Optional; profile default used if omitted; clamped to chain-type hard limit.",
 		},
 	}
-	required := []string{"allow_paths"}
+	var required []string
 	addProfileArg(s, props, &required)
 	return map[string]any{
 		"type":                 "object",

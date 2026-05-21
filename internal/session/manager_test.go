@@ -309,6 +309,108 @@ func TestCoversRealm_matchesExactAndSubpath(t *testing.T) {
 	}
 }
 
+func TestManager_pickForRun_skipsSessionWithoutAllowRun(t *testing.T) {
+	m := newTestManager(t)
+	noRun := activeSession("g1norun", "gpub1norun", []string{"gno.land/r/test/blog"}, 1000)
+	m.mu.Lock()
+	m.insertStateLocked("p", noRun, StateActive)
+	m.mu.Unlock()
+
+	_, err := m.PickSessionForRun(context.Background(), nullResolver(), "p")
+	if err == nil {
+		t.Fatal("expected error when no session has AllowRun=true")
+	}
+	var mismatch *ErrScopeMismatch
+	if !errors.As(err, &mismatch) && !errors.Is(err, ErrNoActiveSession) {
+		t.Errorf("error = %v, want ErrScopeMismatch or ErrNoActiveSession", err)
+	}
+}
+
+func TestManager_pickForRun_returnsSessionWithAllowRun(t *testing.T) {
+	m := newTestManager(t)
+	withRun := activeSession("g1run", "gpub1run", nil, 2000)
+	withRun.AllowRun = true
+	m.mu.Lock()
+	m.insertStateLocked("p", withRun, StateActive)
+	m.mu.Unlock()
+
+	signer, err := m.PickSessionForRun(context.Background(), nullResolver(), "p")
+	if err != nil {
+		t.Fatalf("PickSessionForRun: %v", err)
+	}
+	if signer.Address() != "g1run" {
+		t.Errorf("picked %q, want g1run", signer.Address())
+	}
+}
+
+func TestManager_pickForRun_emptyProfileReturnsNoActiveSession(t *testing.T) {
+	m := newTestManager(t)
+	_, err := m.PickSessionForRun(context.Background(), nullResolver(), "empty")
+	if !errors.Is(err, ErrNoActiveSession) {
+		t.Errorf("error = %v, want ErrNoActiveSession", err)
+	}
+}
+
+func TestManager_sessionWithBothAllowPathsAndRun_pickedByEither(t *testing.T) {
+	m := newTestManager(t)
+	both := activeSession("g1both", "gpub1both", []string{"gno.land/r/test/blog"}, 1000)
+	both.AllowRun = true
+	m.mu.Lock()
+	m.insertStateLocked("p", both, StateActive)
+	m.mu.Unlock()
+
+	// Realm-based pick works.
+	signer, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
+	if err != nil {
+		t.Fatalf("PickSessionForProfile: %v", err)
+	}
+	if signer.Address() != "g1both" {
+		t.Errorf("PickSessionForProfile picked %q, want g1both", signer.Address())
+	}
+
+	// Run pick works.
+	signer, err = m.PickSessionForRun(context.Background(), nullResolver(), "p")
+	if err != nil {
+		t.Fatalf("PickSessionForRun: %v", err)
+	}
+	if signer.Address() != "g1both" {
+		t.Errorf("PickSessionForRun picked %q, want g1both", signer.Address())
+	}
+}
+
+func TestManager_pickForRun_activatesPendingFromChainWithAllowRun(t *testing.T) {
+	m := newTestManager(t)
+	kp, err := NewKeypair()
+	if err != nil {
+		t.Fatalf("NewKeypair: %v", err)
+	}
+	scope := Scope{
+		SpendLimit: "500000ugnot",
+		ExpiresIn:  time.Hour,
+		AllowRun:   true,
+	}
+	meta, err := m.AddPending("testnet", kp, scope, "g1master")
+	if err != nil {
+		t.Fatalf("AddPending: %v", err)
+	}
+
+	fake := chain.NewFake()
+	fake.SetSession("g1master", meta.SessionAddress, chain.SessionStatus{
+		Active:         true,
+		AllowRun:       true,
+		SpendLimit:     "500000ugnot",
+		SpendRemaining: "500000ugnot",
+		ExpiresAt:      time.Now().Add(time.Hour).Unix(),
+	})
+	signer, err := m.PickSessionForRun(context.Background(), resolverFor(fake), "testnet")
+	if err != nil {
+		t.Fatalf("PickSessionForRun after chain activation: %v", err)
+	}
+	if signer.Address() != meta.SessionAddress {
+		t.Errorf("signer address = %q, want %q", signer.Address(), meta.SessionAddress)
+	}
+}
+
 func TestManager_markActive_persistsAndUpdates(t *testing.T) {
 	m := newTestManager(t)
 	kp, _ := NewKeypair()

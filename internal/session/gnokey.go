@@ -22,6 +22,9 @@ func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, 
 	for _, p := range scope.AllowPaths {
 		sb.WriteString(fmt.Sprintf("  --allow-paths vm/exec:%s \\\n", p))
 	}
+	if scope.AllowRun {
+		sb.WriteString("  --allow-paths vm/run \\\n")
+	}
 	sb.WriteString(fmt.Sprintf("  --spend-limit %s \\\n", scope.SpendLimit))
 	expiresAt := time.Now().Add(scope.ExpiresIn).Unix()
 	sb.WriteString(fmt.Sprintf("  --expires-at %d \\\n", expiresAt))

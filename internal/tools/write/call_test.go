@@ -20,12 +20,20 @@ import (
 // Returns the session address.
 func seedActiveSession(t *testing.T, mgr *session.Manager, profile string, allowPaths []string, spendLimit string) string {
 	t.Helper()
+	return seedActiveSessionWithRun(t, mgr, profile, allowPaths, spendLimit, false)
+}
+
+// seedActiveSessionWithRun is like seedActiveSession but lets the caller set
+// AllowRun on both the proposed scope and the activated chain status.
+func seedActiveSessionWithRun(t *testing.T, mgr *session.Manager, profile string, allowPaths []string, spendLimit string, allowRun bool) string {
+	t.Helper()
 	kp, err := session.NewKeypair()
 	if err != nil {
 		t.Fatalf("NewKeypair: %v", err)
 	}
 	scope := session.Scope{
 		AllowPaths: allowPaths,
+		AllowRun:   allowRun,
 		SpendLimit: spendLimit,
 	}
 	meta, err := mgr.AddPending(profile, kp, scope, "g1master")
@@ -35,6 +43,7 @@ func seedActiveSession(t *testing.T, mgr *session.Manager, profile string, allow
 	status := chain.SessionStatus{
 		Active:         true,
 		AllowPaths:     scope.AllowPaths,
+		AllowRun:       scope.AllowRun,
 		SpendLimit:     scope.SpendLimit,
 		SpendRemaining: scope.SpendLimit,
 	}

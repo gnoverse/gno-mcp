@@ -51,6 +51,7 @@ type RunResult struct {
 type SessionStatus struct {
 	Active         bool
 	AllowPaths     []string
+	AllowRun       bool
 	SpendLimit     string
 	SpendRemaining string
 	ExpiresAt      int64

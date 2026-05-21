@@ -16,15 +16,18 @@ type Scope struct {
 	SpendPeriod time.Duration
 	ExpiresIn   time.Duration
 	AllowPaths  []string
+	AllowRun    bool
 }
 
 // ScopeArgs carries the agent-supplied values from gno_session_propose.
 // Empty string means "agent omitted"; ResolveScope falls back to profile
-// defaults and then hardcoded fallback. Only AllowPaths is required.
+// defaults and then hardcoded fallback. At least one of AllowPaths
+// (non-empty) or AllowRun==true must be requested.
 type ScopeArgs struct {
 	SpendLimit string
 	ExpiresIn  string
 	AllowPaths []string
+	AllowRun   bool
 }
 
 const (
@@ -34,10 +37,10 @@ const (
 
 // ResolveScope applies the 4-layer scope policy.
 func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, error) {
-	if len(args.AllowPaths) == 0 {
+	if len(args.AllowPaths) == 0 && !args.AllowRun {
 		return Scope{}, nil, errors.New(
-			"session: allow_paths is required and must contain at least one realm path " +
-				"(e.g. [\"gno.land/r/myorg/blog\"])",
+			"session: at least one of allow_paths (non-empty, e.g. " +
+				"[\"gno.land/r/myorg/blog\"]) or allow_run=true must be requested",
 		)
 	}
 
@@ -65,6 +68,7 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 		SpendPeriod: expiresIn,
 		ExpiresIn:   expiresIn,
 		AllowPaths:  args.AllowPaths,
+		AllowRun:    args.AllowRun,
 	}
 
 	if profile.BypassHardLimits {

@@ -19,6 +19,7 @@ type SessionMeta struct {
 	Privkey        []byte   `json:"privkey"`
 	Encrypted      bool     `json:"encrypted"`
 	AllowPaths     []string `json:"allow_paths"`
+	AllowRun       bool     `json:"allow_run"`
 	SpendLimit     string   `json:"spend_limit"`
 	SpendRemaining string   `json:"spend_remaining"`
 	ExpiresAt      int64    `json:"expires_at"`
