@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 )
@@ -35,14 +36,26 @@ type Annotations struct {
 	OpenWorld   bool
 }
 
+// Validate returns an error when Annotations contain mutually exclusive flags.
+// ReadOnly and Destructive cannot both be true: a tool that doesn't modify state
+// cannot be destructive.
+func (a Annotations) Validate() error {
+	if a.ReadOnly && a.Destructive {
+		return errors.New("annotations: ReadOnly and Destructive are mutually exclusive")
+	}
+	return nil
+}
+
 // Result is what a handler returns. Pipeline formats per OutputKind.
 type Result struct {
-	Text              string         // for OutputText
-	ResourceURI       string         // for OutputResource
-	ResourceBody      string         // for OutputResource
-	ResourceMIME      string         // for OutputResource (defaults to text/markdown)
-	StructuredContent map[string]any // machine-readable output alongside prose text
-	IsError           bool           // true when the result represents a tool-side error
+	Text         string // for OutputText
+	ResourceURI  string // for OutputResource
+	ResourceBody string // for OutputResource
+	ResourceMIME string // for OutputResource (defaults to text/markdown)
+	// StructuredContent is arbitrary key-value data emitted alongside Text on the
+	// MCP wire. Keys must be JSON-serializable. Nil and empty map are equivalent.
+	StructuredContent map[string]any
+	IsError           bool // true when the result represents a tool-side error
 }
 
 // ToolError is a structured error returned by a tool handler. Code/Message
@@ -50,11 +63,22 @@ type Result struct {
 type ToolError struct {
 	Code    string
 	Message string
-	Extra   map[string]any
+	// Extra holds additional key-value pairs merged into the wire-format
+	// structuredContent. Keys here take precedence over caller-provided keys
+	// when both are present.
+	Extra map[string]any
 }
 
 func (e *ToolError) Error() string {
-	return fmt.Sprintf("tool error [%s]: %s", e.Code, e.Message)
+	if len(e.Extra) == 0 {
+		return fmt.Sprintf("tool error [%s]: %s", e.Code, e.Message)
+	}
+	keys := make([]string, 0, len(e.Extra))
+	for k := range e.Extra {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return fmt.Sprintf("tool error [%s]: %s extra=%v", e.Code, e.Message, keys)
 }
 
 // Handler is a tool's execution function. Pipeline injects schema-validated args.

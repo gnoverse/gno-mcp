@@ -1,58 +1,30 @@
 package server_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
-func TestAnnotations_zeroValue(t *testing.T) {
-	var a server.Annotations
-	if a.ReadOnly || a.Destructive || a.Idempotent || a.OpenWorld {
-		t.Error("zero-value Annotations must have all false fields")
+func TestAnnotations_Validate_okWhenIndependent(t *testing.T) {
+	cases := []server.Annotations{
+		{},
+		{ReadOnly: true, Idempotent: true},
+		{Destructive: true, OpenWorld: true},
+		{Idempotent: true, OpenWorld: true},
+	}
+	for i, a := range cases {
+		if err := a.Validate(); err != nil {
+			t.Errorf("case %d: unexpected error: %v", i, err)
+		}
 	}
 }
 
-func TestTool_withAnnotations(t *testing.T) {
-	tool := &server.Tool{
-		Name: "test_tool",
-		Annotations: server.Annotations{
-			ReadOnly:    true,
-			Destructive: false,
-			Idempotent:  true,
-			OpenWorld:   false,
-		},
-	}
-	if !tool.Annotations.ReadOnly {
-		t.Error("ReadOnly should be true")
-	}
-	if tool.Annotations.Destructive {
-		t.Error("Destructive should be false")
-	}
-}
-
-func TestResult_withStructuredContent(t *testing.T) {
-	r := server.Result{
-		Text: "hello",
-		StructuredContent: map[string]any{
-			"key": "value",
-		},
-	}
-	if r.Text != "hello" {
-		t.Errorf("Text = %q, want \"hello\"", r.Text)
-	}
-	if r.StructuredContent["key"] != "value" {
-		t.Errorf("StructuredContent[key] = %v, want \"value\"", r.StructuredContent["key"])
-	}
-}
-
-func TestResult_isError(t *testing.T) {
-	r := server.Result{
-		Text:    "something went wrong",
-		IsError: true,
-	}
-	if !r.IsError {
-		t.Error("IsError should be true")
+func TestAnnotations_Validate_rejectsReadOnlyAndDestructive(t *testing.T) {
+	a := server.Annotations{ReadOnly: true, Destructive: true}
+	if err := a.Validate(); err == nil {
+		t.Fatal("expected error when ReadOnly and Destructive are both true")
 	}
 }
 
@@ -60,6 +32,21 @@ func TestToolError_Error(t *testing.T) {
 	e := &server.ToolError{Code: "x", Message: "bad"}
 	if e.Error() != "tool error [x]: bad" {
 		t.Errorf("Error() = %q", e.Error())
+	}
+}
+
+func TestToolError_Error_withExtra(t *testing.T) {
+	e := &server.ToolError{
+		Code:    "scope_mismatch",
+		Message: "denied",
+		Extra:   map[string]any{"allow_paths": []string{"a", "b"}, "wanted_path": "c"},
+	}
+	got := e.Error()
+	if !strings.Contains(got, "scope_mismatch") {
+		t.Errorf("Error() = %q; want it to contain code", got)
+	}
+	if !strings.Contains(got, "extra=[allow_paths wanted_path]") {
+		t.Errorf("Error() = %q; want sorted extra key list", got)
 	}
 }
 
