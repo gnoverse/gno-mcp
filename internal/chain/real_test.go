@@ -2,6 +2,7 @@ package chain
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -134,5 +135,37 @@ func TestReal_File_rejectsEmptyFile(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "ListFiles") {
 		t.Errorf("error should steer caller to ListFiles, got %q", err)
+	}
+}
+
+// ---- Real.QuerySession tests
+
+func TestReal_QuerySession_rejectsEmptyPubkey(t *testing.T) {
+	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	if err != nil {
+		t.Fatalf("NewReal: %v", err)
+	}
+	_, err = r.QuerySession(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error for empty pubkey")
+	}
+	if !strings.Contains(err.Error(), "empty") && !strings.Contains(err.Error(), "must") {
+		t.Errorf("error should mention empty/required pubkey, got: %v", err)
+	}
+}
+
+func TestReal_QuerySession_returnsUnsupportedForValidPubkey(t *testing.T) {
+	// Per D8: no per-pubkey session ABCI path exists. Real returns the sentinel
+	// regardless of pubkey content. Manager handles graceful degradation.
+	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	if err != nil {
+		t.Fatalf("NewReal: %v", err)
+	}
+	_, err = r.QuerySession(context.Background(), "gpub1validlooking")
+	if err == nil {
+		t.Fatal("expected ErrSessionQueryUnsupported")
+	}
+	if !errors.Is(err, ErrSessionQueryUnsupported) {
+		t.Errorf("error = %v, want ErrSessionQueryUnsupported", err)
 	}
 }

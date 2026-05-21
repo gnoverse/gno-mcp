@@ -266,6 +266,19 @@ func (r *Real) Run(_ context.Context, signer Signer, code string, simulate bool)
 	}, nil
 }
 
-func (r *Real) QuerySession(_ context.Context, _ string) (SessionStatus, error) {
-	return SessionStatus{}, fmt.Errorf("not implemented")
+// QuerySession returns the chain-side SessionStatus for the given bech32 pubkey.
+//
+// Per the Task 2.3 research (see internal/chain/README.md), no per-pubkey session
+// ABCI path exists in the current chain build. This implementation returns
+// ErrSessionQueryUnsupported for any non-empty pubkey. The session.Manager
+// catches this sentinel and degrades to local-authoritative session state.
+//
+// When a per-pubkey session ABCI path lands in gnoclient (post-PR #5307), this
+// method will be replaced with a real implementation. The chain.Client interface
+// stays correct in the meantime.
+func (r *Real) QuerySession(_ context.Context, sessionPubkey string) (SessionStatus, error) {
+	if sessionPubkey == "" {
+		return SessionStatus{}, fmt.Errorf("querysession: pubkey must not be empty")
+	}
+	return SessionStatus{}, ErrSessionQueryUnsupported
 }

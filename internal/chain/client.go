@@ -18,6 +18,12 @@ type Signer interface {
 // simulate_unsupported ToolError.
 var ErrSimulateUnsupported = errors.New("chain: simulate not supported by current gnoclient")
 
+// ErrSessionQueryUnsupported is returned by Real.QuerySession when the
+// underlying chain does not expose a per-pubkey session ABCI path.
+// The session.Manager falls back to local-authoritative state and
+// surfaces this to tools as session_query_unsupported.
+var ErrSessionQueryUnsupported = errors.New("chain: per-pubkey session query not supported by current gnoclient")
+
 // CallResult is the outcome of a vm/MsgCall broadcast (or simulation).
 type CallResult struct {
 	TxHash    string
