@@ -1,0 +1,2 @@
+# Un-ignore files that the root .gitignore blocks but are intentional here.
+!profiles.toml

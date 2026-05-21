@@ -1,0 +1,11 @@
+[local]
+chain-type = "local"
+rpc-url = "http://127.0.0.1:26657"
+chain-id = "dev"
+allow-dangerous-tools = true
+
+[local-safe]
+chain-type = "local"
+rpc-url = "http://127.0.0.1:26657"
+chain-id = "dev"
+allow-dangerous-tools = false
