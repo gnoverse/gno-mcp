@@ -1,6 +1,9 @@
 package profiles
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // HardLimits is the per-profile clamp ceiling derived from chain-type.
 // Zero-valued fields signal "unlimited" (only set when BypassHardLimits=true).
@@ -8,6 +11,31 @@ type HardLimits struct {
 	MaxSpendLimit      string        // e.g. "100000000ugnot"; "" = unlimited
 	MaxExpiresIn       time.Duration // 0 = unlimited
 	MaxAllowPathsCount int           // 0 = unlimited
+}
+
+const (
+	hardDefaultSpendLimit = "100000ugnot"
+	hardDefaultExpiresIn  = time.Hour
+)
+
+// EffectiveDefaults returns the scope defaults that apply when the agent
+// omits values in gno_session_propose. Implements layers 2→3 of the scope
+// policy: profile override falls back to hardcoded. The returned values are
+// NOT clamped to HardLimits — callers apply clamping separately.
+func (p *Profile) EffectiveDefaults() (spendLimit string, expiresIn time.Duration, err error) {
+	spendLimit = p.DefaultSpendLimit
+	if spendLimit == "" {
+		spendLimit = hardDefaultSpendLimit
+	}
+	if p.DefaultExpiresIn == "" {
+		expiresIn = hardDefaultExpiresIn
+	} else {
+		expiresIn, err = time.ParseDuration(p.DefaultExpiresIn)
+		if err != nil {
+			return "", 0, fmt.Errorf("invalid default-expires-in %q: %w", p.DefaultExpiresIn, err)
+		}
+	}
+	return spendLimit, expiresIn, nil
 }
 
 // HardLimits returns the clamp ceiling for the profile.

@@ -1,6 +1,7 @@
 package profiles
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -72,5 +73,61 @@ func TestHardLimits_bypassReturnsUnlimited(t *testing.T) {
 	}
 	if hl.MaxAllowPathsCount != 0 {
 		t.Errorf("bypass: MaxAllowPathsCount should be 0 (unlimited), got %d", hl.MaxAllowPathsCount)
+	}
+}
+
+func TestEffectiveDefaults_profileSetWins(t *testing.T) {
+	p := Profile{
+		DefaultSpendLimit: "500000ugnot",
+		DefaultExpiresIn:  "2h",
+	}
+	spend, expires, err := p.EffectiveDefaults()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if spend != "500000ugnot" {
+		t.Errorf("spend: got %q, want 500000ugnot", spend)
+	}
+	if expires != 2*time.Hour {
+		t.Errorf("expires: got %v, want 2h", expires)
+	}
+}
+
+func TestEffectiveDefaults_fallbackToHardcoded(t *testing.T) {
+	p := Profile{}
+	spend, expires, err := p.EffectiveDefaults()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if spend != "100000ugnot" {
+		t.Errorf("spend: got %q, want hardcoded 100000ugnot", spend)
+	}
+	if expires != time.Hour {
+		t.Errorf("expires: got %v, want hardcoded 1h", expires)
+	}
+}
+
+func TestEffectiveDefaults_mixedFallback(t *testing.T) {
+	p := Profile{DefaultSpendLimit: "200000ugnot"}
+	spend, expires, err := p.EffectiveDefaults()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if spend != "200000ugnot" {
+		t.Errorf("spend: got %q, want 200000ugnot", spend)
+	}
+	if expires != time.Hour {
+		t.Errorf("expires: got %v, want hardcoded 1h", expires)
+	}
+}
+
+func TestEffectiveDefaults_invalidExpiresInReturnsError(t *testing.T) {
+	p := Profile{DefaultExpiresIn: "garbage"}
+	_, _, err := p.EffectiveDefaults()
+	if err == nil {
+		t.Fatal("expected error for unparseable default-expires-in")
+	}
+	if !strings.Contains(err.Error(), "default-expires-in") {
+		t.Errorf("error should mention field name: %v", err)
 	}
 }
