@@ -5,7 +5,8 @@ import "strconv"
 var total int
 
 // Increment adds 1 to the running total and returns the new value.
-func Increment() int {
+// Declared `cur realm` so MsgCall (and session-signed MsgCall) can invoke it.
+func Increment(cur realm) int {
 	total++
 	return total
 }

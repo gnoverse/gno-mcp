@@ -3,7 +3,7 @@ chain-type = "local"
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 allow-dangerous-tools = true
-master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
+master-address = "g19rl4cm2hmr8afy4kldpxz3fka4jguq0a0u3773"
 
 [local-safe]
 chain-type = "local"

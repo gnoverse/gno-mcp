@@ -9,6 +9,7 @@ and `.mynote/v2-issues/YYYY-MM-DD-milestone-b-section-b-runlog.md` (Section B).
 ## Pre-flight
 
 - [ ] `./test/e2e/setup.sh` exits with the ready banner (port, master address, mnemonic printed).
+- [ ] **Master address sanity check.** Confirm `master-address` in `test/e2e/profiles.toml` matches the `master addr:` line printed by `setup.sh`. If they differ, edit `profiles.toml` to match. gnomcp uses this as `MsgCall.Caller`; a mismatch makes every session-signed write fail.
 - [ ] `make build` produces `bin/gnomcp` without error.
 - [ ] `bin/gnomcp --config test/e2e/profiles.toml` starts and stays running (second terminal).
 
@@ -91,16 +92,16 @@ If the operator ran `setup.sh --with-indexer` (out-of-scope for default Mileston
 
 Pre-flight: A1–A6 all pass. `gno_eval Total()` returns the expected baseline.
 
-### Check 1 — simulate=true bypasses session check
+### Check 1 — authentication_required on simulate without session
 
-Skip if simulate did not ship (gnoclient has no simulate primitive — see Task 2.3 finding).
+`simulate=true` still requires an active session under the chain-bounded session
+model (the ante handler validates the same way for simulate and broadcast).
 
 ```
 gno_call(profile=local, realm=gno.land/r/test/counter, func=Increment, simulate=true)
 ```
 
-Pass: text contains `Simulated: true`; no error.
-Confirm `gno_eval Total()` still returns `(0 int)`.
+Pass: `isError`, `code=authentication_required`. Confirm `gno_eval Total()` is unchanged.
 
 ### Check 2 — authentication_required on real call without session
 
@@ -121,20 +122,50 @@ Pass: `isError`, `code=dangerous_disabled`, text mentions editing `profiles.toml
 ### Check 4 — Session propose returns a runnable gnokey command
 
 ```
-gno_session_propose(profile=local, allow_paths=["gno.land/r/test/counter"])
+gno_session_propose(profile=local, allow_paths=["gno.land/r/test/counter"], spend_limit="100000000ugnot")
 ```
 
+**Pass `spend_limit="100000000ugnot"` (100M).** The chain debits the tx's `GasFee` against the session's spend limit, and gnomcp's default `GasFee` is `10000000ugnot`. The hardcoded scope default `100000ugnot` is below that and would reject every broadcast as "session not allowed."
+
 Pass:
-- Text contains fenced `gnokey maketx session create ...` with `--pubkey gpub1...` and `--allow-paths`.
+- Text contains fenced `gnokey maketx session create ...` with `--pubkey gpub1...` and `--allow-paths vm/exec:gno.land/r/test/counter`.
 - Session file appears at `~/.local/share/gnomcp/sessions/local/<session_addr>.key`, mode `0600`.
+
+### Check 4b — Realm functions need `cur realm` for MsgCall
+
+Realms invoked by `gno_call` must declare an explicit `cur realm` first parameter (e.g. `func Increment(cur realm) int`). The chain refuses MsgCall against non-crossing functions with `function X is non-crossing and cannot be called with MsgCall; query with vm/qeval or use MsgRun`. The bundled `test/e2e/realms/*.gno` files conform; if you add your own realm to test session-signed writes, ensure every callable function follows this signature.
 
 ### Check 5 — User signs and session activates
 
 Copy the command from Check 4. Replace `<your-master-key-name>` with `e2e-master`.
-Run with `GNOKEYHOME=test/e2e/.keyring gnokey ...`.
+Append `-home test/e2e/.keyring` and the remote/chainid flags so the command runs
+against the test gnodev:
+
+```
+gnokey -home test/e2e/.keyring maketx session create \
+  --pubkey gpub1... --allow-paths gno.land/r/test/counter \
+  --spend-limit 100000ugnot --expires-at <unix-ts> \
+  --gas-fee 10000000ugnot --gas-wanted 10000000 \
+  --remote http://127.0.0.1:<PORT> --chainid dev \
+  --insecure-password-stdin --broadcast \
+  e2e-master
+```
+
+(Send an empty password via `printf '\n' | gnokey ...` — the e2e master key has no passphrase.)
 
 Pass: gnokey reports tx success.
 `gno_auth_status(profile=local)` shows `[active]` for the session address.
+
+### Check 5b — Simulate with session now succeeds
+
+Repeat Check 1 now that a session is active:
+
+```
+gno_call(profile=local, realm=gno.land/r/test/counter, func=Increment, simulate=true)
+```
+
+Pass: text contains `Simulated: true`; no error. `gno_eval Total()` is unchanged
+(simulate must not mutate state).
 
 ### Check 6 — Authorized write succeeds and mutates chain
 
@@ -184,21 +215,21 @@ Pass: call succeeds via original session.
 ### Check 10 — Hard-limit clamp + warning
 
 ```
-gno_session_propose(profile=local, allow_paths=["gno.land/r/test/counter"], spend_limit="200gnot")
+gno_session_propose(profile=local, allow_paths=["gno.land/r/test/counter"], spend_limit="200000000ugnot")
 ```
+
+(Use `ugnot` to match the local cap's denomination — gnomcp's `clampCoin` rejects cross-denomination compares, so a `gnot` request against a `ugnot` cap errors instead of warning. Tracked as a separate scope-policy decision.)
 
 Pass:
 - Proposal succeeds (no error).
-- Text includes clamp warning: e.g. `"WARNING: requested spend_limit 200gnot exceeds local cap of 100gnot; clamped to 100gnot."`.
-- The `gnokey` command in the text shows `100gnot` (the clamped value).
+- Text includes clamp warning: e.g. `"WARNING: requested spend_limit 200000000ugnot exceeds local cap of 100000000ugnot; clamped to 100000000ugnot."`.
+- The `gnokey` command in the text shows `100000000ugnot` (the clamped value).
 
 ### Check 11 — gno_run broadcasts ad-hoc script
 
-```
-gno_run(profile=local, code="package main\nfunc main() { println(\"hi from run\") }")
-```
+**Deferred.** MsgRun requires a different chain permission (`vm/run`, no realm path) than gno_session_propose currently emits — propose only outputs `vm/exec:<realm>` entries. Wiring gno_run end-to-end needs propose to also support `vm/run` permissions or a separate `gno_session_propose_run` flow. Out of scope for the per-profile-master MVP; revisit alongside MsgRun's permission model.
 
-Pass: result has `tx_hash`; `Output` contains `hi from run`.
+For now, gno_run against Real fails with `session not allowed error` at the ante handler.
 
 ### Check 12 — Revoke flow
 
