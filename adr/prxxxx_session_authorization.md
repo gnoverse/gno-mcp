@@ -29,6 +29,8 @@ gno-mcp v2 signs writes exclusively with chain-bounded session keys. The master 
 
 Sessions are immutable after creation; scope expansion requires a new `MsgCreateSession`. Multiple sessions per profile are supported; gnomcp picks the most recently created session whose `AllowPaths` matches the requested realm and that has not expired or run down its `SpendLimit`.
 
+The master address used as `MsgCall.Caller` is discovered per session via a funded Send carrying memo `gnomcp-auth`, or pre-configured per profile as an escape hatch. See `prxxxx_master_discovery.md`.
+
 **Session private keys persist by default on a mounted volume** at `/var/lib/gnomcp/sessions/<profile>.key` (file mode `0600`). On startup, gnomcp reads existing keys and verifies each is still active on chain via ABCI query; valid sessions are reused without re-prompting. Expired or revoked sessions trigger a fresh proposal on the next write attempt.
 
 Persistence is controlled by Docker volume convention: mounting `/var/lib/gnomcp` (the default invocation) keeps sessions across container removals; not mounting it makes sessions ephemeral within the container's writable layer. Encryption-at-rest is opt-in via the `GNOMCP_SESSION_PASSPHRASE` env var; if unset, the privkey is stored plain on disk.
@@ -54,7 +56,7 @@ A per-profile `bypass-hard-limits = true` escape hatch disables layer 4 for that
 
 **Continue v1's master-key signing.** Rejected. Closes the Rule of Two trifecta (state-changing tools + untrusted input + sensitive access). The meta-issue (`.mynote/gno-agentic/issues/meta-issue.md`) defers open-ended writes specifically because this posture is unacceptable.
 
-**gno-mcp PR #3's fund-to-authorize model.** Partially adopted: the OAuth-style UX flow (lazy keypair, `authentication_required` error with payload, user authorizes out of band) is taken. The chain-side mechanism is upgraded from "session is its own account, user funds it" to "session is a chain-bounded `MsgCreateSession` registration, user signs scope at authorization time." PR #3 itself notes the upgrade as future work. The funded-balance bound is replaced by chain-enforced `AllowPaths` + `SpendLimit` + `ExpiresAt`.
+**gno-mcp PR #3's fund-to-authorize model.** Partially adopted: the OAuth-style UX flow (lazy keypair, `authentication_required` error with payload, user authorizes out of band) is taken. The chain-side mechanism is upgraded from "session is its own account, user funds it" to "session is a chain-bounded `MsgCreateSession` registration, user signs scope at authorization time." PR #3 itself notes the upgrade as future work. The funded-balance bound is replaced by chain-enforced `AllowPaths` + `SpendLimit` + `ExpiresAt`. The Send-with-memo signal from PR #3 is retained as the master-address discovery channel (`prxxxx_master_discovery.md`) without taking on its authorization semantics.
 
 **Active-profile state machine** with a `select_profile` tool that mutates server state. Rejected. Adds session-scope state-management complexity without safety gain over per-call hard errors plus capability gates. State transitions add ambiguity to the audit log; stateless `profile`-arg on every call is cleaner.
 
