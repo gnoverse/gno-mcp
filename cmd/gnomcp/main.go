@@ -24,8 +24,10 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/indexer"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
+	"github.com/gnoverse/gno-mcp/internal/session"
 	idxtools "github.com/gnoverse/gno-mcp/internal/tools/indexer"
 	readtools "github.com/gnoverse/gno-mcp/internal/tools/read"
+	writetools "github.com/gnoverse/gno-mcp/internal/tools/write"
 )
 
 const version = "v0.2.0"
@@ -46,6 +48,7 @@ func main() {
 	configPath := fs.String("config", defaultConfigPath(), "path to profiles.toml")
 	auditPath := fs.String("audit-path", defaultAuditPath(), "path to audit log file")
 	auditReads := fs.Bool("audit-reads", false, "also audit read-only tool calls")
+	sessionsPath := fs.String("sessions-path", defaultSessionsPath(), "Path to session storage directory")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		log.Fatalf("flag parse: %v", err)
 	}
@@ -90,6 +93,13 @@ func main() {
 	chainResolver := buildChainResolver(cfg)
 	indexerResolver := buildIndexerResolver(cfg)
 
+	// ---- session manager
+	passphrase := os.Getenv("GNOMCP_SESSION_PASSPHRASE")
+	sessionMgr := session.NewManager(*sessionsPath, passphrase)
+	if err := sessionMgr.Hydrate(ctx, chainResolver); err != nil {
+		log.Printf("session hydration warning: %v", err)
+	}
+
 	// ---- register tools
 	readtools.RegisterRender(s, chainResolver)
 	readtools.RegisterEval(s, chainResolver)
@@ -100,6 +110,14 @@ func main() {
 		idxtools.RegisterList(s, indexerResolver)
 		idxtools.RegisterHistory(s, indexerResolver)
 		idxtools.RegisterActivity(s, indexerResolver)
+	}
+
+	if s.AnyProfileAllowsDangerous() {
+		writetools.RegisterCall(s, sessionMgr, chainResolver, auditLog)
+		writetools.RegisterRun(s, sessionMgr, chainResolver, auditLog)
+		writetools.RegisterAuthStatus(s, sessionMgr, chainResolver)
+		writetools.RegisterSessionPropose(s, sessionMgr)
+		writetools.RegisterSessionRevoke(s, sessionMgr)
 	}
 
 	// ---- build MCP SDK server
@@ -344,6 +362,16 @@ func defaultAuditPath() string {
 		return filepath.Join(home, ".local", "share", "gnomcp", "audit.log")
 	}
 	return "audit.log"
+}
+
+func defaultSessionsPath() string {
+	if v := os.Getenv("GNOMCP_SESSIONS_PATH"); v != "" {
+		return v
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".local", "share", "gnomcp", "sessions")
+	}
+	return "./sessions"
 }
 
 // ---- helpers

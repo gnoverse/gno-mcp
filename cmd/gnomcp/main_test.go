@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // srcDir returns the directory containing this test file.
@@ -91,5 +93,122 @@ func TestAuditGrep(t *testing.T) {
 	lines2 := strings.Split(strings.TrimSpace(string(out2)), "\n")
 	if len(lines2) != 2 {
 		t.Errorf("expected 2 matching lines, got %d: %v", len(lines2), lines2)
+	}
+}
+
+func TestMain_writeToolsAbsent_whenAllReadOnly(t *testing.T) {
+	toml := `
+[testnet5]
+chain-type = "testnet"
+rpc-url = "https://rpc.test5.gno.land:443"
+chain-id = "test5"
+allow-dangerous-tools = false
+`
+	cfg := t.TempDir()
+	cfgFile := filepath.Join(cfg, "profiles.toml")
+	if err := os.WriteFile(cfgFile, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sessDir := t.TempDir()
+
+	cmd := exec.Command("go", "run", ".", "-config", cfgFile, "-sessions-path", sessDir)
+	cmd.Dir = srcDir()
+	cmd.Stdin = strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}` + "\n")
+	out, err := cmd.Output()
+	if err != nil {
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) {
+			t.Fatalf("run: %v", err)
+		}
+	}
+
+	for _, tool := range []string{"gno_call", "gno_run", "gno_auth_status", "gno_session_propose", "gno_session_revoke"} {
+		if strings.Contains(string(out), tool) {
+			t.Errorf("write tool %q should not be in initialize response when allow-dangerous-tools=false", tool)
+		}
+	}
+}
+
+func TestMain_writeToolsPresent_whenDangerousEnabled(t *testing.T) {
+	toml := `
+[testnet5]
+chain-type = "testnet"
+rpc-url = "https://rpc.test5.gno.land:443"
+chain-id = "test5"
+allow-dangerous-tools = true
+`
+	cfg := t.TempDir()
+	cfgFile := filepath.Join(cfg, "profiles.toml")
+	if err := os.WriteFile(cfgFile, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sessDir := t.TempDir()
+
+	cmd := exec.Command("go", "run", ".", "-config", cfgFile, "-sessions-path", sessDir)
+	cmd.Dir = srcDir()
+	// Use a StdinPipe so we control when the server sees EOF.
+	// Closing stdin too soon races with MCP's async response dispatch:
+	// the server closes stdout when stdin reaches EOF, which may happen
+	// before the response is written. We keep stdin open until we receive
+	// the tools/list response (signalled by reading from stdout), then
+	// close it to let the server exit cleanly.
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("stdin pipe: %v", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("stdout pipe: %v", err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	const (
+		initMsg = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}` + "\n"
+		listMsg = `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}` + "\n"
+	)
+	if _, err := stdin.Write([]byte(initMsg + listMsg)); err != nil {
+		t.Fatalf("write init+list: %v", err)
+	}
+
+	// Read all stdout in a goroutine; the server will not write after stdin
+	// closes, so draining stdout first is safe.
+	outCh := make(chan []byte, 1)
+	go func() {
+		var buf strings.Builder
+		tmp := make([]byte, 4096)
+		for {
+			n, readErr := stdout.Read(tmp)
+			if n > 0 {
+				buf.Write(tmp[:n])
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		outCh <- []byte(buf.String())
+	}()
+
+	// Give the server enough time to respond to both requests, then close
+	// stdin so it exits cleanly.  500 ms is generous; a cached go run
+	// typically responds in <100 ms.
+	timer := time.NewTimer(500 * time.Millisecond)
+	<-timer.C
+	stdin.Close()
+
+	out := string(<-outCh)
+
+	if err := cmd.Wait(); err != nil {
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) {
+			t.Fatalf("run: %v", err)
+		}
+	}
+
+	for _, tool := range []string{"gno_session_propose", "gno_session_revoke", "gno_auth_status"} {
+		if !strings.Contains(out, tool) {
+			t.Errorf("write tool %q missing from initialize response when allow-dangerous-tools=true; response:\n%s", tool, out)
+		}
 	}
 }
