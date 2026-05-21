@@ -46,6 +46,12 @@ type signerAdapter struct {
 func (s *signerAdapter) Address() string { return s.addr }
 
 func (s *signerAdapter) Pubkey() []byte {
+	if len(s.priv) != ed25519.PrivateKeySize {
+		// Match Sign's defensive posture: surface a malformed privkey as a
+		// nil pubkey so chain.Real.Call/Run rejects it with a clean error
+		// instead of panicking inside crypto/ed25519.PrivateKey.Public.
+		return nil
+	}
 	pub := ed25519.PrivateKey(s.priv).Public().(ed25519.PublicKey)
 	out := make([]byte, len(pub))
 	copy(out, pub)

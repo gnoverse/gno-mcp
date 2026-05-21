@@ -3,7 +3,6 @@ package chain
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	"github.com/gnolang/gno/gno.land/pkg/gnoland"
 	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
+	"github.com/gnolang/gno/tm2/pkg/amino"
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 	tmed25519 "github.com/gnolang/gno/tm2/pkg/crypto/ed25519"
@@ -159,7 +159,7 @@ func (r *Real) Call(_ context.Context, signer Signer, master, realm, fn string, 
 
 	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call: %w", err)
+		return CallResult{}, fmt.Errorf("call: sign tx: %w", err)
 	}
 
 	if simulate {
@@ -176,7 +176,7 @@ func (r *Real) Call(_ context.Context, signer Signer, master, realm, fn string, 
 
 	res, err := r.cli.BroadcastTxCommit(signedTx)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call: %w", err)
+		return CallResult{}, fmt.Errorf("call: broadcast tx: %w", err)
 	}
 	return CallResult{
 		TxHash:  hex.EncodeToString(res.Hash),
@@ -214,7 +214,7 @@ func (r *Real) Run(_ context.Context, signer Signer, master, code string, simula
 
 	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run: %w", err)
+		return RunResult{}, fmt.Errorf("run: sign tx: %w", err)
 	}
 
 	if simulate {
@@ -231,7 +231,7 @@ func (r *Real) Run(_ context.Context, signer Signer, master, code string, simula
 
 	res, err := r.cli.BroadcastTxCommit(signedTx)
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run: %w", err)
+		return RunResult{}, fmt.Errorf("run: broadcast tx: %w", err)
 	}
 	return RunResult{
 		TxHash:  hex.EncodeToString(res.Hash),
@@ -242,8 +242,11 @@ func (r *Real) Run(_ context.Context, signer Signer, master, code string, simula
 }
 
 // QuerySession looks up a session account at auth/accounts/<master>/session/<sessionAddr>.
-// The chain returns the GnoSessionAccount JSON-marshaled. An absent record
-// yields SessionStatus{Active: false}, nil.
+// The chain emits the GnoSessionAccount via amino-JSON. Returns
+// SessionStatus{Active: false}, nil when the chain reports "session not
+// found." Returns ErrSessionQueryUnsupported on any other query failure
+// (transient RPC, malformed response) so the Manager preserves local state
+// rather than wiping sessions on a flake.
 func (r *Real) QuerySession(_ context.Context, master, sessionAddr string) (SessionStatus, error) {
 	if master == "" || sessionAddr == "" {
 		return SessionStatus{}, ErrSessionQueryUnsupported
@@ -252,19 +255,18 @@ func (r *Real) QuerySession(_ context.Context, master, sessionAddr string) (Sess
 	path := fmt.Sprintf("auth/accounts/%s/session/%s", master, sessionAddr)
 	qres, err := r.cli.Query(gnoclient.QueryCfg{Path: path})
 	if err != nil {
-		// "session not found" surfaces here as an RPC error. Treat any
-		// query failure as "no session" rather than propagating — callers
-		// already encode chain unreachability as ErrSessionQueryUnsupported
-		// elsewhere if they need to distinguish.
-		return SessionStatus{Active: false}, nil
+		if isSessionNotFoundErr(err) {
+			return SessionStatus{Active: false}, nil
+		}
+		return SessionStatus{}, ErrSessionQueryUnsupported
 	}
-	if len(qres.Response.Data) == 0 {
+	if len(qres.Response.Data) == 0 || string(qres.Response.Data) == "null" {
 		return SessionStatus{Active: false}, nil
 	}
 
-	var acc gnoland.GnoSessionAccount
-	if err := json.Unmarshal(qres.Response.Data, &acc); err != nil {
-		return SessionStatus{}, fmt.Errorf("querysession: unmarshal session account: %w", err)
+	acc, err := decodeSessionAccount(qres.Response.Data)
+	if err != nil {
+		return SessionStatus{}, fmt.Errorf("querysession: decode session account: %w", err)
 	}
 
 	return SessionStatus{
@@ -312,21 +314,56 @@ func (r *Real) signTxForSession(unsignedTx *std.Tx, signer Signer, masterAddr, s
 }
 
 // querySessionSequence returns the session account's (AccountNumber, Sequence)
-// from auth/accounts/<master>/session/<sessionAddr>.
+// from auth/accounts/<master>/session/<sessionAddr>. The response is
+// amino-JSON-encoded (NOT std JSON) so we route through decodeSessionAccount.
 func (r *Real) querySessionSequence(master, sessionAddr crypto.Address) (uint64, uint64, error) {
 	path := fmt.Sprintf("auth/accounts/%s/session/%s", master.String(), sessionAddr.String())
 	qres, err := r.cli.Query(gnoclient.QueryCfg{Path: path})
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("auth/accounts query: %w", err)
 	}
-	if len(qres.Response.Data) == 0 {
+	if len(qres.Response.Data) == 0 || string(qres.Response.Data) == "null" {
 		return 0, 0, errors.New("session not found")
 	}
-	var acc gnoland.GnoSessionAccount
-	if err := json.Unmarshal(qres.Response.Data, &acc); err != nil {
-		return 0, 0, fmt.Errorf("unmarshal session account: %w", err)
+	acc, err := decodeSessionAccount(qres.Response.Data)
+	if err != nil {
+		return 0, 0, fmt.Errorf("decode session account: %w", err)
 	}
 	return acc.AccountNumber, acc.Sequence, nil
+}
+
+// decodeSessionAccount parses the amino-JSON payload returned by
+// auth/accounts/<master>/session/<addr>. Amino-JSON differs from std JSON in
+// three load-bearing ways: embedded structs are not flattened (so the embedded
+// std.BaseSessionAccount appears under its own key), integers are
+// string-encoded, and std.Coins marshals as "<amount><denom>". encoding/json
+// silently drops the embedded subtree, zeroing AccountNumber/Sequence/
+// ExpiresAt and corrupting the next tx signature. Mirror gnokey's flat-decode
+// shape at tm2/pkg/crypto/keys/client/maketx.go:220.
+func decodeSessionAccount(data []byte) (*gnoland.GnoSessionAccount, error) {
+	var wire struct {
+		BaseSessionAccount std.BaseSessionAccount
+		AllowPaths         []string `json:"allow_paths,omitempty"`
+	}
+	if err := amino.UnmarshalJSON(data, &wire); err != nil {
+		return nil, fmt.Errorf("amino: %w", err)
+	}
+	return &gnoland.GnoSessionAccount{
+		BaseSessionAccount: wire.BaseSessionAccount,
+		AllowPaths:         wire.AllowPaths,
+	}, nil
+}
+
+// isSessionNotFoundErr returns true when err matches the chain's
+// std.ErrSessionNotFound. gnoclient.Query wraps the ABCI response error in a
+// string-only chain (the typed error is not preserved), so we string-match
+// the stable "session not found error" prefix coined at
+// tm2/pkg/std/errors.go:62.
+func isSessionNotFoundErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "session not found")
 }
 
 // defaultBaseTxCfg returns the gas/fee defaults for write txs.

@@ -4,6 +4,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/gnolang/gno/gno.land/pkg/gnoland"
+	"github.com/gnolang/gno/tm2/pkg/amino"
+	"github.com/gnolang/gno/tm2/pkg/crypto"
+	"github.com/gnolang/gno/tm2/pkg/std"
 )
 
 // ---- Real.Call tests
@@ -168,5 +173,72 @@ func TestReal_QuerySession_emptyArgsReturnsUnsupported(t *testing.T) {
 				t.Fatalf("expected ErrSessionQueryUnsupported")
 			}
 		})
+	}
+}
+
+// TestDecodeSessionAccount_aminoJSON_roundTrip pins the contract that
+// auth/accounts/<master>/session/<addr> is amino-JSON encoded (NOT std JSON):
+// embedded structs are not flattened, integers are string-encoded, and
+// std.Coins is marshaled as a string like "1000ugnot". encoding/json silently
+// drops the embedded BaseSessionAccount subtree, which would zero out
+// AccountNumber/Sequence/ExpiresAt — corrupting tx signing.
+//
+// This test marshals a populated GnoSessionAccount via amino.MarshalJSONIndent
+// (the exact path tm2/pkg/sdk/auth/handler.go uses) and asserts every
+// load-bearing field round-trips through decodeSessionAccount.
+func TestDecodeSessionAccount_aminoJSON_roundTrip(t *testing.T) {
+	master := crypto.AddressFromPreimage([]byte("master-test-preimage"))
+	sessAddr := crypto.AddressFromPreimage([]byte("session-test-preimage"))
+
+	original := &gnoland.GnoSessionAccount{
+		BaseSessionAccount: std.BaseSessionAccount{
+			BaseAccount: std.BaseAccount{
+				Address:       sessAddr,
+				AccountNumber: 42,
+				Sequence:      7,
+			},
+			MasterAddress: master,
+			ExpiresAt:     1735689600,
+			SpendLimit:    std.NewCoins(std.NewCoin("ugnot", 1_000_000)),
+			SpendPeriod:   3600,
+			SpendUsed:     std.NewCoins(std.NewCoin("ugnot", 250_000)),
+			SpendReset:    1735600000,
+		},
+		AllowPaths: []string{"gno.land/r/test/blog", "gno.land/r/test/forum"},
+	}
+
+	data, err := amino.MarshalJSONIndent(original, "", "  ")
+	if err != nil {
+		t.Fatalf("amino.MarshalJSONIndent: %v", err)
+	}
+
+	got, err := decodeSessionAccount(data)
+	if err != nil {
+		t.Fatalf("decodeSessionAccount: %v\npayload:\n%s", err, data)
+	}
+
+	if got.AccountNumber != 42 {
+		t.Errorf("AccountNumber = %d, want 42", got.AccountNumber)
+	}
+	if got.Sequence != 7 {
+		t.Errorf("Sequence = %d, want 7", got.Sequence)
+	}
+	if got.ExpiresAt != 1735689600 {
+		t.Errorf("ExpiresAt = %d, want 1735689600", got.ExpiresAt)
+	}
+	if got.MasterAddress != master {
+		t.Errorf("MasterAddress = %s, want %s", got.MasterAddress, master)
+	}
+	if !got.SpendLimit.IsEqual(original.SpendLimit) {
+		t.Errorf("SpendLimit = %s, want %s", got.SpendLimit, original.SpendLimit)
+	}
+	if !got.SpendUsed.IsEqual(original.SpendUsed) {
+		t.Errorf("SpendUsed = %s, want %s", got.SpendUsed, original.SpendUsed)
+	}
+	if got.SpendPeriod != 3600 {
+		t.Errorf("SpendPeriod = %d, want 3600", got.SpendPeriod)
+	}
+	if len(got.AllowPaths) != 2 || got.AllowPaths[0] != "gno.land/r/test/blog" || got.AllowPaths[1] != "gno.land/r/test/forum" {
+		t.Errorf("AllowPaths = %v, want [gno.land/r/test/blog gno.land/r/test/forum]", got.AllowPaths)
 	}
 }
