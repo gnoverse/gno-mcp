@@ -5,7 +5,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gnolang/gno/gno.land/pkg/gnoclient"
+	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
 	"github.com/gnolang/gno/tm2/pkg/bech32"
+	"github.com/gnolang/gno/tm2/pkg/crypto"
+	tmed25519 "github.com/gnolang/gno/tm2/pkg/crypto/ed25519"
+	"github.com/gnolang/gno/tm2/pkg/std"
 )
 
 func TestNewKeypair_distinctEachCall(t *testing.T) {
@@ -77,5 +82,108 @@ func TestKeypair_Sign_verifiable(t *testing.T) {
 	}
 	if !ed25519.Verify(ed25519.PublicKey(kp.Pub), payload, sig) {
 		t.Fatal("ed25519.Verify returned false for a freshly generated signature")
+	}
+}
+
+// TestKeypair_GnoclientSigner_signsTxWithSessionPubkey verifies that the
+// adapter signs std.Tx sign-bytes with the session keypair and attaches the
+// session pubkey to the resulting Signature. SessionAddr is intentionally
+// left zero — chain.Real.Call injects it after Sign returns.
+func TestKeypair_GnoclientSigner_signsTxWithSessionPubkey(t *testing.T) {
+	kp, err := NewKeypair()
+	if err != nil {
+		t.Fatalf("NewKeypair: %v", err)
+	}
+
+	const chainID = "test-chain"
+	signer := kp.GnoclientSigner(chainID)
+	if signer == nil {
+		t.Fatal("GnoclientSigner returned nil")
+	}
+
+	// Build a minimal unsigned tx. Caller is left zero — Sign only needs the
+	// tx for GetSignBytes(chainID, accNum, seq); it must not enforce slot match.
+	masterAddr := crypto.AddressFromPreimage([]byte("master-address-preimage"))
+	tx := std.Tx{
+		Msgs: []std.Msg{vm.MsgCall{
+			Caller:  masterAddr,
+			PkgPath: "gno.land/r/test/blog",
+			Func:    "Foo",
+		}},
+		Fee: std.NewFee(10_000_000, std.NewCoin("ugnot", 10_000_000)),
+	}
+
+	const accNum, seq uint64 = 5, 7
+	signedTx, err := signer.Sign(gnoclient.SignCfg{
+		UnsignedTX:     tx,
+		AccountNumber:  accNum,
+		SequenceNumber: seq,
+	})
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	if len(signedTx.Signatures) != 1 {
+		t.Fatalf("len(Signatures) = %d, want 1", len(signedTx.Signatures))
+	}
+
+	sig := signedTx.Signatures[0]
+	if sig.PubKey == nil {
+		t.Fatal("Signature.PubKey is nil")
+	}
+	pk, ok := sig.PubKey.(tmed25519.PubKeyEd25519)
+	if !ok {
+		t.Fatalf("Signature.PubKey type = %T, want tmed25519.PubKeyEd25519", sig.PubKey)
+	}
+	if string(pk[:]) != string(kp.Pub) {
+		t.Errorf("Signature.PubKey bytes do not match keypair.Pub")
+	}
+
+	if !sig.SessionAddr.IsZero() {
+		t.Errorf("Signature.SessionAddr should be zero (caller fills it); got %s", sig.SessionAddr)
+	}
+
+	signBytes, err := tx.GetSignBytes(chainID, accNum, seq)
+	if err != nil {
+		t.Fatalf("GetSignBytes: %v", err)
+	}
+	if !ed25519.Verify(ed25519.PublicKey(kp.Pub), signBytes, sig.Signature) {
+		t.Fatal("ed25519.Verify returned false for session-signed tx")
+	}
+}
+
+// TestKeypair_GnoclientSigner_Info exposes the session pubkey via the
+// gnoclient.Signer.Info() contract. Callers don't usually need it (Real.Call
+// uses chain.Signer directly), but the interface requires it.
+func TestKeypair_GnoclientSigner_Info(t *testing.T) {
+	kp, err := NewKeypair()
+	if err != nil {
+		t.Fatalf("NewKeypair: %v", err)
+	}
+	signer := kp.GnoclientSigner("test-chain")
+	info, err := signer.Info()
+	if err != nil {
+		t.Fatalf("Info: %v", err)
+	}
+	if info.GetPubKey() == nil {
+		t.Fatal("Info().GetPubKey() is nil")
+	}
+	pk, ok := info.GetPubKey().(tmed25519.PubKeyEd25519)
+	if !ok {
+		t.Fatalf("PubKey type = %T", info.GetPubKey())
+	}
+	if string(pk[:]) != string(kp.Pub) {
+		t.Errorf("Info().GetPubKey() bytes do not match keypair.Pub")
+	}
+}
+
+// TestKeypair_GnoclientSigner_Validate verifies the signer reports itself valid.
+func TestKeypair_GnoclientSigner_Validate(t *testing.T) {
+	kp, err := NewKeypair()
+	if err != nil {
+		t.Fatalf("NewKeypair: %v", err)
+	}
+	if err := kp.GnoclientSigner("test-chain").Validate(); err != nil {
+		t.Errorf("Validate: %v", err)
 	}
 }
