@@ -22,7 +22,7 @@ const (
 // omits values in gno_session_propose. Implements layers 2→3 of the scope
 // policy: profile override falls back to hardcoded. The returned values are
 // NOT clamped to HardLimits — callers apply clamping separately.
-func (p *Profile) EffectiveDefaults() (spendLimit string, expiresIn time.Duration, err error) {
+func (p Profile) EffectiveDefaults() (spendLimit string, expiresIn time.Duration, err error) {
 	spendLimit = p.DefaultSpendLimit
 	if spendLimit == "" {
 		spendLimit = hardDefaultSpendLimit
@@ -41,7 +41,7 @@ func (p *Profile) EffectiveDefaults() (spendLimit string, expiresIn time.Duratio
 // HardLimits returns the clamp ceiling for the profile.
 // BypassHardLimits=true returns all-zero sentinel values (unlimited).
 // Unknown chain-types default to testnet limits (safe middle).
-func (p *Profile) HardLimits() HardLimits {
+func (p Profile) HardLimits() HardLimits {
 	if p.BypassHardLimits {
 		return HardLimits{}
 	}
