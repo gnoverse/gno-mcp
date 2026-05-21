@@ -20,6 +20,7 @@ func newBaseTestServer(t *testing.T) *server.Server {
 			RPCURL:              "x",
 			ChainID:             "test5",
 			AllowDangerousTools: true,
+			MasterAddress:       "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 		},
 	}}
 	if _, err := cfg.Validate(); err != nil {

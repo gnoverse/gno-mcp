@@ -137,6 +137,7 @@ chain-type = "testnet"
 rpc-url = "https://rpc.test5.gno.land:443"
 chain-id = "test5"
 allow-dangerous-tools = true
+master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 `
 	cfg := t.TempDir()
 	cfgFile := filepath.Join(cfg, "profiles.toml")
@@ -221,6 +222,7 @@ chain-type = "testnet"
 rpc-url = "https://rpc.test5.gno.land:443"
 chain-id = "test5"
 allow-dangerous-tools = true
+master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 `
 	cfgDir := t.TempDir()
 	cfgFile := filepath.Join(cfgDir, "profiles.toml")

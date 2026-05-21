@@ -15,6 +15,7 @@ type SessionMeta struct {
 	Version        int      `json:"version"`
 	SessionAddress string   `json:"session_address"`
 	SessionPubkey  string   `json:"session_pubkey"`
+	MasterAddress  string   `json:"master_address"` // bech32 master address the session was issued under; mirrored from Profile.MasterAddress at session creation
 	Privkey        []byte   `json:"privkey"`
 	Encrypted      bool     `json:"encrypted"`
 	AllowPaths     []string `json:"allow_paths"`

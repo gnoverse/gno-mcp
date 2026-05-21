@@ -146,6 +146,25 @@ func TestStore_filePermsAre0600(t *testing.T) {
 	}
 }
 
+func TestStore_masterAddressRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	s := NewStore(dir, "")
+
+	m := makeTestMeta("g1master")
+	m.MasterAddress = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
+	if err := s.Write("p", m); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	got, err := s.Read("p", "g1master")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got.MasterAddress != m.MasterAddress {
+		t.Errorf("MasterAddress = %q, want %q", got.MasterAddress, m.MasterAddress)
+	}
+}
+
 func TestStore_passphraseRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	passphrase := "correct-horse-battery-staple"

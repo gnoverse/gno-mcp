@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/gnolang/gno/tm2/pkg/crypto"
 )
 
 // Valid chain types.
@@ -59,6 +61,13 @@ func (c *Config) Validate() (warn error, err error) {
 		}
 		if p.BypassHardLimits && !p.AllowDangerousTools {
 			return nil, fmt.Errorf("profile %q: bypass-hard-limits requires allow-dangerous-tools=true (bypass is meaningless without write tools)", name)
+		}
+		if p.MasterAddress != "" {
+			if _, err := crypto.AddressFromBech32(p.MasterAddress); err != nil {
+				return nil, fmt.Errorf("profile %q: invalid master-address %q: %w", name, p.MasterAddress, err)
+			}
+		} else if p.AllowDangerousTools {
+			return nil, fmt.Errorf("profile %q: master-address is required when allow-dangerous-tools=true", name)
 		}
 
 		c.Profiles[name] = p

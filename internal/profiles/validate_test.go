@@ -165,6 +165,7 @@ chain-type = "mainnet"
 rpc-url = "https://rpc.gno.land:443"
 chain-id = "portal-loop"
 allow-dangerous-tools = true
+master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 `))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -210,6 +211,7 @@ chain-type = "local"
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 allow-dangerous-tools = true
+master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 default-spend-limit = "500000ugnot"
 default-expires-in = "2h"
 bypass-hard-limits = true
@@ -219,5 +221,58 @@ bypass-hard-limits = true
 	}
 	if _, err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate: unexpected error: %v", err)
+	}
+}
+
+func TestValidate_requiresMasterAddressWhenDangerous(t *testing.T) {
+	cfg, err := Load(strings.NewReader(`
+[local]
+rpc-url = "http://127.0.0.1:26657"
+chain-id = "dev"
+allow-dangerous-tools = true
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	_, err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error when allow-dangerous-tools=true and master-address empty")
+	}
+	if !strings.Contains(err.Error(), "master-address is required") {
+		t.Errorf("error %q should explain master-address requirement", err)
+	}
+}
+
+func TestValidate_rejectsMalformedMasterAddress(t *testing.T) {
+	cfg, err := Load(strings.NewReader(`
+[local]
+rpc-url = "http://127.0.0.1:26657"
+chain-id = "dev"
+allow-dangerous-tools = true
+master-address = "not-a-bech32-address"
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	_, err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error for malformed master-address")
+	}
+	if !strings.Contains(err.Error(), "master-address") {
+		t.Errorf("error %q should mention master-address", err)
+	}
+}
+
+func TestValidate_acceptsEmptyMasterAddressWhenReadOnly(t *testing.T) {
+	cfg, err := Load(strings.NewReader(`
+[local]
+rpc-url = "http://127.0.0.1:26657"
+chain-id = "dev"
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: unexpected error for read-only profile without master-address: %v", err)
 	}
 }

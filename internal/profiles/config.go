@@ -19,6 +19,7 @@ type Profile struct {
 
 	// Write authorization settings.
 	AllowDangerousTools bool   `toml:"allow-dangerous-tools"` // default false; gates write tools
+	MasterAddress       string `toml:"master-address"`        // bech32 master account address (g1...) used as MsgCall.Caller when this profile signs writes via a session. Required when allow-dangerous-tools=true. No key material — public address only.
 	DefaultSpendLimit   string `toml:"default-spend-limit"`   // optional; clamped at use
 	DefaultExpiresIn    string `toml:"default-expires-in"`    // optional; Go duration string
 	BypassHardLimits    bool   `toml:"bypass-hard-limits"`    // default false; disables per-chain clamps
