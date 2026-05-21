@@ -1,4 +1,4 @@
-.PHONY: build test test-integration lint fmt run
+.PHONY: build test test-integration lint fmt run test-e2e
 
 build:
 	go build -o bin/gnomcp ./cmd/gnomcp
@@ -18,3 +18,10 @@ fmt:
 
 run: build
 	./bin/gnomcp
+
+test-e2e:
+	@echo "Manual e2e protocol — see test/e2e/PROTOCOL.md"
+	@echo "1. Run: ./test/e2e/setup.sh"
+	@echo "2. In another terminal: ./bin/gnomcp --config test/e2e/profiles.toml"
+	@echo "3. Walk through test/e2e/PROTOCOL.md by hand."
+	@echo "4. Tear down: ./test/e2e/teardown.sh"

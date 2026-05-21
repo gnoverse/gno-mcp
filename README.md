@@ -41,6 +41,52 @@ MCP server for [gno.land](https://gno.land). Greenfield rewrite on the `v2` bran
 - Docker image — Milestone D
 - Trust middleware (sanitization, provenance wrap, TOFU) — separate spec
 
+## Milestone B (sessions + writes)
+
+> Status: **In progress.** See `test/e2e/PROTOCOL.md` for the manual e2e checklist.
+
+### 5 new tools
+
+| Tool | Description |
+| --- | --- |
+| `gno_call` | Broadcast a `MsgCall` to a realm function. Requires an active session (`gno_session_propose` first). |
+| `gno_run` | Broadcast a `MsgRun` with ad-hoc Gno code. Requires an active session. |
+| `gno_auth_status` | Narrative view of all gnomcp-managed sessions for a profile (no master address needed). |
+| `gno_session_propose` | Generate an ephemeral ed25519 keypair and emit a ready-to-run `gnokey maketx session create` command. |
+| `gno_session_revoke` | Emit a `gnokey maketx session revoke` command for a gnomcp-managed session. |
+
+Registration gate: all five register only when at least one profile has `allow-dangerous-tools = true`. When unset, gnomcp behaves identically to Milestone A.
+
+### New profile fields (profiles.toml)
+
+```toml
+[local]
+chain-type = "local"
+rpc-url = "http://127.0.0.1:26657"
+chain-id = "dev"
+allow-dangerous-tools = true          # required to enable write tools
+default-spend-limit  = "100000ugnot" # optional; per-session default
+default-expires-in   = "1h"          # optional; Go duration string
+bypass-hard-limits   = false         # optional; disables per-chain-type clamps
+```
+
+### New env vars and flags
+
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `GNOMCP_SESSIONS_PATH` | `~/.local/share/gnomcp/sessions` | Directory for session key files |
+| `GNOMCP_SESSION_PASSPHRASE` | (unset) | Enables scrypt+AES-256-GCM encryption at rest |
+| `--sessions-path` | same as `GNOMCP_SESSIONS_PATH` | CLI override for session storage |
+
+### E2E verification
+
+See `test/e2e/PROTOCOL.md` for the manual checklist (Section A = Milestone A regression, Section B = Milestone B writes).
+
+Run with:
+```bash
+make test-e2e   # prints instructions; run steps by hand
+```
+
 ## Quick start
 
 ```bash
