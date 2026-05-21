@@ -134,15 +134,18 @@ func (m *Manager) Hydrate(ctx context.Context, resolver chain.Resolver) error {
 
 // ---- AddPending
 
-// AddPending creates a new pending session from a freshly generated keypair and
-// caller-supplied scope, persists it to disk, and registers it in-memory as
-// StatePending. Returns the populated SessionMeta (without private key encrypted).
-func (m *Manager) AddPending(profile string, kp *Keypair, scope Scope) (*SessionMeta, error) {
+// AddPending creates a new pending session from a freshly generated keypair,
+// caller-supplied scope, and the profile's master address, persists it to
+// disk, and registers it in-memory as StatePending. Master is stamped onto
+// the SessionMeta so subsequent chain queries by (master, sessionAddr) work.
+// Returns the populated SessionMeta.
+func (m *Manager) AddPending(profile string, kp *Keypair, scope Scope, master string) (*SessionMeta, error) {
 	now := time.Now()
 	meta := &SessionMeta{
 		Version:        1,
 		SessionAddress: kp.Address(),
 		SessionPubkey:  kp.PubkeyBech32(),
+		MasterAddress:  master,
 		Privkey:        kp.Priv,
 		AllowPaths:     scope.AllowPaths,
 		SpendLimit:     scope.SpendLimit,
@@ -355,26 +358,6 @@ func (m *Manager) MarkActive(profile, sessionAddr string, status chain.SessionSt
 
 	if err := m.store.Write(profile, ss.meta); err != nil {
 		return fmt.Errorf("session/manager: MarkActive: persist: %w", err)
-	}
-	return nil
-}
-
-// ---- SetMasterAddress
-
-// SetMasterAddress stamps the master address onto an existing session's meta
-// and persists it. Used by the tool layer to attach the profile's master at
-// session-propose time. Returns an error if the session is not found.
-func (m *Manager) SetMasterAddress(profile, sessionAddr, master string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	ss := m.getStateLocked(profile, sessionAddr)
-	if ss == nil {
-		return fmt.Errorf("session/manager: SetMasterAddress: session %q not found for profile %q", sessionAddr, profile)
-	}
-	ss.meta.MasterAddress = master
-	if err := m.store.Write(profile, ss.meta); err != nil {
-		return fmt.Errorf("session/manager: SetMasterAddress: persist: %w", err)
 	}
 	return nil
 }

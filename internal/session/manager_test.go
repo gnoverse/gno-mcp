@@ -50,7 +50,7 @@ func TestManager_addPendingPersists(t *testing.T) {
 		ExpiresIn:   time.Hour,
 		AllowPaths:  []string{"gno.land/r/test/blog"},
 	}
-	meta, err := m.AddPending("testnet", kp, scope)
+	meta, err := m.AddPending("testnet", kp, scope, "g1master")
 	if err != nil {
 		t.Fatalf("AddPending: %v", err)
 	}
@@ -60,6 +60,9 @@ func TestManager_addPendingPersists(t *testing.T) {
 	}
 	if got.SessionAddress != meta.SessionAddress {
 		t.Errorf("stored addr = %q, want %q", got.SessionAddress, meta.SessionAddress)
+	}
+	if got.MasterAddress != "g1master" {
+		t.Errorf("stored MasterAddress = %q, want %q", got.MasterAddress, "g1master")
 	}
 }
 
@@ -155,16 +158,10 @@ func TestManager_pickActivatesPendingFromChain(t *testing.T) {
 		ExpiresIn:  time.Hour,
 		AllowPaths: []string{"gno.land/r/test/blog"},
 	}
-	meta, err := m.AddPending("testnet", kp, scope)
+	meta, err := m.AddPending("testnet", kp, scope, "g1master")
 	if err != nil {
 		t.Fatalf("AddPending: %v", err)
 	}
-	// Set MasterAddress on the stored meta so PickSessionForProfile can
-	// query the chain by (master, sessionAddr). MD-D will plumb this through
-	// AddPending; until then tests inject it directly.
-	m.mu.Lock()
-	m.sessions["testnet"][meta.SessionAddress].meta.MasterAddress = "g1master"
-	m.mu.Unlock()
 
 	fake := chain.NewFake()
 	fake.SetSession("g1master", meta.SessionAddress, chain.SessionStatus{
@@ -194,7 +191,7 @@ func TestManager_updateSpendPersists(t *testing.T) {
 		ExpiresIn:  time.Hour,
 		AllowPaths: []string{"gno.land/r/test/blog"},
 	}
-	meta, err := m.AddPending("p", kp, scope)
+	meta, err := m.AddPending("p", kp, scope, "g1master")
 	if err != nil {
 		t.Fatalf("AddPending: %v", err)
 	}
@@ -275,7 +272,7 @@ func TestManager_concurrentAddPickNoRace(t *testing.T) {
 				ExpiresIn:  time.Hour,
 				AllowPaths: []string{"gno.land/r/test/blog"},
 			}
-			_, _ = m.AddPending("p", kp, scope)
+			_, _ = m.AddPending("p", kp, scope, "g1master")
 			_, _ = m.PickSessionForProfile(context.Background(), resolver, "p", "gno.land/r/test/blog")
 		}()
 	}
@@ -315,7 +312,7 @@ func TestCoversRealm_matchesExactAndSubpath(t *testing.T) {
 func TestManager_markActive_persistsAndUpdates(t *testing.T) {
 	m := newTestManager(t)
 	kp, _ := NewKeypair()
-	_, err := m.AddPending("p", kp, Scope{AllowPaths: []string{"r/x"}, SpendLimit: "1000ugnot", ExpiresIn: time.Hour})
+	_, err := m.AddPending("p", kp, Scope{AllowPaths: []string{"r/x"}, SpendLimit: "1000ugnot", ExpiresIn: time.Hour}, "g1master")
 	if err != nil {
 		t.Fatal(err)
 	}
