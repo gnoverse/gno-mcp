@@ -208,7 +208,7 @@ func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Reso
 			continue
 		}
 		availablePaths = append(availablePaths, ss.meta.AllowPaths...)
-		if !coversRealm(ss.meta.AllowPaths, realm) {
+		if realm != "" && !coversRealm(ss.meta.AllowPaths, realm) {
 			continue
 		}
 		candidates = append(candidates, ss)

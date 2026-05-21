@@ -274,6 +274,21 @@ func TestManager_concurrentAddPickNoRace(t *testing.T) {
 	wg.Wait()
 }
 
+func TestManager_pickAnyActiveSessionWithEmptyRealm(t *testing.T) {
+	m := newTestManager(t)
+	s1 := activeSession("g1one", "gpub1one", []string{"gno.land/r/test/blog"}, 1000)
+	m.mu.Lock()
+	m.insertStateLocked("p", s1, StateActive)
+	m.mu.Unlock()
+	signer, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "")
+	if err != nil {
+		t.Fatalf("expected success with empty realm wildcard: %v", err)
+	}
+	if signer.Address() != "g1one" {
+		t.Errorf("picked %q, want g1one", signer.Address())
+	}
+}
+
 func TestCoversRealm_doesNotMatchSiblingName(t *testing.T) {
 	if coversRealm([]string{"gno.land/r/test"}, "gno.land/r/testing") {
 		t.Error("coversRealm must not match a realm that only shares a string prefix but is not a sub-path")
