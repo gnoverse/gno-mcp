@@ -1,114 +1,223 @@
 # Interrealm semantics
 
-> **Category: spec / model.** Update when interrealm spec changes land in master. In-flight changes belong in `future.md`.
-> **Authoritative spec**: `docs/resources/gno-interrealm.md` (38K). This reference is a load-bearing summary, not a replacement. When an audit hinges on exact semantics, load the spec.
+> **Category: spec / model.** Update when the interrealm specification changes in master.
+> **Authoritative spec**: `docs/resources/gno-interrealm-v2.md` in the `gnolang/gno` repo. This reference is a load-bearing summary, not a replacement. When an audit hinges on exact semantics or a subtle invariant, load the spec.
 
 ## Why this reference exists
 
-Gno extends Go to a multi-user runtime. Realms are independent agents that own state and authority; calling between realms is the central design problem. The interrealm spec is the youngest part of the chain — most LLM training data predates it, and pattern-matching from Solidity or Cosmos produces wrong answers. Read this before generating *any* caller-authentication, access-control, or cross-realm code.
+Gno extends Go to a multi-user runtime. Realms are independent agents that own state and authority; calling between realms is the central design problem. The interrealm specification is the youngest part of the chain — most LLM training data predates it, and pattern-matching from Solidity or Cosmos produces wrong answers. Read this before generating *any* caller-authentication, access-control, or cross-realm code.
 
 ## The two contexts
 
-All Gno logic runs under **two simultaneous contexts**:
+Every executing frame in Gno carries **two pieces of state**:
 
-| Context | Determines | Changes on… | Accessible via |
+| Context | Determines | Changes on… | Surfaced by |
 |---|---|---|---|
-| **Realm-context** | identity / agency: who is the actor, who called them. Has an associated Gno address that can send / receive coins. | explicit cross-calls only (`fn(cross, ...)`) | `runtime.CurrentRealm()` / `runtime.PreviousRealm()` |
-| **Realm-storage-context** | where new and modified objects persist during transaction finalization. No associated address. | explicit cross-calls AND implicit borrow-crosses (calling a non-crossing method on a real receiver in a different realm) | not directly accessible at runtime |
+| **Realm-context** | identity / agency: who is the actor, who called them. Has an associated address that can send / receive coins. | explicit `fn(cross(cur), ...)` cross-calls into crossing functions | `cur` parameter (modern), `runtime.CurrentRealm()` / `runtime.PreviousRealm()` (legacy, imported from `chain/runtime/unsafe`) |
+| **Realm-storage-context** (`m.Realm` in VM internals) | who has write authority right now; determines which realm pays storage rent and which realm a mutation attributes to | explicit cross-calls AND implicit borrows (§ Borrow rules) | not directly accessible at runtime |
 
-After an explicit cross-call, both contexts point at the same realm. They diverge only when a non-crossing method is called on a receiver that resides in a different realm — the storage context shifts to the receiver's realm while the realm-context stays put.
+The two diverge whenever a borrow is active. They re-align on the next cross-call.
 
-**This divergence is the root of bug class `security.md` §9 (attached-method privilege escalation).** It is by design.
+### Summary table
+
+| Call shape | Realm-ctx | Storage-ctx | Boundary | Finalizes |
+|---|---|---|---|---|
+| `fn(cross(cur), ...)` into same realm | shifts† | unchanged | yes | yes |
+| `fn(cross(cur), ...)` into different realm | shifts | shifts | yes | yes |
+| `fn(cur, ...)` non-crossing call (same realm) | unchanged | unchanged | no | no |
+| Non-crossing call of `/r/X`-declared callable from `/r/Y` | unchanged | shifts to `/r/X` (borrow #1) | yes | yes |
+| Stdlib/`/p/` method on real foreign-stamped receiver | unchanged | shifts to receiver's stamp (borrow #2) | yes | yes |
+| Stdlib/`/p/` method on primitive/nil/unstamped receiver | unchanged | unchanged (no-anchor) | no | no |
+| Stdlib/`/p/` top-level function | unchanged | unchanged | no | no |
+
+† `runtime.CurrentRealm()` returns the same realm, but `runtime.PreviousRealm()` shifts — what was current becomes previous.
 
 ## Package types
 
-Three flavors. Memorize the distinctions; they determine what code can do where.
+Three flavors. Every code unit in Gno is a package; the prefix letter is the **kind** (`r` = realm, `p` = pure, `e` = ephemeral).
 
-| Path | Name | Stateful? | Can declare crossing functions? | Can import `/r/`? |
+| Path | Kind | Stateful? | Can declare crossing functions? | Can import `/r/`? |
 |---|---|---|---|---|
-| `/r/...` | Realm | yes (persistent state) | yes | yes |
-| `/p/...` | Pure package | no | **no** | **no** (only `/p/` imports) |
+| `/r/...` | Realm | yes (persistent) | yes | yes |
+| `/p/...` | Pure | post-init frozen | **no** | **no** (only `/p/` imports) |
 | `/e/...` | Ephemeral | yes (per-tx, discarded) | n/a (created by `MsgRun`) | yes |
 
-**Important constraints**:
-- A `/p/` package's behavior must be identical regardless of which realm calls it. P-code copied into a realm should behave the same. If a /p/ package behaves differently across callers, it's smuggling state and that's a bug.
-- A `/p/` package **cannot** import a `/r/` package. The constraint is structural; the linker enforces it.
-- An `/e/` package is what `MsgRun` runs in. It's created on-the-fly with path `gno.land/e/g1<user>/run` and discarded after the transaction.
+Hard constraints:
+
+- A `/p/` package's behavior must be identical regardless of which realm calls it. If a `/p/` package smuggles state-dependent behavior it's a bug.
+- A `/p/` package **cannot** import a `/r/` or `/e/` package. Structural; the linker enforces it.
+- **`/p/`-immutability**: after deployment, mutations to real `/p/`-stamped objects from outside their own init panic with `cannot mutate <pkgpath>: package is immutable post-init`. This is the gate that prevents `/p/`-attacker-via-interface (see `security.md` § Safety hypothesis (B)).
+- An `/e/` package is what `MsgRun` runs in. Path is `gno.land/e/g1<user>/run`, created on-the-fly and discarded after the transaction; the ephemeral realm's address derives from the user's, so coins sent to it flow back.
 
 ## Crossing functions
 
-**Syntax**:
+A **crossing function** declares `cur realm` as its first parameter. Realm-context changes occur only through explicit `cross(cur)` calls into crossing functions.
 
 ```go
-// Receiver-side: declare a crossing function in a realm.
-func MakeBread(cur realm, ingredients ...string) Bread { ... }
-
-// Caller-side: cross into it.
-import "gno.land/r/alice/bakery"
-loaf := bakery.MakeBread(cross, "flour", "water")
+// Declaration: only valid in /r/ packages.
+func MakeBread(cur realm, ingredients ...string) *Bread { ... }
 ```
 
-Rules:
-- `cur realm` **must** be the first parameter. Anywhere else is illegal.
-- `cur realm` is illegal in `/p/` packages.
-- Callers pass `cross` as the first argument to cross-call.
-- Callers can pass `nil` instead of `cross` for a non-crossing call (same-realm call only — non-crossing call into an external realm is a type-check error or runtime error).
-
-**Calling convention table** (from the spec):
-
-| Call type | Realm-context changes? | Storage-context changes? | Boundary? | Finalizes? |
-|---|---|---|---|---|
-| `fn(cross, ...)` to same realm | yes* | no | yes | yes |
-| `fn(cross, ...)` to different realm | yes | yes | yes | yes |
-| `fn(nil, ...)` non-crossing call | no | no | no | no |
-| Non-crossing method, receiver in same realm | no | no | no | no |
-| **Non-crossing method, receiver in different realm** | **no** | **yes** | **yes** | **yes** |
-| Non-crossing method, unreal receiver | no | no | no | no |
-| Non-crossing function | no | no | no | no |
-
-\* `CurrentRealm()` returns the same realm, but `PreviousRealm()` shifts — what was current becomes previous.
-
-The bolded row is the implicit borrow-cross. It's the only place storage context shifts without an explicit cross.
-
-## `PreviousRealm()` semantics
-
-**The most pattern-matched-wrong primitive in Gno.** Anti-Solidity reflexes give wrong answers.
-
-`runtime.PreviousRealm()`:
-- Returns the realm immediately prior to the *most recent realm boundary*.
-- Boundaries are created **only** by explicit cross-calls into crossing functions.
-- A non-crossing function call does **not** create a boundary, so `PreviousRealm()` returns whatever the *caller's* `PreviousRealm()` was — not the immediate caller.
-
-**Consequence**: a check like
+Two valid call forms:
 
 ```go
-func F(args ...) {                          // non-crossing — no cur realm param
+// (1) Cross-call — shifts realm-context and storage-context to the
+// callee's declaring realm. Returns via a realm boundary, finalizing.
+loaf := bakery.MakeBread(cross(cur), "flour", "water")
+
+// (2) Non-crossing call — same realm only. No realm-context or
+// storage-context change, no boundary, no finalization.
+loaf := bakery.MakeBread(cur, "flour", "water")
+```
+
+A non-crossing call from `/r/B` of a crossing function declared in `/r/A` is rejected — at preprocess if statically detectable, otherwise at runtime. The bare `cross` keyword that existed during the 0.9 migration is gone; the canonical form is `cross(rlm)` universally.
+
+## The `cur` capability token
+
+Inside a crossing function body, the `cur realm` parameter is a **typed capability handle** on the realm-context at the moment of the call. The runtime mints one per crossing frame, refuses to persist it, and validates each use.
+
+`realm` is the uverse interface with these methods:
+
+| Method | Returns |
+|---|---|
+| `Address() address` | bech32 address derived from the realm's pkgpath |
+| `PkgPath() string` | pkgpath, or `""` at chain root (EOA) |
+| `Previous() realm` | the captured realm that was current before this crossing |
+| `IsCurrent() bool` | **true only when this `cur` matches the topmost live crossing frame's identity**. Stale or stored realm values return `false` |
+| `IsCode() / IsUser() / IsUserCall() / IsUserRun() / IsEphemeral()` | classification by address and pkgpath |
+| `String() string` | debug representation |
+
+**`IsCurrent()` is the authentication primitive.** Any public entry point that uses `cur` to derive caller identity (`cur.Previous().Address()`, `cur.Previous().PkgPath()`) **must** check `cur.IsCurrent()` first. Without that check, a stale or attacker-supplied realm value's `Address()` and `PkgPath()` still resolve numerically — they just no longer refer to the live caller. This is the **designation-forgery** class (see `security.md`).
+
+### Realm values are ephemeral
+
+Captured realm values must not survive past the transaction. Storing a `realm`-typed value in a top-level var, struct field, map value, slice element, or closure capture panics:
+
+```
+cannot persist realm value: realm values are ephemeral and tied to a call frame
+```
+
+`realm`-typed *parameter* and *return type* declarations are fine — the rule applies to **values**, not **types**. To remember a caller across transactions, capture `cur.Address()` or `cur.PkgPath()` (plain strings).
+
+### Parity with `runtime.{Current,Previous}Realm()`
+
+At every comparable position:
+
+- `cur.Address()` ≡ `runtime.CurrentRealm().Address()`
+- `cur.PkgPath()` ≡ `runtime.CurrentRealm().PkgPath()`
+- `cur.Previous().Address()` ≡ `runtime.PreviousRealm().Address()`
+- `cur.Previous().PkgPath()` ≡ `runtime.PreviousRealm().PkgPath()`
+
+The two APIs differ only in shape: `runtime.*` returns a struct, `cur realm` is the interface. They are **distinct types** — not assignable to each other — but surface the same identity. `runtime.PreviousRealm()` is imported from `chain/runtime/unsafe`; the rename signals the danger when using the stack-walking form outside a crossing-function frame.
+
+## The three borrow rules
+
+On every function or method call, the VM applies at most one implicit borrow rule. These determine the storage-context (`m.Realm`) for the call's body.
+
+### Borrow rule #1 — Declaring-realm borrow (`/r/`-declared callables)
+
+Any function, method, or closure **declared in** a realm package `/r/X` runs its body with `m.Realm = /r/X`. Symmetric and unforgeable: calling attacker-declared code from victim's frame runs that code under attacker's authority. Direct field writes to victim-owned state inside the attacker's body fail the readonly check.
+
+### Borrow rule #2 — Storage-realm borrow (stdlib / `/p/` methods)
+
+A non-`/r/`-declared method (stdlib or `/p/`) called on a **defined receiver whose `PkgID` differs from `m.Realm.ID`** shifts `m.Realm` to the receiver's allocating realm for the call duration. This lets generic library helpers mutate caller-owned state — `bptree.Set(...)`, `*grc20.fnTeller` methods.
+
+**Does NOT fire when** the receiver has no object identity:
+- Primitive-underlying defined types (`type Mutator int`)
+- Nil-pointer receivers
+- Nil-valued slice/map/func defined types
+
+This is the **no-anchor case**: `m.Realm` inherits the caller's value. If the caller was already borrowed to a victim, the no-anchor body runs under victim authority. This is the open laundering vector — see `security.md` § Safety hypothesis (B).
+
+### Borrow rule #3 — Closure-capability borrow (`/p/`-declared closures)
+
+A closure created by code in `/p/` (or in any package with no realm of its own) remembers the realm that was current at closure-construction time. When invoked later — regardless of who calls it or where it was stored — `m.Realm` is set to that creator-realm.
+
+**"Closure = capability"**: a closure carries its creator's authority and nothing can give it more. Attacker `/r/M` cannot build a closure that writes `/r/V`'s data, even if `/r/V` accepts and runs it.
+
+If the closure's source file lives in `/r/X`, rule #1 has already borrowed to `/r/X` and rule #3 is a no-op.
+
+## Storage = Authority (PkgID stamped at allocation)
+
+Every object's `ObjectID.PkgID` is set to the active **realm-storage-context at allocation time**. The realm that holds authority over an object is the same realm that allocated it — there is no separate "owner" or "linked-from" concept.
+
+Two practical consequences:
+
+1. **Borrow rules fire on unreal receivers too**: an unreal value just returned from a foreign realm's constructor already carries its allocating realm's PkgID, so borrow rule #2 follows immediately.
+2. **Construction-time check**: composite literals, `new()`, and `make()` of a foreign `/r/`-declared type panic when invoked outside the declaring realm:
+
+   ```
+   cannot allocate gno.land/r/v.UserT in realm gno.land/r/a
+   ```
+
+   Authority cannot be forged by constructing impostor instances. Construction must go through a constructor declared in the type's home realm.
+
+## Readonly taint
+
+Values read across a realm-storage boundary are tainted read-only. Mutation attempts panic with `cannot directly modify readonly tainted object`. The taint is **sticky**: it propagates through field access, indexing, slicing, copies, interface boxing/unboxing, and conversion.
+
+| Tainted | Not tainted |
+|---|---|
+| `externalrealm.Foo` direct read | Values returned by a foreign function/method (fresh, no underlying object) |
+| `externalobject.FieldA[0]` (entire reference chain) | Primitive values copied out (an int extracted from a foreign struct is just an int) |
+| Local copy of a foreign value (`b := foreign.Slice[0]`) | |
+
+Write paths that route through the readonly check: `=`, `+=` family, `++`, `--`, `*p = v`, `s[i] = v`, `m[k] = v`, `append`, `copy`, `delete`, range-loop bindings used for writes. No write path bypasses the check.
+
+## Conversion guards
+
+Two cross-realm invariants enforced at `doOpConvert`:
+
+1. **Refuse foreign-readonly source.** Converting a tainted value to a type the current realm doesn't declare panics with `illegal conversion of readonly or externally stored value`. Without this, an attacker could declare a parallel `/p/`-type with the same struct layout plus a mutator method, convert the victim's pointer to the parallel type, and invoke the mutator under victim authority via borrow rule #2.
+
+2. **Refuse conversion to foreign `/r/`-declared type.** A realm cannot forge values of `/r/`-declared types it doesn't declare. Combined with the construction-time check, this ensures every real instance of a `/r/`-declared type traces back to its home realm's allocator.
+
+**Implementation note**: case 1 uses a raw Go `panic(...)` rather than `m.Panic(...)`, which means it is **not catchable** by Gno `defer { recover() }`. This is asymmetric with the write-time readonly panic (catchable). Realm code cannot recover from conversion panics.
+
+## Realm boundaries and finalization
+
+A **realm boundary** is a transition where `m.Realm` (or `runtime.CurrentRealm()`) changes:
+
+- Every `fn(cross(cur), ...)` is a boundary, even into the same realm.
+- Every borrow rule firing that changes storage-context is a boundary.
+- Non-crossing calls within the same storage-context are not boundaries.
+
+Boundaries control two things:
+
+1. **Realm-transaction finalization** runs at boundary exit: newly-reachable unreal objects are persisted under their PkgID, zero-refcount objects are GC'd, Merkle hashes recompute.
+2. **Cross-realm panic abort**: panics that cross a boundary on their unwind path abort the transaction. A `defer { recover() }` in the boundary-crossing caller does **not** catch a cross-boundary panic — only explicit `revive()` frames can. `revive(fn)` is currently test-only; future releases will give it transactional memory semantics.
+
+## `PreviousRealm()` — legacy stack-walker
+
+`runtime.PreviousRealm()` (from `chain/runtime/unsafe`) returns the realm prior to the most recent **realm boundary**. A non-crossing function call does NOT create a boundary — so `PreviousRealm()` inside a non-crossing function returns whatever the caller's `PreviousRealm()` was, not the immediate caller.
+
+```go
+func F(args ...) {                                // non-crossing — no cur realm param
     if runtime.PreviousRealm().PkgPath() != "gno.land/r/trusted/admin" {
         panic("admin only")
     }
-    // ...
 }
 ```
 
-does NOT verify the immediate caller. If a non-crossing function in some other realm calls `F(...)`, `PreviousRealm()` is still whatever was previous *before that other call* — possibly the admin realm two frames back. This is a security bug. Always perform caller-identity checks inside **crossing** functions (`func F(cur realm, ...)`).
+This is **insecure**. If a non-crossing function in some other realm calls `F(...)`, `PreviousRealm()` is whatever was previous *before that other call* — possibly the admin realm two frames back. Always perform caller-identity checks inside **crossing functions** (`func F(cur realm, ...)`) and use `cur.IsCurrent() + cur.Previous()`.
 
-See `security.md` §5 (cur disclosure) and §7 (MsgRun semantics) for related classes.
+The `unsafe` in the import path is intentional: this is the unconditional stack-walking primitive. Modern code uses `cur`.
 
 ## `CurrentRealm()` and stage
 
-`runtime.CurrentRealm()` returns the active realm-context. Its value depends on which **stage** the VM is in:
+`runtime.CurrentRealm()` returns the active realm-context; its value depends on which **stage** the VM is in:
 
-| Stage | Triggered by | `CurrentRealm()` is… | `PreviousRealm()` is… |
+| Stage | Triggered by | `CurrentRealm()` | `PreviousRealm()` |
 |---|---|---|---|
-| `StageAdd` | `MsgAddPackage` (deploy) | the package being deployed (incl. `/p/` packages — "mutating for a moment") | the deploying user |
+| `StageAdd` | `MsgAddPackage` (deploy) | the package being deployed (incl. `/p/` — "mutating for a moment") | the deploying user |
 | `StageRun` via `MsgCall` | a user calling a crossing function | the called realm | the user with `PkgPath: ""` |
-| `StageRun` via `MsgRun` | a user running an ephemeral realm | `gno.land/e/g1<user>/run` (ephemeral) | the user with `PkgPath: ""` |
+| `StageRun` via `MsgRun` | a user running an ephemeral realm | `gno.land/e/g1<user>/run` | the user with `PkgPath: ""` |
 
-**Therefore**: code in an `init()` block sees deploy-time context, not call-time context. Code that runs under both `MsgCall` and `MsgRun` must distinguish via `IsUserCall()` vs `IsUserRun()` (see `security.md` §7).
+**Therefore**: code in an `init()` block sees deploy-time context, not call-time context. Code that runs under both `MsgCall` and `MsgRun` must distinguish via `IsUserCall()` vs `IsUserRun()`.
 
 ## Caller-identity predicates
 
-`Realm` exposes three predicates that look interchangeable but aren't:
+`realm` exposes three predicates that look interchangeable but aren't:
 
 | Predicate | EOA via `MsgCall` | EOA via `MsgRun` (ephemeral realm) | Realm via `MsgCall` |
 |---|---|---|---|
@@ -116,66 +225,54 @@ See `security.md` §5 (cur disclosure) and §7 (MsgRun semantics) for related cl
 | `IsUserRun()` | ✗ | ✓ | ✗ |
 | `IsUser()` | ✓ | ✓ | ✗ |
 
-The `MsgRun` ephemeral realm can consume `banker.OriginSend()` and forward control — so `IsUser()` (broad) is the wrong guard for payment-gated paths. Use `IsUserCall()`. See `security.md` §1, §7.
+The `MsgRun` ephemeral realm can consume `banker.OriginSend()` and forward control — so `IsUser()` is the wrong guard for payment-gated paths. Use `IsUserCall()` (or `cur.Previous().IsUserCall()` in modern style). See `security.md` § payment-guard.
 
-## Implicit borrow-cross on methods
+## Method values
 
-When a non-crossing method is called on a real receiver that lives in another realm, the **storage-context** shifts to the receiver's realm. The **realm-context** does NOT shift. The method's body executes with:
-- the caller's identity (`CurrentRealm()` unchanged), but
-- the receiver realm's persistence authority (new and modified objects persist into the receiver's realm).
+A bound method value `mv := recv.M` is a function value that remembers its receiver. When invoked later, the VM applies borrow rules at **invocation time** based on `M`'s declaring package and `recv`'s PkgID — **not** at binding time.
 
-**This is the trust grant**: whoever stores an object in their realm grants execution privileges to the methods declared on that object's type. If the type comes from an `r/` import authored by a third party, methods on that type can mutate the storing realm's state.
+Two consequences:
 
-The spec is explicit about this:
+1. **Storing a bound method value isn't a safety boundary.** A `/p/`-method bound to a victim-stamped receiver, stored anywhere, still borrows to victim when invoked. Returning such a method value is equivalent to publishing the underlying method to any holder — a setter closure under another name.
+2. **Method expressions are different.** `me := (*T).M` is an *unbound* method value with the receiver as an explicit first argument. The unbound form does not anchor on the receiver the same way bound calls do.
 
-> "The interrealm specification does not secure applications against arbitrary code execution. It is important for realm logic (and even p package logic) to ensure that arbitrary (variable) functions (and similarly arbitrary interface methods) are not provided by malicious callers; such arbitrary functions and methods whether crossing (or non-crossing) will inherit the previous realm (or both current and previous realms) and could abuse these realm-contexts."
+## Message types — entry points
 
-The compiler does not flag this. Audit is the only line of defense. See `security.md` §3 (callback substitution), §9 (attached-method privilege).
+### `MsgCall`
 
-## Readonly taint
+Invokes a single exported crossing function on a target realm. **Rejects** non-crossing functions and `/p/` functions — only crossing functions of `/r/` packages can be invoked directly. This prevents accidental non-crossing calls that would inherit the caller's realm-context.
 
-Values accessed across a realm boundary are tainted read-only:
+Inside the called function: `runtime.PreviousRealm()` is the origin user (pkgpath `""`); `runtime.CurrentRealm()` is the called realm.
 
-```go
-// realm A imports realm B
-b := externalrealm.B          // read: ok
-b.FieldA = 42                  // PANIC: external realm's object is readonly
-externalrealm.B = newB         // PANIC: same
-```
+### `MsgRun`
 
-Rules:
-- Dot-selector access (`r.X`) on an external real value taints the result readonly.
-- Index expression (`r.X[0]`) does the same.
-- The taint **persists** through subsequent direct access — `externalrealm.X.Y.Z[0]` is readonly even if `Y` happens to live in the caller's realm.
-- Function/method arguments and return values pass the taint through.
-- To modify an external real object, call a function declared in the external realm that mutates it directly (closed-over scope).
+Deploys an ephemeral `/e/g1<user>/run` package and invokes its `main()`. Inside `main`, the user is both the previous-realm (at the chain root) and shares the address with the ephemeral realm. The ephemeral can `realmA.PublicCrossing(cross)` to enter `realmA` properly.
 
-**Round-tripping a slice through an external realm can produce a transient taint that doesn't fully clear on re-entry** — open issue #4765. See `security.md` §8.
+The address derivation makes coins sent to the ephemeral flow back to the user. The ephemeral can also consume `banker.OriginSend()` and forward control — which is why `IsUser()` (broad) is unsafe for payment guards.
 
-## Closure capture (heap items)
+### `MsgAddPackage`
 
-Closures and package-level variables are represented internally as `*HeapItemValue`. Closures capture **heap items**, not the containing block. A closure created in realm A and stored in realm B's state **still references A's heap items**, so it carries A's identity / authority when invoked.
+A new realm's `init()` and global-var declarations run with `PreviousRealm()` = the deployer (only available during init — save its `Address()` as a string if you need it later) and `CurrentRealm()` = the new realm.
 
-PR #4890 hardened the readonly stickiness on heap items inherited through closure captures, but the trust requirement remains: caller-supplied closures run with the *declarer's* realm authority via implicit borrow-cross on the captured state. See `security.md` §3.
+## Public API checklist (for `/r/` realms)
 
-## Guidelines (the spec author's mental model)
+For every exported function or method:
 
-From `docs/resources/gno-interrealm.md` § Guidelines:
+- Does it take `cur realm`? If yes, does it check `cur.IsCurrent()` before using `cur.Previous()`, `cur.Address()`, or `cur.PkgPath()`?
+- Does it return a pointer that aliases internal mutable state? If yes, expect attackers to invoke any method on the returned pointer type that borrow rule #2 routes back to you.
+- Does it accept an interface or function-value parameter? If yes, gate with a canonical-type check (`t.(*MyConcrete)` or an `IsCanonicalX` predicate). Embedding-based seal patterns are bypassable.
+- Does it accept a `func(*MyPType)` callback for any `/p/`-declared `MyPType`? Retype to use one of your own `/r/`-declared types as the parameter — otherwise `/p/`-attackers can launder authority through the no-anchor case.
 
-- **Public realm functions called by users must be crossing functions.** `MsgCall` only invokes crossing functions; users can't `MsgCall` non-crossing functions or `/p/` functions.
-- **Methods should generally be non-crossing.** They're pre-bound to an object — a quasi-realm. A method that crosses into its declaring realm is "intrusive, but sometimes desired."
-- **Utility functions** (common sequences of non-crossing logic) live as non-crossing functions in realm packages. They can import and call other realm utility functions; `/p/` packages cannot.
-- **You can always cross-call a method from a non-crossing method if you need it.** The decision goes one way: non-crossing is the default, cross is the deliberate escalation.
+See `security.md` for worked examples.
 
 ## Cross-references
 
-- `security.md` — bug classes built on each of the above primitives (§5 cur disclosure, §7 MsgRun trichotomy, §8 slice taint, §9 attached-method, §3 callback substitution)
-- `patterns.md` — idioms that work *with* the model (crossing-function discipline, state shape, p/ vs r/)
-- `stdlib.md` — `std.CurrentRealm`, `std.PreviousRealm`, `Realm.IsUserCall`, `Realm.IsUserRun`, `Realm.IsUser` API surface
-- `render.md` — `Render()` is **not** a crossing function (no `cur realm` parameter)
-- `future.md` — `cross2(rlm)` explicit caller form (PR #5669, in flight)
+- `security.md` — bug classes built on each of the above primitives (designation-forgery, callback substitution, attached-method privilege, payment-bypass, slice taint, the no-anchor laundering vector)
+- `patterns.md` — idioms that work *with* the model (crossing-function discipline, state shape, `/p/` vs `/r/`)
+- `stdlib.md` — `chain/runtime`, `chain/runtime/unsafe`, `chain/banker`, `chain/std` API surface
+- `render.md` — `Render(path string) string` is **not** a crossing function (no `cur realm` parameter)
 
 ## Source
 
-- `docs/resources/gno-interrealm.md` — canonical spec (38K, eight numbered sections).
-- `.mynote/gno-agentic/reference/15-security-evolution-interrealm.md` §2 — timeline of merged spec PRs (#4060, #4192, #4264, #4429, #4750, #4890, #4899, #5039).
+- `docs/resources/gno-interrealm-v2.md` in the gnolang/gno repo — canonical spec.
+- `gnovm/adr/interrealm_v2.md` — comparison and migration guide from v1.

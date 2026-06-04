@@ -1,10 +1,21 @@
 # Security
 
-> **Category: security / audit.** Update when a new bug class is identified or a fix changes the canonical pattern. In-flight fixes belong in `future.md` until merged.
+> **Category: security / audit.** Update when a new bug class is identified or a fix changes the canonical pattern.
+> **Authoritative spec**: `docs/resources/gno-security.md` (threat-class taxonomy) and `docs/resources/gno-security-guide.md` (long-form patterns) in the `gnolang/gno` repo. This reference is a load-bearing summary plus auditor-oriented detection signals; the upstream docs are the source of truth.
 
 ## Purpose
 
 Catalog of bug classes with concrete code shapes, grep signals, and fix patterns. Loaded by an agent reviewing a Gno realm for safety or guarding against known footguns while authoring one.
+
+## Threat model
+
+A **victim** realm `/r/V` holds state and exposes APIs. An **attacker** is any actor — end user, another realm `/r/A`, or a pure package `/p/A` — that can call into `/r/V`'s exposed surface. The attacker's goal is **write authority laundering**: causing a write to `/r/V`-stamped data while `m.Realm` is `/r/V` and the writing code path is attacker-controlled.
+
+Assumptions:
+- Attacker can deploy `/r/A` or `/p/A` and import `/r/V`.
+- Attacker can call any exported function or method `/r/V` exposes and hold any pointer it returns.
+- Attacker cannot use `reflect`, `unsafe`, goroutines, or any other escape hatch — these do not exist in Gno.
+- Attacker cannot read `/r/V`'s unexported fields (Go's package-scoped identifier rule applies).
 
 ## How to use this reference
 
@@ -14,78 +25,170 @@ Each class follows the same template:
 - **Why wrong** — one or two lines naming the invariant violated.
 - **Detection** — grep / search pattern an auditor agent can run.
 - **Fix** — minimal code example showing the correction.
-- **Status** — `ACTIVE` (the pattern still appears in master), `HISTORIC` (swept out of master but appears in deployed realms or imported code), `OPEN` (known bug not yet fixed).
+- **Status** — `ACTIVE` (still appears in master), `HISTORIC` (swept out of master but appears in deployed realms or imported code), `OPEN` (known bug not yet fixed).
 
-Cross-link to `interrealm.md` for the spec model these violations build on. Load `future.md` before reporting an audit verdict — some classes have fixes in flight.
+Cross-link to `interrealm.md` for the spec model these violations build on.
 
-## Payment-guard canonical pattern (master, 2026-05)
+## The five threat classes
 
-The single most common security-relevant operation in `/r/` code. Pattern:
+Upstream taxonomy from `gno-security.md`. Code comments in the gno repo reference these class numbers (`// SECURITY (Class-4 captured callback)`).
+
+| Class | Name | Mechanism |
+|---|---|---|
+| **1a** | cur-disclosure / impersonate-self | Hostile interface implementation captures `cur.Address()` / `cur.PkgPath()` from a `cur realm` parameter and later acts AS the realm that handed it the cur. |
+| **1b** | cur-disclosure / impersonate-caller | Hostile implementation captures `cur.Previous()` and acts AS that realm's caller. |
+| **2** | designation-forgery | Public method takes `(caller address, ...)` or `(pkgPath string, ...)`; any attacker calls it with the victim's identity. Also: APIs that accept a `realm` value but skip `cur.IsCurrent()` — a stored stale realm value's `.Address()` still resolves but no longer refers to the live caller. |
+| **3** | impl-substitution | Public function accepts an open interface; attacker supplies an implementation that lies on read (DoS or silent escalation). **Fires even when the interface has no realm-typed methods** — it's a read/behavior-integrity class, not a cur-leak class. |
+| **4** | closed-over-authority | A canonical-typed value's constructor (or post-construction setter) takes attacker-controllable callback/data; the value passes an `IsCanonicalX` type check but carries hostile state. When Class 3 and Class 4 both apply, file as Class 4 — the allowlist passed; residual harm is captured-state. |
+
+## Four structural defenses
+
+The VM provides four independent defenses. A realm becomes exploitable when an API design defeats all of them at once.
+
+| # | Defense | One-line summary |
+|---|---|---|
+| D1 | **Declaration-site rule** (borrow #1) | `/r/`-declared callables run with `m.Realm` borrowed to declaring `/r/`. Attacker code never gets victim authority just by being called by victim. |
+| D2 | **Storage-site rule** (borrow #2) | `/p/` or stdlib methods on a real foreign-stamped receiver borrow `m.Realm` to the receiver's storage realm. Generic library helpers mutate caller-owned state only. |
+| D3 | **Closure-capability rule** (borrow #3) | A closure carries the authority of its creator-realm forever. Cannot gain authority by changing hands. |
+| D4 | **Readonly taint** | Foreign-realm reads are tainted; the taint propagates through copy, conversion, indexing. Mutations panic. No write path bypasses the check. |
+
+## The safety hypothesis (A/B/C)
+
+A victim realm `/r/V` is safe from external state mutation if **all three** of the following hold:
+
+### (A) All logic-data types are `/r/`-declared.
+
+Define `type User struct{...}`, `type Order struct{...}` in your own `/r/V` package, not in a shared `/p/`. Two reasons:
+
+1. `/p/`-attackers cannot reference `/r/V` types in their signatures (`/p/ → /r/` imports are forbidden).
+2. Any `/r/`-attacker impl of an interface taking `*v.User` runs with `m.Realm = /r/A` by D1 (borrow #1), so writes hit readonly.
+
+The escape valve is the **encapsulation pattern** (GRC20 reference, below) — `/p/`-declared types with airtight encapsulation.
+
+### (B) No `/p/`-type embedded in `/r/V`-data has higher-order methods with concretely-`/p/`-typed callbacks.
+
+The subtle one. If `/r/V` has
 
 ```go
-func Buy(cur realm) {
-    if !runtime.PreviousRealm().IsUserCall() {
-        panic("only EOA via MsgCall can fund this")
-    }
-    coins := banker.OriginSend()
-    if coins.AmountOf("ugnot") != price {
-        panic("incorrect amount")
-    }
-    // mutate state
+type Wrapper struct {
+    Inner *somelib.Node
 }
 ```
 
-Why `IsUserCall()` and not `IsUser()`: `IsUser()` accepts both EOAs and the user's ephemeral `gno.land/e/g1<user>/run` realm created by `MsgRun`. The ephemeral realm can consume the `OriginSend` envelope *before* forwarding control, bypassing the receipt invariant.
+then attackers reach `Inner`, and `somelib.Node` may have `Iterate(cb func(*Node) bool)`. Inside `Apply`'s body, `m.Realm` is borrowed to `/r/V` by D2 (the `*Node`'s PkgID is `/r/V`). The body invokes `fn`. If `fn` is a top-level `/p/A.Evil` function with signature `func(*somelib.Node)`, **neither borrow rule fires** — top-level `/p/`-functions have no `/r/` declaring realm and no receiver. `m.Realm` stays at `/r/V` for the entire callback. Writes through the parameter commit under victim authority.
 
-Successor pattern `realm.SentCoins()` (PR #5039, merged 2026-04) is frame-local and re-entrancy-safe; adoption sweep across `examples/` is pending. See `future.md` for posture during the transition.
+This is the **no-anchor case** — see `interrealm.md` § Three borrow rules.
 
-## Bug classes
+Real-world `/p/`-types with this shape include `nt/avl/v0/node.Iterate`, `moul/cow/node.Iterate`, `onbloc/json/builder.WriteObject`.
 
-### 1. `OriginSend()` + `IsUser()` — payment bypass via `MsgRun`
+### (C) Victim does not invoke caller-supplied function/interface values while holding its own authority.
+
+The mirror of (B), viewed from `/r/V`'s API:
+
+```go
+func ApplyHook(fn func(any)) {
+    fn(internalState)   // /r/V's m.Realm; attacker fn can launder
+}
+```
+
+Closures handed in by an attacker are safe — D3 (borrow #3) borrows `m.Realm` back to the attacker for the body. The gap is narrower than it looks: it applies only to top-level `/p/` `FuncDecl` values, not arbitrary `func()` parameters.
+
+**Defense in depth**: type the callback parameter with one of your own `/r/V`-declared types — `fn func(*v.User)`. `/p/` code can't name `v.User`, and any `/r/A` implementation runs under `/r/A`'s authority by D1.
+
+Empirically verified across the `gnovm/tests/files/zrealm_launder_*.gno` probe corpus (~64 filetests, ~50 of them the `_rdata_` subset), each annotated with its attack mechanism and outcome.
+
+## Bug class details (auditor mode)
+
+### Class 1a/1b — cur-disclosure
 
 **Shape**:
 
 ```go
-func Buy(cur realm) {
-    if !runtime.PreviousRealm().IsUser() { panic("EOA only") }
-    if banker.OriginSend().AmountOf("ugnot") != price { panic("bad amount") }
-    // grant goods
+// In /r/V, public crossing function:
+func F(cur realm) {
+    thirdParty.Hook(cur)   // forwarding cur to untrusted code
 }
+
+// thirdParty (attacker), declared as:
+type Hooker interface { Hook(cur realm) }
 ```
 
-**Why wrong**: `IsUser()` accepts `IsUserCall()` AND `IsUserRun()`. The user's `MsgRun` ephemeral realm can call `Buy()` after already consuming the same `OriginSend` envelope — the receipt invariant breaks and the goods are granted without payment.
+**Why wrong**: `cur realm` is a capability token for the immediately-preceding crossing into `/r/V`. Forwarding it to attacker code lets the attacker capture `cur.Address()` (1a) or `cur.Previous()` (1b) and later impersonate `/r/V` or its caller.
 
-**Detection**: file contains `banker.OriginSend(` AND `IsUser(` (no `Call` suffix). Both in the same function = high severity. `OriginSend` purely read-for-display = low severity.
+**Detection**: interface methods declared with `cur realm` parameters; functions that pass `cur` (not `cross(cur)`) to subsequent cross-realm calls. The interface-with-`cur realm` shape is the primary tell.
 
-**Fix**: replace `IsUser()` with `IsUserCall()`. Or migrate to `realm.SentCoins()` once adopted (see `future.md`).
+**Fix**: never declare an interface method that takes `cur realm`. Take `caller address` instead, and let the calling code derive the address from `cur.Previous().Address()` under an `IsCurrent()` guard at the call site.
 
-**Status**: HISTORIC in master `examples/` (verified 2026-05: 0 co-occurrences). Documented in `docs/resources/effective-gno.md § Verifying inbound Coin payments`. Pattern still appears in older deployed realms and external code; the auditor agent should expect to find it in user-supplied input.
+**Status**: ACTIVE class (defensive lint). The compiler today rejects most expressions; the lint catches the cases it doesn't.
 
-### 2. Interface-based re-entrancy (caller-supplied interface)
+### Class 2 — designation-forgery
 
 **Shape**:
 
 ```go
-type Voter interface { Cast(cur realm, p ProposalID) bool }
+func DoThing(addr address) {
+    log[addr] = ...   // anyone can call with any address
+}
+```
 
-// In DAO realm:
+Or:
+
+```go
+func DoThing(cur realm) {
+    // missing IsCurrent() check
+    addr := cur.Previous().Address()   // a stale stored realm value still resolves
+    log[addr] = ...
+}
+```
+
+**Why wrong**: an `address` or `pkgPath` parameter is attacker-controlled. To identify the actual calling realm, take `cur realm` and derive the address inside. And a stored stale realm value can still resolve `.Address()` numerically — it just no longer refers to the live caller. **`cur.IsCurrent()` is the authentication primitive**.
+
+**Detection**: function signatures with `caller address` or `pkgPath string` as identity parameters; `cur` used to derive identity without an `IsCurrent()` guard.
+
+**Fix**:
+
+```go
+func DoThing(cur realm) {
+    if !cur.IsCurrent() { panic("spoofed realm") }
+    addr := cur.Previous().Address()
+    log[addr] = ...
+}
+```
+
+**Status**: ACTIVE. Most common LLM-generated bug shape — pattern-matching from Solidity's `msg.sender` produces wrong answers here.
+
+### Class 3 — impl-substitution
+
+**Shape**:
+
+```go
+type Voter interface { Cast(p ProposalID) bool }
+
 func Vote(cur realm, v Voter, p ProposalID) {
     requirePermission()
-    if v.Cast(cross, p) {     // external call into UNKNOWN realm
-        markVoted(p)          // state mutation AFTER external call
+    if v.Cast(p) {          // external call into UNKNOWN realm
+        markVoted(p)         // state mutation AFTER external call
     }
 }
 ```
 
-**Why wrong**: `v` is caller-supplied. `v.Cast(cross, ...)` transfers execution into the caller's realm, which can re-enter `Vote()` with a different `Voter` or interleave other state changes. Classic re-entrancy; Gno has no implicit `nonReentrant` guard.
+**Why wrong**: `v` is caller-supplied. The implementation can lie on read (DoS or silent escalation), or invoke other `/r/V` methods to interleave state changes. Classic re-entrancy variant; Gno has no implicit `nonReentrant` guard.
 
-**Detection**: interface types whose methods take `cross` or `cur realm`, with instances stored in realm state or accepted as parameters. Cross-check: any function that calls an interface method AND mutates state on the same path, without a generation counter or in-flight flag.
+**Detection**: public functions accepting an open interface (not gated by canonical-type check); functions that call an interface method AND mutate state on the same path without a generation counter or in-flight flag; embedded-marker "seal" patterns (which are bypassable — see Sealing below).
 
-**Fix**: either (a) restrict implementations to known realms via path-allowlist (boards2 pattern, PR #4750), (b) finalize all state mutations *before* the external call (checks-effects-interactions), or (c) gate with an in-flight flag cleared on entry/exit.
+**Fix**: at every public entry point that accepts an interface from external callers, gate with a canonical-type assert:
 
-**Status**: ACTIVE class. The pre-#4884 `samcrew/daokit` `Permissions` interface is the canonical bad example. The daokit upgrade (PR #4884, see `future.md`) addresses some instances; new code should still follow the discipline.
+```go
+if _, ok := t.(*ConcreteImpl); !ok {
+    panic("not a canonical impl")
+}
+```
 
-### 3. Behavior substitution via user-supplied callbacks
+Or use the package-provided predicate (`grc20.IsCanonicalTeller(t)`). Then apply checks-effects-interactions or an in-flight flag.
+
+**Status**: ACTIVE. Common shape: a DAO/permission framework that lets governance code accept a caller-supplied `Permissions`/`Voter`/`Executor` interface and performs state writes after invoking one of its methods.
+
+### Class 4 — closed-over-authority
 
 **Shape**:
 
@@ -102,252 +205,262 @@ func (d *Definition) Execute(cur realm) error {
 }
 ```
 
-**Why wrong**: `cb` is captured from the caller's realm at config time. When invoked later under DAO authority, the function body executes with the storage realm's privileges. The seminal PR #4890 review thread (`alice.SetClosure(cross, peter.F(alice.AllowedList))`) shows variants where this is exploitable across multiple realms; readonly-taint stickiness (#4890) limits but does not eliminate the trust requirement.
+**Why wrong**: `cb` is captured from the caller's realm at config time. When invoked later under DAO authority, the function body executes with the storing realm's privileges. PR #4890 hardened the readonly-taint side; the caller-trust requirement remains by design.
 
-**Detection**: function signatures containing `func(...)` or function-typed parameters; realm-stored function values (`var cb func(...)`); `SetXxx(cur realm, fn func(...))` style setters; calls to caller-supplied function values from permission-gated functions. **Also flag latent cases** — a function-valued state variable that's writable but currently never invoked. Today it's harmless; one future commit that wires it into a gated path turns it into an active §3 hazard. Mark as YELLOW with a "wire-and-document-or-delete" recommendation.
+**Detection**: function signatures containing `func(...)` or function-typed parameters; realm-stored function values (`var cb func(...)`); `SetXxx(cur realm, fn func(...))` style setters. **Also flag latent cases** — a function-valued state variable that's writable but currently never invoked. Today it's harmless; one future commit wiring it into a gated path turns it into an active Class 4 hazard. Mark YELLOW with a "wire-and-document-or-delete" recommendation.
 
-**Fix**: prefer typed interfaces with known implementations over `func()` parameters. Where callbacks are unavoidable, document the trust assumption and never use them in payment- or permission-gated paths.
+**Fix**: prefer typed interfaces with known implementations over `func()` parameters. Where callbacks are unavoidable, document the trust assumption loudly. The constructor itself is the trust boundary — *the caller IS the authority for the lifetime of the constructed value*.
 
-**Status**: ACTIVE. Live in `examples/gno.land/p/nt/commondao/v0/exts/definition/options.gno` (`WithExecutor`, `ExecFunc func(realm) error`) and surrounding code. PR #4890 hardened the readonly-taint side; the caller-trust requirement is by design.
+**Status**: ACTIVE. Typical shapes: `WithExecutor`-style option constructors.
 
-### 4. Cross-realm method calls on unattached / unpersisted receivers
+## Payment-guard canonical pattern
 
-**Shape**:
-
-```go
-obj := alice.NewObject()    // obj not yet persisted to alice's state
-bob.Do(obj.Method)           // bob calls obj's method
-```
-
-**Why wrong**: the receiver's storage realm determines which realm the method runs as. An unattached object has no storage realm, so the call either is rejected (post-#4890) or used the wrong realm (pre-fix, obscure panic).
-
-**Detection**: method expressions (`obj.Method` without parens) passed across realm boundaries; `new(T).Method` or `(*T)(nil).Method` patterns.
-
-**Fix**: persist the receiver to realm state before taking the method expression. Or use the "virtual realm" pattern from PR #4890 review for nil-receiver type-based dispatch.
-
-**Status**: HISTORIC. PR #4890 produces a clear VM error rather than silent misbehavior.
-
-### 5. `cur realm` disclosure to untrusted callees
-
-**Shape**:
-
-```go
-func F(cur realm) {
-    thirdParty.Hook(cur)   // forwarding our realm authority outward
-}
-```
-
-**Why wrong**: `cur realm` is the proof that the immediately-preceding caller crossed into us deliberately. Forwarding it (instead of using `cross` for a new explicit crossing) leaks authority. Currently the type system makes this hard to express, but the convention is enforced by review (PR #4394 "Don't make an entry field for cur realm" in gnoweb help is the UX confirmation).
-
-**Detection**: function signatures with `cur realm` AND that pass `cur` (not `cross`) to subsequent cross-realm calls. Should be very rare; flag any occurrence.
-
-**Fix**: call subsequent realms with `cross`. `cur` is consumed at the function boundary, full stop.
-
-**Status**: ACTIVE class (defensive lint). Compiler today rejects most expressions of this; the lint is for the cases it doesn't.
-
-### 6. Pointer-stealing via realm assignment
-
-**Shape** (historical, kept for the model):
-
-```go
-// realm A
-var x = uint32(42)
-steal.Steal(&x)   // realm B captures &x
-
-// realm B
-var ptr *uint32
-func Steal(p *uint32) { ptr = p }   // B persists A's pointer
-```
-
-**Why wrong**: assigning a cross-realm pointer to B's state caused ownership transfer to B. Subsequent `*ptr = ...` in realm A would panic with "cannot modify external-realm object".
-
-**Detection**: `&someVar` where `someVar` is a top-level realm-state variable, passed to a function in another realm; the receiving realm stores it in state.
-
-**Fix**: pass by value, or copy first — `localCopy := remote.X; otherRealm.Foo(&localCopy)`.
-
-**Status**: HISTORIC. Issue #974 (2023). Absorbed into #4028's readonly-taint design — cross-realm references now carry the readonly bit and can't be assigned into external-realm state without explicit `cross`.
-
-### 7. `MsgRun` vs `MsgCall` semantic confusion — the trichotomy
-
-This is the *conceptual* framing of class §1; same fix, different angle. An auditor agent benefits from catching both surface and concept.
-
-**Shape**:
+The single most common security-relevant operation in `/r/` code:
 
 ```go
 func Buy(cur realm) {
-    // dev wants "user only", reaches for IsUser
-    if !runtime.PreviousRealm().IsUser() {
-        panic("user only")
+    if !cur.IsCurrent() { panic("spoofed realm") }
+    if !cur.Previous().IsUserCall() {
+        panic("only EOA via MsgCall can fund this")
     }
     coins := banker.OriginSend()
-    // ...
+    if coins.AmountOf("ugnot") != price {
+        panic("incorrect amount")
+    }
+    // mutate state
 }
 ```
 
-**Why wrong**: `Realm` exposes three caller-identity predicates that look interchangeable but aren't.
+Three predicates that look interchangeable but aren't:
 
-| Predicate | EOA via `MsgCall` | EOA via `MsgRun` (ephemeral realm) | Realm via `MsgCall` |
+| Predicate | EOA via `MsgCall` | EOA via `MsgRun` (ephemeral) | Realm via `MsgCall` |
 |---|---|---|---|
 | `IsUserCall()` | ✓ | ✗ | ✗ |
 | `IsUserRun()` | ✗ | ✓ | ✗ |
 | `IsUser()` | ✓ | ✓ | ✗ |
 
-The `MsgRun` ephemeral realm (`gno.land/e/g1<user>/run`) can consume `OriginSend` and then forward control, so any payment-gated function whose guard accepts `IsUser()` (broad) is exploitable. The author's intent ("only allow user-initiated calls") was correct; the API choice was too broad.
+`IsUser()` accepts both EOAs and the user's ephemeral `gno.land/e/g1<user>/run` realm created by `MsgRun`. The ephemeral can consume the `OriginSend` envelope **before** forwarding control, bypassing the receipt invariant. Use `IsUserCall()` for payment-gated paths.
 
-**Detection**: `IsUser()` (no `Call` suffix) in payment-gated paths; `PreviousRealm().PkgPath() == ""` used as a user-only check (technically captures only `MsgCall`-from-user, but suggests the author didn't understand the trichotomy — flag for review).
+**Detection**: file contains `banker.OriginSend(` AND `IsUser(` (no `Call` suffix). Both in the same function = high severity. `OriginSend` purely read-for-display = low severity.
 
-**Fix**: `IsUserCall()` for "only EOA via MsgCall" (the payment-guard case). `IsUserRun()` only when explicitly building dev tooling. Prefer the named API over `PkgPath()` comparisons.
+**Status**: HISTORIC. No genuine example realm guards an `OriginSend` payment with `IsUser()` in the same function on current master; the only files referencing both predicates are deliberate test fixtures under `r/tests/vm/`, and there each predicate sits in a separate helper. The dangerous pattern still appears in older deployed realms and external code, so the auditor agent should expect to find it in user-supplied input.
 
-**Status**: HISTORIC in master `examples/` (verified 2026-05: 0 co-occurrences). External / older code may still ship the antipattern. Root cause of §1; documented in PR #4192.
+## The encapsulation pattern (GRC20 reference)
 
-### 8. Slice mutation across realms (readonly-taint surprise)
+`gno.land/p/demo/tokens/grc20` is the canonical example of *safe* `/p/`-declared data. It violates (A) — `Token`, `PrivateLedger`, and `fnTeller` are all `/p/`-declared — but compensates with airtight encapsulation:
 
-**Shape**:
+| Defense | How |
+|---|---|
+| All sensitive fields are unexported | `Token.ledger`, `PrivateLedger.balances`, `PrivateLedger.allowances`, `fnTeller.accountFn` all lowercase. Foreign packages cannot access them. |
+| No exported method leaks an interior pointer | No `Token` method returns `*PrivateLedger`, `*avl.Tree`, or `*avl.Node`. |
+| Authority transitions gated by `cur.IsCurrent()` | Every `Teller` method checks `cur.IsCurrent()` before resolving `cur.Previous().Address()`. |
+| Forgery defended by nominal type assertion | `IsCanonicalTeller(t)` checks `_, ok := t.(*fnTeller)`. Embedding wrappers fail this. |
+| `*PrivateLedger`'s unauthenticated mutators isolated by package privacy | `Mint`/`Burn`/etc. have no `cur` check. They're safe only because no realm exports the `*PrivateLedger` pointer. |
 
-```go
-// In realm crossrealm
-var Allowed = S{AllowedList: []int{1, 2}}
-func Set(cur realm, v []int) { Allowed.AllowedList = v }
-func Edit(cur realm, i, v int) { Allowed.AllowedList[i] = v }
+Realm authors using GRC20 must:
 
-// In main
-crossrealm.Set(cross, crossrealm.Allowed.AllowedList)   // alias
-crossrealm.Edit(cross, 0, 5)                            // PANIC: readonly tainted
-```
+1. Store `*PrivateLedger` in a **lowercase** package-level variable.
+2. Expose only authenticated entry points (`Transfer(cur realm, to address, amount int64)` calling `userTeller.Transfer(...)`).
+3. If accepting a `Teller` from external callers, gate with `IsCanonicalTeller(t)` before dispatching its methods.
+4. **Never import `gno.land/r/tests/vm/test20`** — its `PrivateLedger` is deliberately exported for tests; using it in production = instant compromise.
 
-**Why wrong**: when a slice from realm X passes through realm Y and back to X, the slice descriptor inherits a transient readonly taint that isn't fully cleared on re-entry. Element mutation then panics.
+## Anti-patterns (footguns)
 
-**Detection**: a function in realm X that accepts a slice and re-assigns or element-mutates a state slice from the same realm. High risk if the slice originated from an `import`'d realm path.
-
-**Fix**: clone on entry — `v := append([]int(nil), v...)`. Or replace whole slices instead of element-mutating — `Allowed.AllowedList = []int{...}`, not `Allowed.AllowedList[i] = ...`.
-
-**Status**: OPEN. Issue #4765 (2025-09), not fixed at scaffold-time. The advice is don't round-trip slices.
-
-### 9. Soft cross to FuncValue declaration realm vs storage realm — attached-method authority grant
-
-**Shape**:
+### Exposing a pointer to mutable state
 
 ```go
-// In realm bob:
-var obj alice.Object = alice.New()   // bob persists an alice.Object to its state
-
-// In alice's code, method declared as:
-func (*Object) Drain() {
-    bob.Treasury = 0                 // runs with bob's storage authority via borrow-switch
-}
-
-// In bob (later):
-obj.Drain()                          // method body executes with bob's privileges, drains bob's treasury
+var users []*User
+func Users() []*User { return users }   // attacker gets aliased slice
 ```
 
-**Why wrong**: a method on a struct can be **declared in realm A but the struct stored in realm B**. The implicit storage-realm borrow-switch targets B (where the receiver lives), not A (where the method was declared). Whoever attaches the struct to their state has effectively granted A's code execution privileges over B's storage.
+The readonly taint protects you from direct field writes, but if `*User` has any method whose body writes the receiver, calling that method on the returned pointer succeeds — D2 borrows `m.Realm` back to `/r/V` and the write commits.
 
-**Detection**: realm-state variables typed with imports from other realms (especially `r/...` imports, not just `p/...`); methods on such types called as `obj.Method()` where the storage-realm borrow-switch kicks in. Pay special attention to imports from less-trusted authors.
+**Rule**: getters return values (copies), unexported method results, or read-only views. Never a pointer to internal mutable state.
 
-**Fix**: prefer composition with `p/` (pure) types only. If you must store an `r/` type, audit every method on it as if it were code in your own realm. **Note the supply-chain dimension**: imported `r/` realms are runtime-upgradeable from the dependency author's side — your audit is valid only for the version you reviewed. A future widget release can change behavior without manager noticing. Jae Kwon (PR #4584 review): *"don't attach objects/receivers to your realm unless you know it's safe."*
+### Embedding a `/p/`-type with concrete-callback higher-order methods
 
-**Status**: ACTIVE — policy not bug. Acknowledged by core as a deliberate design trade-off (#4584 closed unmerged). PR #4890 hardens the readonly-taint side; the attachment-as-privilege model itself remains. **This is the single largest LLM-auditable class** — the compiler will not save you, the audit must.
+The (B)-class vector. When embedding/fielding a `/p/`-type, audit its method set. If it has any `func(...) func(*PType)`-shaped method, treat embedding as **publishing a mutator API** to the world.
 
-### 10. Stale-spec code copy
+**Rule**: either don't embed, or keep the field unexported AND don't return aliased pointers to it.
 
-**Shape**:
+### Accepting an attacker callback under your own authority
 
-```go
-func F() {
-    crossing()                       // pre-Gno-0.9 body marker
-    // ...
-}
-```
+The (C)-class vector. Even `func()` is dangerous — the callback body can call back into your own state-mutating methods.
 
-Or:
+**Rule**: never invoke a caller-supplied function/interface value while holding your own `m.Realm`. Either:
+- Type the callback parameter with one of your own `/r/V`-declared types so attackers can't supply a matching `/p/`-callback, OR
+- Don't invoke caller callbacks at all; design synchronous APIs.
 
-```go
-// Old caller-side syntax:
-F(cross, args...)                    // calling a function that doesn't have `cur realm` first param
-```
+### Sealing is not a security boundary
 
-**Why wrong**: pre-#4060 / pre-#4264 syntax. Won't compile against current chain. If a transpiler accepts it, may produce subtly different semantics.
+Unexported marker methods on an interface (`isCanonical()` etc.) are **bypassable via embedding** in Gno. See `examples/gno.land/p/test/seal/filetests/z_seal_*_filetest.gno` for the four working bypass tests.
 
-**Detection**: function body contains `crossing()` as a statement; function `F(...)` with no `cur realm` first parameter called as `F(cross, ...)`; `gno.mod` pinning version before 0.9.
+**Rule**: sealing is documentation, not defense. For real allowlists, use a concrete-type switch (`switch v.(type) { case *MyImpl: ... }`) at the boundary function.
 
-**Fix**: generate only Gno 0.9+ syntax. Auditor agent should flag and offer transpile-style rewrite.
+### Stored `realm`-typed values
 
-**Status**: HISTORIC in master (verified 2026-05: 0 `crossing()` body markers in `examples/`). Common in user-supplied or copy-pasted external code.
+Storing a `realm` value (whether `cur` or `cur.Previous()`) panics at attachment time or transaction finalize: `cannot persist realm value: realm values are ephemeral and tied to a call frame`.
 
-## Audit signals (grep checklist)
+**Rule**: if you need to remember a caller across transactions, store `cur.Previous().Address()` or `cur.Previous().PkgPath()` (plain strings), not the realm value.
 
-Quick-reference for Phase-1 triage. Run these from the realm root.
+## Properties that strengthen the boundary
 
-| Pattern | Signal | Action |
+### Cross-realm panic aborts the transaction
+
+A panic raised inside a realm-borrowed frame **cannot be caught by `recover()` in any other realm**. The transaction aborts entirely. A write that would have panicked at the readonly check takes the whole transaction with it — no half-mutated state, no recover-and-retry under a different guise. (The test-only `revive(fn)` builtin is the documented exception.)
+
+### Readonly taint propagates through value copy
+
+Reading a foreign struct value into a local variable preserves the readonly bit. Writing the local copy still panics. Go-semantics-divergent but closes a class of subtle attacks where attacker might "extract" victim data into their own context.
+
+### Bound method values carry the receiver's PkgID
+
+`mv := victim.Apply` is a function value that remembers its receiver. When invoked later — even stored in attacker state — D2 (borrow #2) fires based on the receiver's PkgID. Method *expressions* (unbound: `(*T).Apply`) do not carry the receiver stamp.
+
+**Implication**: returning a bound method value of a `/p/`-type pointing into your state is equivalent to publishing the method to any holder. Don't return bound method values of `/p/`-types unless the method body is safe under attacker invocation.
+
+### Conversion-time panic is not Gno-recoverable
+
+`doOpConvert` Case 1 (foreign-readonly source conversion refused) uses raw Go `panic(...)`, **not** catchable by Gno `defer { recover() }`. The write-time readonly check is catchable. This is an implementation inconsistency, not a bug.
+
+### Storage-construction-time check
+
+Allocating a foreign `/r/`-declared type with a composite literal, `new()`, or `make()` panics: `cannot allocate <type> in realm <m.Realm>`. Attackers cannot fabricate impostor instances. Construction must go through constructors declared in the type's home realm.
+
+## Audit signals (Phase-1 triage)
+
+Quick-reference grep checklist. Run these from the realm root.
+
+| Pattern | Signal | Class |
 |---|---|---|
-| `IsUser()` co-occurring with `OriginSend` | RED | §1 — replace with `IsUserCall()` |
-| `crossing()` as a statement | RED | §10 — pre-0.9 stale; migrate to `func F(cur realm, ...)` |
-| `PreviousRealm()` inside a non-crossing function used as caller identity | RED | §7 — does not identify the immediate caller |
-| Method on receiver persisted into other realm's state | YELLOW | §9 — implicit storage-realm authority grant; audit the method |
-| `interface { ... }` stored in state, methods invoked from gated functions | YELLOW | §2 — re-entrancy risk; verify CEI ordering |
-| `func(...)` parameters or function-typed fields in realm state | YELLOW | §3 — behavior substitution; verify trust assumptions |
-| `&someStateVar` passed to external realm | YELLOW | §6 — ownership-transfer risk (mostly defended by readonly taint now) |
-| Slice element mutation after round-trip through external realm | YELLOW | §8 — open issue #4765; clone on entry |
-| `cur realm` forwarded as an argument to a non-crossing function call | RED | §5 — authority disclosure |
+| `IsUser()` co-occurring with `OriginSend` | RED | payment-bypass via MsgRun |
+| `cur.Previous()` / `cur.Address()` without prior `cur.IsCurrent()` check | RED | Class 2 — designation-forgery |
+| Public method takes `caller address` / `pkgPath string` as identity parameter | RED | Class 2 — designation-forgery |
+| `runtime.PreviousRealm()` inside a non-crossing function used as caller identity | RED | Class 2 — does not identify the immediate caller |
+| `interface { ... }` with `cur realm` parameter declared anywhere | YELLOW | Class 1a/1b — cur-disclosure surface |
+| `interface { ... }` accepted as parameter and methods invoked without canonical-type assert | YELLOW | Class 3 — impl-substitution |
+| `func(...)` parameters or function-typed state fields used in permission-gated paths | YELLOW | Class 4 — closed-over-authority |
+| Function-valued state variable writable but never invoked | YELLOW | Class 4 — latent; wire-and-document-or-delete |
+| Embedded `/p/`-type with `Iterate(cb func(*T))` / `Apply(fn func(*T))` shape on `/r/V`-data | YELLOW | (B) violation — no-anchor laundering surface |
+| Exported field is a `/p/`-pointer or embedded `/p/`-type | YELLOW | (B) violation candidate |
+| Exported function/var returns a pointer aliasing internal mutable state | YELLOW | mutator surface for D2 borrow back |
+| Storing a `realm`-typed value in struct field / map / package var | RED | will panic at finalize; usually a Class 2 misunderstanding |
+| Slice element mutation after round-trip through external realm | YELLOW | readonly-taint round-trip surprise (open issue #4765) |
+| `crossing()` as a statement (pre-0.9 body marker) | RED | won't compile — migrate to `func F(cur realm, ...)` |
 
-## Operational audit signals (non-bug-class but block-worthy)
+## Operational audit signals
 
-Not Gno-language bug classes, but real audit signals an auditor should catch alongside the bug catalog. Detail and idioms in `patterns.md` § "Operational anti-patterns" — duplicated here as grep signals so audit-mode loads them.
+Not Gno-language bug classes, but real audit signals an auditor should catch alongside the bug catalog.
 
 | Pattern | Signal | Action |
 |---|---|---|
 | `banker.OriginSend()` consumed with no `SendCoins` / `Withdraw` / auto-forward elsewhere in the realm | RED | Funds lock in realm address. Either implement guarded withdraw, auto-forward to a treasury, or document burn-on-receipt intent. |
-| Hardcoded `admin std.Address` with no `TransferAdmin(cur realm, ...)` function | YELLOW | Key loss = permanent loss of privileged ops. Ship rotation or document trade-off. |
-| `var cb func(...)` set-able but never invoked anywhere in the realm | YELLOW | Latent §3 — see "Behavior substitution" above. Wire-and-document or delete. |
+| Hardcoded `admin address` with no `TransferAdmin(cur realm, ...)` | YELLOW | Key loss = permanent loss of privileged ops. Ship rotation or document trade-off. |
 | `_ := someAvl.Get(k)` / `n, _ := v.(int)` swallowing the second return | YELLOW | Silent fallback on missing key or wrong type. Future state-shape change corrupts the read invisibly. |
-| `avl.Tree` storing only a single statically-named key | YELLOW | Over-typed; either collapse to a scalar or expose multi-key API. Don't ship the middle. |
-| Admin / privileged inputs with no bound check (negative `qty`, oversized strings, etc.) | YELLOW | Admin footgun; bound at the function boundary. |
-| Pointer-receiver method called on a value extracted from `interface{}` (e.g. `v.(T)` then `v.Method()` where `Method` is on `*T`) | YELLOW | Go auto-addresses the local copy; mutations in the method body don't persist to the stored value. Subtle Gno-vs-Go gotcha when the stored value lives in an `avl.Tree`. Store `*T` or document the value-store contract. |
-| Exported `ErrXxx` declared in the package but never returned anywhere in the package | YELLOW | Intent inconsistent with behavior — the error name implies a check that the code doesn't perform (typical case: `ErrVoteExists` declared but `AddVote` silently overwrites). Either wire the error or remove it. |
-| Map iteration order influencing execution (`for k, v := range m { … emit / sum / mutate }`) | RED | Go's map iteration is non-deterministic. Different nodes processing the same tx will iterate in different orders and diverge — a consensus halt risk. Convert to `avl.Tree` (or `bptree`) for ordered traversal. |
-| Use of `math.MinInt` / `math.MaxInt` / `unsafe.Sizeof` / architecture-dependent ints | RED | Values are platform-dependent. Two nodes on different architectures produce different results. Use the explicit-width types (`int64`, `uint32`) instead. |
-| `append` whose growth capacity is observed (e.g., `cap(s)` checked after append) | YELLOW | Go's `append` capacity-growth strategy is version-dependent. Code that branches on `cap()` post-append can diverge across nodes running different Go versions. Don't observe capacity. |
-| Floating-point arithmetic in deterministic paths | YELLOW | Float formatting has platform edge cases. If you must use floats, format with explicit-precision (`strconv.FormatFloat`) and validate against the spec; prefer integer math wherever possible. |
-| Delete and re-add the same object identity in a single tx (e.g., `tree.Remove(k); tree.Set(k, newObj)` where `newObj` overlaps the prior object's reachable graph) | YELLOW | Realm finalization assigns object IDs by reachability. Refcount accounting on delete-then-recreate within a tx can produce "unexpected object with id" / "unexpected zero object id" runtime errors. Replace whole values; don't intermix delete and recreate of overlapping graphs. |
+| `avl.Tree` storing only a single statically-named key | YELLOW | Over-typed; collapse to a scalar or expose multi-key API. Don't ship the middle. |
+| Admin/privileged inputs with no bound check (negative `qty`, oversized strings) | YELLOW | Admin footgun; bound at the function boundary. |
+| Exported `ErrXxx` declared but never returned anywhere in the package | YELLOW | Intent inconsistent with behavior — either wire the error or remove it. |
+| Map iteration order influencing execution (`for k, v := range m { ... }` with side effects) | RED | Go's map iteration is non-deterministic; different nodes diverge — consensus halt risk. Use `avl.Tree` for ordered traversal. |
+| `math.MinInt` / `math.MaxInt` / `unsafe.Sizeof` / architecture-dependent ints | RED | Platform-dependent values; nodes on different architectures diverge. Use explicit-width types (`int64`, `uint32`). |
+| `append` whose growth capacity is observed (`cap(s)` checked after append) | YELLOW | Go's append capacity-growth is version-dependent; code branching on `cap()` can diverge across Go versions. |
+| Floating-point arithmetic in deterministic paths | YELLOW | Float formatting has platform edge cases. Prefer integer math; if floats are necessary, format with explicit precision. |
+| Delete-and-recreate the same object identity within a tx | YELLOW | Realm finalization assigns object IDs by reachability. Refcount accounting can produce "unexpected object with id" / "unexpected zero object id" runtime errors. |
 
 ## Severity calibration
 
 `RED` = exploitable today on current master, OR a block-worthy operational concern. Block deploy / send / interact.
-`YELLOW` = exploitable depending on context (caller is trusted? trust assumption documented? CEI ordering preserved?). Investigate before clearing.
+`YELLOW` = exploitable depending on context (caller trust, CEI ordering, documentation). Investigate before clearing.
 `GREEN` (implicit) = pattern matched but trust assumption is explicit and reasonable. Record so the next audit is faster.
 
-Always cite the class number when reporting (`§1`, `§9`, etc.) so the realm author can cross-reference back to this file. For operational signals, cite `security.md § operational`.
+Always cite the class number when reporting (`Class 1a`, `Class 4`, etc.) so the realm author can cross-reference back to this file. For operational signals, cite `security.md § operational`.
 
-### Audit lens: `/p/` package vs `/r/` realm
+### `/p/` vs `/r/` audit lens
 
-The bug-class catalog above is realm-audit-flavored — "is this realm exploitable today?" When the audit target is a `/p/` **package**, the rubric shifts:
+The catalog above is realm-audit-flavored. When auditing a `/p/` **package**:
 
 | Severity | `/r/` realm | `/p/` package |
 |---|---|---|
 | **RED** | Exploitable today on master | Any naive importer ships a vulnerability (the library hands callers a footgun) |
-| **YELLOW** | Exploitable depending on context | Importer has to actively misuse it; library exposes the surface, doesn't force it |
+| **YELLOW** | Exploitable depending on context | Importer must actively misuse it; library exposes the surface but doesn't force it |
 | **GREEN** | Pattern matched, trust assumption explicit | Safe regardless of importer behavior |
 
-A `/p/` package has no state of its own and no direct attack surface; its risk is **what every importing realm fails to wrap**. The same `ExecFunc func(realm) error` pattern that's RED in a deployed realm is YELLOW in a `/p/` library that documents the trust requirement and exposes the option only through a `With*` setter the importer can choose not to expose.
+A `/p/` package has no state of its own; its risk is **what every importing realm fails to wrap**. The same `ExecFunc func(realm) error` pattern that's RED in a deployed realm is YELLOW in a `/p/` library that documents the trust requirement and exposes the option only through a `With*` setter the importer can choose not to expose.
 
-When auditing a `/p/`, look for:
-- Documentation honesty (e.g., `"v0 — Unaudited"` in `doc.gno` is honest calibration, raise it to the verdict)
-- Whether dangerous shapes are necessary for the library's purpose or are convenience footguns that could be removed
-- Whether the package documents the trust requirement on each callback/interface field
+When auditing `/p/`, look for:
+- Documentation honesty (`"v0 — Unaudited"` is honest calibration; raise it to the verdict).
+- Whether dangerous shapes are necessary for the library's purpose or are convenience footguns.
+- Whether the package documents the trust requirement on each callback/interface field.
 
-Cite findings as `YELLOW (RED in any realm that exposes <surface> to public input)` when the dangerous shape is structurally necessary but importer-conditional. This is more honest than flattening to RED at the wrong layer.
+Cite findings as `YELLOW (RED in any realm that exposes <surface> to public input)` when the shape is structurally necessary but importer-conditional.
+
+## Verification checklist for realm authors
+
+Before deploying a realm, verify:
+
+- [ ] All logic-data types are declared in this package, OR `/p/`-declared types are stored in **unexported** package vars.
+- [ ] Every exported function/method does one of: pure read (returns primitives or values, no internal pointers); takes `cur realm` and authenticates via `cur.IsCurrent()`; documented intentionally permissive (faucet, public mint).
+- [ ] No exported var or function returns a pointer aliasing internal mutable state.
+- [ ] Every interface parameter from external callers is gated with a canonical-type assert before invoking methods.
+- [ ] No method takes a `func(*MyPType)` callback (where `MyPType` is `/p/`-declared) and invokes it from within. If yes, retype the callback to use your own `/r/V`-typed parameter.
+- [ ] No exported field is a `/p/`-pointer or embedded `/p/`-type with concretely-typed callback methods.
+- [ ] Payment-guarded entry points use `cur.Previous().IsUserCall()`, not `IsUser()`.
+- [ ] No `realm`-typed value is stored in package state, struct fields, maps, slices, or closure captures.
+- [ ] Not imported `gno.land/r/tests/vm/test20` (deliberately insecure test fixture).
+
+## Worked example — a secure counter realm
+
+```go
+// gno.land/r/example/counter
+package counter
+
+// /r/-declared data type. (A) satisfied.
+type Counter struct {
+    value int
+    owner address
+}
+
+var gCounter *Counter   // unexported — only reachable through methods below
+
+func init() {
+    gCounter = &Counter{value: 0, owner: address("")}
+}
+
+// Public read. Returns a value, not a pointer.
+func Value() int {
+    return gCounter.value
+}
+
+// Authenticated mutator.
+func Increment(cur realm) {
+    if !cur.IsCurrent() { panic("spoofed realm") }
+    gCounter.value++
+}
+
+// Authenticated owner-gated mutator.
+func SetOwner(cur realm, newOwner address) {
+    if !cur.IsCurrent() { panic("spoofed realm") }
+    if gCounter.owner != "" && cur.Previous().Address() != gCounter.owner {
+        panic("not the owner")
+    }
+    gCounter.owner = newOwner
+}
+
+// NO method like ApplyHook(fn func(*Counter)) — violates (C).
+// NO method like GetCounter() *Counter — aliased-pointer leak.
+```
+
+Attackers can read `Value()` (returns a copy), call `Increment(cur)` (D1 keeps `m.Realm = counter`), call `SetOwner(cur, ...)` (owner check). They cannot write `gCounter.value` (unexported), Apply-launder it (no Apply method, no exported pointer), forge `cur` (`IsCurrent()` fails), or spoof `cur.Previous().Address()` (it's the live crossing frame).
 
 ## Cross-references
 
-- `interrealm.md` — the spec model these violations build on (especially "Implicit borrow-cross on methods", "Readonly taint", "Closure capture", and the "Two contexts" table)
+- `interrealm.md` — the spec model these violations build on (two contexts, three borrow rules, capability token semantics, readonly taint, conversion guards)
 - `patterns.md` — preferred shapes that avoid these classes
-- `stdlib.md` — `banker.OriginSend`, `std.PreviousRealm.IsUserCall()`, `realm.SentCoins()`
+- `stdlib.md` — `chain/banker`, `chain/runtime`, payment primitives
 - `render.md` — XSS / untrusted-content posture for `Render()` output (separate trust axis)
-- `future.md` — fixes in flight (PR #5669 `cross2(rlm)`, `realm.SentCoins()` adoption sweep, daokit upgrade #4884)
 
-## Source (internal)
+## Source
 
-`.mynote/gno-agentic/reference/15-security-evolution-interrealm.md` §4 — 10 bug classes with PR archaeology.
-`.mynote/gno-agentic/reference/17-pr5669-and-security-comments.md` §3 — repo-wide `// SECURITY` comment audit; provides additional evidence for §2 (treasury banker iface), §3 (sealed-interface bypass), §9 (token-identity attacks).
-`docs/resources/gno-interrealm.md` — canonical spec.
-`docs/resources/effective-gno.md § Verifying inbound Coin payments` — canonical payment guard.
+- `docs/resources/gno-security.md` — five-class taxonomy (class numbers used in chain code comments).
+- `docs/resources/gno-security-guide.md` — four structural defenses, safety hypothesis (A/B/C), encapsulation pattern, anti-patterns, surprising properties, checklist.
+- `gnovm/tests/files/zrealm_launder_*.gno` — ~64 exploit-attempt filetests, each annotated with mechanism and outcome.
+- `examples/gno.land/p/test/seal/filetests/z_seal_*_filetest.gno` — four bypass tests showing why sealing is documentation, not defense.

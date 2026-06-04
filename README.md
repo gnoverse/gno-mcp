@@ -116,6 +116,24 @@ EOF
 (`allow-dangerous-tools`, etc. from Milestone B) will fail loud rather than be silently
 ignored.
 
+## Skill installation (for AI coding agents)
+
+The repo bundles a `gno` skill at `skills/gno/` covering interrealm semantics, the
+security taxonomy, idiomatic patterns, Render() conventions, the stdlib surface, the
+memory model, and project setup. It installs as a plugin for the major coding-agent
+harnesses.
+
+| Agent | Install |
+| --- | --- |
+| **Claude Code** | `/plugin marketplace add gnoverse/gno-mcp` then `/plugin install gnomcp` |
+| **Codex CLI** | Install via Codex's plugin flow pointing at `.codex-plugin/plugin.json` in this repo |
+| **Cursor** | Install via Cursor's plugin flow; reads `.cursor-plugin/plugin.json` |
+| **Gemini CLI** | `gemini extensions install https://github.com/gnoverse/gno-mcp` |
+| **OpenCode** | Add `"gnomcp@git+https://github.com/gnoverse/gno-mcp.git"` to your `opencode.json` `plugin` array. See `.opencode/INSTALL.md`. |
+
+The skill is independent of the MCP server — installing one does not require the other,
+but they're complementary (skill = knowledge, MCP server = on-chain tools).
+
 ## Architecture
 
 ADRs in `adr/`:

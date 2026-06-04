@@ -1,4 +1,4 @@
-.PHONY: build test test-integration lint fmt run test-e2e
+.PHONY: build test test-integration lint fmt run test-e2e dev
 
 build:
 	go build -o bin/gnomcp ./cmd/gnomcp
@@ -18,6 +18,12 @@ fmt:
 
 run: build
 	./bin/gnomcp
+
+# Launch Claude Code with the gnomcp skill + agents loaded live from this repo
+# (visible top-level skills/ and agents/, no .claude/ symlinks). Iterate with
+# /reload-skills and /reload-plugins; no restart needed.
+dev:
+	claude --plugin-dir .
 
 test-e2e:
 	@echo "Manual e2e protocol — see test/e2e/PROTOCOL.md"

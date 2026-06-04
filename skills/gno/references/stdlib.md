@@ -1,70 +1,189 @@
 # Stdlib API surface
 
 > **Category: API reference.** Designed for **live introspection**, not static restatement.
+> **Authoritative spec**: `docs/resources/gno-stdlibs.md` in the `gnolang/gno` repo. This reference names the packages and security-relevant primitives, then defers to live introspection for current API details.
 
 ## Purpose
 
-Stdlib APIs change. A static reference goes stale; an agent that emits stale API names produces broken code. This reference is intentionally thin — it names the packages and the security-relevant primitives, then defers to live introspection for current API details.
+Stdlib APIs change. A static reference goes stale; an agent that emits stale API names produces broken code. This reference is intentionally thin — package names, the security-relevant primitives, and the gotchas — then defers to `gno_inspect` for exact signatures.
 
 ## How to use this reference
 
-For exact, up-to-date API surface, the gnomcp design (see `contribs/gnomcp/` skills' parent) exposes introspection tools that query the chain directly:
+For exact, up-to-date API surface, the gnomcp design exposes introspection tools that query the chain directly:
 
-- **`gno_inspect <pkgPath>`** — per-function godoc and function signatures, queried via `vm/qdoc` against the current chain.
+- **`gno_inspect <pkgPath>`** — per-function godoc and function signatures via `vm/qdoc` against the current chain.
 - **`gno_render <pkgPath>`** — rendered docs / examples if the package exposes `Render()`.
 - **`gno_eval <pkgPath> <expr>`** — evaluate an expression in the package context.
 
 When emitting code that calls stdlib, **prefer querying live** over recalling from training data. This reference tells you *what to query*, not what to copy.
 
-## Packages a builder will encounter
+## Package map
 
-### `std`
+The 0.9 release reorganized the stdlib into a `chain/...` family. Old code that imported `std` directly may need migration.
 
-The core runtime interface — caller identity, addresses, coins.
+| Import path | Purpose |
+|---|---|
+| `chain` | Core types — `Coin`, `Coins`, `Emit`, `PackageAddress`, `CoinDenom` |
+| `chain/runtime` | Realm-context observation — `CurrentRealm()`, `PreviousRealm()`, `AssertOriginCall()`, `ChainID()`, `ChainDomain()`, `ChainHeight()`, `OriginCaller()` |
+| `chain/runtime/unsafe` | Legacy stack-walking forms of `CurrentRealm()`/`PreviousRealm()` — see § Caller-identity, below |
+| `chain/banker` | Coin handling — `NewBanker()`, `OriginSend()`, `SendCoins()`, `GetCoins()`, `IssueCoin()`, `RemoveCoin()` |
+| `chain/markdown` | Native markdown sanitization (see `render.md`) |
+| `testing` | Test scaffolding — `SkipHeights`, `SetOriginCaller`, `SetOriginSend`, `IssueCoins`, `SetRealm`, `NewUserRealm`, `NewCodeRealm` |
 
-Load via `gno_inspect std`. Security-relevant primitives:
+## Uverse — builtins always in scope
 
-- **`std.PreviousRealm()`** / **`std.CurrentRealm()`** — caller-identity primitives. Only `PreviousRealm()` shifts on explicit cross-calls. See `interrealm.md`.
-- **`Realm.IsUserCall()`** vs **`Realm.IsUser()`** vs **`Realm.IsUserRun()`** — the trichotomy. `IsUser()` accepts MsgRun ephemeral realms (`/e/` paths) and is **insufficient for payment guards**. See `security.md` §1, §7.
-- **`std.Emit`** — event emission for off-chain consumers.
+These do not require an import:
 
-### `std/banker`
+- **`address`** — bech32 address type. Methods: `IsValid() bool`, `String() string`.
+- **`realm`** — the capability token surfaced as the `cur realm` parameter on crossing functions. Methods: `Address()`, `PkgPath()`, `Previous()`, `IsCurrent()`, `IsCode()`, `IsUser()`, `IsUserCall()`, `IsUserRun()`, `IsEphemeral()`, `CoinDenom()`, `String()`. See `interrealm.md`.
+- **`cross(rlm)`** — uverse function used to mark cross-calls: `bakery.MakeBread(cross(cur), "flour", "water")`. See `interrealm.md`.
+- **`revive(fn)`** — boundary-aware recover; currently enabled only in test/filetest mode.
 
-Coin handling.
+## Caller-identity primitives
 
-Load via `gno_inspect banker`. Security-relevant:
+Two surfaces, both supported, with different safety properties:
 
-- **`banker.OriginSend()`** — coins from the originating tx. Guard with `IsUserCall()`. See `security.md` § payment-guard.
-- **`banker.SendCoins(from, to, coins)`** — outbound transfer.
-- Successor `realm.SentCoins()` (PR #5039) — frame-local; re-entrancy-safe. See `future.md` until adoption sweep lands.
+### Modern: `cur realm` parameter
 
-### `std/avl` / `gno.land/p/demo/avl`
+A crossing function `func F(cur realm, ...)` receives a typed capability token. Use this whenever possible:
 
-The canonical persisted keyed collection. Load via `gno_inspect avl`.
+```go
+func Buy(cur realm) {
+    if !cur.IsCurrent() { panic("spoofed realm") }
+    if !cur.Previous().IsUserCall() { panic("not an EOA call") }
+    coins := banker.OriginSend()
+    // ...
+}
+```
 
-Use this (or `gno.land/p/nt/bptree/v0`) instead of Go's `map`. Map iteration is non-deterministic → consensus halt risk. See `patterns.md` § Why these patterns / Determinism.
+The `IsCurrent()` check is the authentication primitive — see `security.md` Class 2 (designation-forgery).
 
-### `std/crypto`
+### Legacy: `chain/runtime/unsafe`
 
-Hashes, address parsing. Load via `gno_inspect crypto` when needed.
+```go
+import "chain/runtime/unsafe"
 
-### `std/testing`
+func F() {
+    if unsafe.PreviousRealm().Address() != owner {
+        panic("caller isn't the owner")
+    }
+}
+```
 
-Test scaffolding (`t.RunTransaction`, txtar helpers). Load via `gno_inspect testing` when writing tests.
+The `unsafe` package name reflects what these primitives do: **stack-walking** that returns the realm prior to the most recent boundary, regardless of which function you're in. **Calling `unsafe.PreviousRealm()` inside a non-crossing function does NOT identify the immediate caller** — it returns whatever was previous at the last realm boundary, possibly an unrelated frame upstream.
+
+Use `chain/runtime/unsafe` only:
+- In code paths that intentionally need the stack-walking semantics.
+- When migrating older code that hasn't been updated to use `cur`.
+
+For new code: prefer `cur` parameters and `cur.Previous()` under `cur.IsCurrent()`. The `unsafe` import name is intentional.
+
+### The trichotomy — `IsUserCall` vs `IsUserRun` vs `IsUser`
+
+| Predicate | EOA via `MsgCall` | EOA via `MsgRun` (ephemeral) | Realm via `MsgCall` |
+|---|---|---|---|
+| `IsUserCall()` | ✓ | ✗ | ✗ |
+| `IsUserRun()` | ✗ | ✓ | ✗ |
+| `IsUser()` | ✓ | ✓ | ✗ |
+
+`IsUser()` is **insufficient for payment guards** — the `MsgRun` ephemeral realm can consume `OriginSend()` and forward control. Use `IsUserCall()` for payment-gated paths. See `security.md` § Payment-guard canonical pattern.
+
+## `chain` — coin types and events
+
+### `Coin` / `Coins`
+
+```go
+type Coin struct {
+    Denom  string
+    Amount int64
+}
+
+type Coins []Coin   // set semantics (no duplicate denoms)
+```
+
+`Coins` can be carried with transactions made by user addresses or realms. Specific banker subtypes manipulate them subject to access rights.
+
+### `Emit`
+
+Events log on-chain activity for off-chain consumers. The `Emit()` function takes an event-type string followed by an even number of key/value-pair strings:
+
+```go
+chain.Emit("OwnershipChange", "oldOwner", oldAddr.String(), "newOwner", newAddr.String())
+```
+
+Each event is recorded in the ABCI results of the block; off-chain services consume them via `/block_results` RPC. Events are pkg-path-stamped (the emitting realm) and func-stamped (the emitting function), both available in the ABCI envelope.
+
+## `chain/banker` — coin handling
+
+The Banker handles balance changes of native coins: issuance, transfers, burning. It exposes four subtypes via `NewBanker()`:
+
+| Subtype | What it grants |
+|---|---|
+| `BankerTypeReadonly` | Read-only access to coin balances |
+| `BankerTypeOriginSend` | Full access to coins sent with the transaction that called the banker |
+| `BankerTypeRealmSend` | Full access to coins the realm itself owns (including those sent with the tx) |
+| `BankerTypeRealmIssue` | Can issue new coins |
+
+Security-relevant primitives:
+
+- **`OriginSend()`** — coins included with the originating transaction. Pair with `cur.Previous().IsUserCall()` and an amount check. See `security.md` § Payment-guard.
+- **`SendCoins(from, to, coins)`** — outbound transfer.
+- **`IssueCoin(addr, denom, amount)`** — only `BankerTypeRealmIssue`.
+
+**Gotcha**: a realm that consumes `OriginSend()` but never `SendCoins`/`Withdraw` locks funds at the realm address. See `security.md` § Operational signals.
+
+## `chain/markdown` — render sanitization
+
+Native sanitization for markdown emitted by `Render()`. See `render.md` for details on extension surface, alerts, forms, image validation, and untrusted-content posture.
+
+## `testing` — test scaffolding
+
+Filetest helpers for realm tests. Common entries:
+
+- `SetOriginCaller(addr)` — fake the EOA for a test.
+- `SetOriginSend(coins)` — fake an inbound `OriginSend` envelope.
+- `SetRealm(realm)` — install a fake realm for a test frame.
+- `NewUserRealm(addr)` / `NewCodeRealm(pkgPath)` — construct test realm values.
+- `SkipHeights(n)` — advance the simulated block height.
+- `IssueCoins(addr, coins)` — mint coins to an address for setup.
+
+See `build.md` for filetest layout and authoring patterns.
+
+## Common community packages (kept in `examples/`)
+
+The packages below survived the test-13 quarantine (`examples/quarantined/` got everything else) — safe to import:
+
+| Purpose | Import path |
+|---|---|
+| AVL tree (canonical persisted keyed collection) | `gno.land/p/nt/avl/v0` |
+| B+tree (alternative for ordered keyed state) | `gno.land/p/nt/bptree/v0` |
+| Render-path routing (mux) | `gno.land/p/nt/mux/v0` |
+| Realm-path parsing | `gno.land/p/moul/realmpath` |
+| Ownership / single-owner pattern | `gno.land/p/nt/ownable` |
+| Authorization patterns | `gno.land/p/moul/authz` |
+| Pagination | `gno.land/p/jeronimoalbi/pager` |
+| DAO primitives | `gno.land/p/nt/commondao/v0` |
+| Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` |
+| Non-fungible tokens | `gno.land/p/demo/tokens/grc721` |
+
+**Use `avl.Tree` (or `bptree`) instead of Go's `map`** — map iteration is non-deterministic and a consensus halt risk. See `patterns.md` § Determinism and `security.md` § operational signals.
 
 ## What NOT to import
 
-- **Go host stdlib**: `net`, `os`, `syscall`, `time` (with non-deterministic functions like `time.Now()` resolved deterministically from block time), `runtime` (the Go one — `runtime` in Gno is `std.runtime`, different package).
-- Anything implying network or filesystem access at runtime — the VM has no host access.
-- See `patterns.md` § Why these patterns / No host access for the driver.
+- **Go host stdlib**: `net`, `os`, `syscall`, `runtime` (the Go one), and anything implying network or filesystem access. The VM has no host access.
+- `time.Now()` and similar non-deterministic functions are resolved from block time — usable, but pay attention to determinism (see `patterns.md`).
+- **`gno.land/r/tests/vm/test20`** — deliberately insecure GRC20 fixture exporting `PrivateLedger`. Importing it in production code = instant compromise. See `security.md` § Encapsulation pattern.
 
 ## Cross-references
 
-- `interrealm.md` — how `std.PreviousRealm` / `std.CurrentRealm` interact with crossing semantics
-- `security.md` — `IsUser()` vs `IsUserCall()` bug class, banker guard pattern
-- `patterns.md` — AVL-over-map, testing idioms
-- `future.md` — `realm.SentCoins()`, anything pending merge
+- `interrealm.md` — how `cur` and `chain/runtime` interact with crossing semantics; capability-token methods in detail
+- `security.md` — payment-guard pattern, predicate trichotomy, attacker-class derivations
+- `patterns.md` — AVL-over-map, event-emission idioms, testing patterns
+- `render.md` — `chain/markdown` sanitization, `Render()` output
+- `build.md` — `testing` package usage and filetest layout
 
 ## Source
 
-Live introspection via gnomcp's `gno_inspect` against the current chain. Master tree under `gnovm/stdlibs/` is the source of truth when offline.
+- `docs/resources/gno-stdlibs.md` in the gnolang/gno repo — full prose reference.
+- Live introspection via `gno_inspect` against the current chain.
+- Master tree under `gnovm/stdlibs/` is the source of truth when offline.

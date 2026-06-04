@@ -15,7 +15,7 @@ Differentiated from a casual read ("how does this work", "what does X do") — t
 
 **Dispatched path**: the `gno-auditor` agent has dispatched you with a realm to audit. Same procedure; the agent's frontmatter has already constrained your tools (read-only). Output the same structured format.
 
-In both paths you load companion references on demand: `security.md` and `interrealm.md` are always relevant; `patterns.md` for idiom checks; `render.md` if the realm has a `Render(path string) string`; `future.md` before reporting verdicts to avoid flagging in-flight migrations as bugs.
+In both paths you load companion references on demand: `security.md` and `interrealm.md` are always relevant; `patterns.md` for idiom checks; `render.md` if the realm has a `Render(path string) string`.
 
 ## The three phases
 
@@ -25,15 +25,17 @@ Run cheap pattern checks first to surface obvious problems and orient yourself b
 
 Patterns to check against the realm source (see `security.md` Audit signals table for the full catalog):
 
-- `IsUser()` co-occurring with `OriginSend` → §1 payment bypass
-- `crossing()` body marker → §10 pre-0.9 stale spec
-- `PreviousRealm()` inside non-crossing functions → §7 caller-identity misuse
-- Methods on receivers persisted into other-realm state → §9 attached-method privilege
-- `interface { … }` stored in state, invoked from gated functions → §2 re-entrancy surface
-- `func(…)` parameters or function-typed state fields → §3 callback substitution
-- `&someStateVar` passed to external realm → §6 pointer ownership
-- Slice element mutation after round-trip through external realm → §8 readonly-taint
-- `cur realm` forwarded as argument to a non-crossing call → §5 cur disclosure
+- `IsUser()` co-occurring with `OriginSend` → payment-bypass via MsgRun
+- `cur.Previous()` / `cur.Address()` without prior `cur.IsCurrent()` check → Class 2 designation-forgery
+- Public method takes `caller address` / `pkgPath string` as identity parameter → Class 2 designation-forgery
+- `runtime.PreviousRealm()` inside a non-crossing function used as caller identity → Class 2 (stack-walker doesn't identify immediate caller)
+- `interface { ... }` declared with `cur realm` parameter → Class 1a/1b cur-disclosure surface
+- `interface { ... }` accepted as parameter and methods invoked without canonical-type assert → Class 3 impl-substitution
+- `func(...)` parameters or function-typed state fields used in permission-gated paths → Class 4 closed-over-authority
+- Embedded `/p/`-type with `Iterate(cb func(*T))` / `Apply(fn func(*T))` on `/r/`-data → (B) violation, no-anchor laundering surface
+- Storing a `realm`-typed value in struct field / map / package var → will panic at finalize; usually Class 2 misunderstanding
+- Slice element mutation after round-trip through external realm → readonly-taint round-trip (open issue #4765)
+- `crossing()` body marker → pre-0.9 stale spec (won't compile)
 - Map iteration order influencing execution → operational (non-determinism RED)
 - `math.MinInt` / `MaxInt` / `unsafe.Sizeof` → operational (platform divergence RED)
 
@@ -44,10 +46,10 @@ Each hit is a candidate finding, not a confirmed one. Phase 2 verifies.
 For each exported function on the realm's public surface:
 
 1. **Crossing or not?** A function with `func F(cur realm, …)` signature is callable via MsgCall. Non-crossing functions are internal. Identify which is which.
-2. **Payment-accepting?** If the function consumes `banker.OriginSend()` or any banker primitive that handles inbound coins, verify the guard ordering (see `security.md` § Payment-guard canonical pattern). `IsUserCall()` *before* reading `OriginSend()`, *before* any state mutation.
-3. **Interface or callback acceptance?** If the function takes an `interface{…}` or `func(…)` parameter, trace where the impl comes from. If caller-supplied, this is §2 or §3 territory — verify CEI ordering (checks → effects → interactions) and gate documentation.
+2. **Payment-accepting?** If the function consumes `banker.OriginSend()` or any banker primitive that handles inbound coins, verify the guard ordering (see `security.md` § Payment-guard canonical pattern). `cur.IsCurrent()` + `cur.Previous().IsUserCall()` *before* reading `OriginSend()`, *before* any state mutation.
+3. **Interface or callback acceptance?** If the function takes an `interface{...}` or `func(...)` parameter, trace where the impl comes from. If caller-supplied, this is Class 3 or Class 4 territory — verify canonical-type gating, CEI ordering (checks → effects → interactions), and gate documentation.
 4. **State pointer leakage?** If the function returns a pointer or slice into internal state, check the cross-realm direction. External callers receive readonly-tainted references; mutating them panics (potentially after observable side effects).
-5. **Caller-identity check?** Any `PreviousRealm()` usage must be inside a crossing function. Non-crossing PreviousRealm checks don't identify the immediate caller — they walk back to the last realm boundary.
+5. **Caller-identity check?** Any `cur.Previous()` usage must be preceded by `cur.IsCurrent()`. Any `runtime.PreviousRealm()` usage must be inside a crossing function — non-crossing `runtime.PreviousRealm()` doesn't identify the immediate caller and walks back to the last realm boundary.
 
 ### Phase 3 — Cross-realm flows (30+ minutes)
 
@@ -55,8 +57,8 @@ The deepest pass; only for realms that import `r/` types or store interface/func
 
 1. **Map every `import "gno.land/r/..."`.** For each: who's the author, is the realm actively maintained, do you trust their methods to run with this realm's storage authority?
 2. **Trace persisted callbacks/interfaces back to their construction sites.** Where was the callback minted? Which realm's authority does it carry?
-3. **Identify trust direction** for each cross-realm call site. Is this realm granting authority outward (§9 risk) or receiving authority inward (§5 risk)?
-4. **Check for §9 attached-method authority grants.** Any field typed as `r/`-imported struct + method calls on that field = audit every method on that type as if it were code in this realm. Note the supply-chain dimension: imported `r/` realms are upgradeable from the dependency side, so audit validity is per-version.
+3. **Identify trust direction** for each cross-realm call site. Is this realm granting authority outward (Class 1a/1b cur-disclosure risk) or receiving authority inward (Class 3/4 / (B)-class no-anchor risk)?
+4. **Check for attached-method authority grants** — the (B)-class vector. Any field typed as `/r/`-imported struct or `/p/`-type with higher-order methods + method calls on that field = audit every method on that type as if it were code in this realm. Note the supply-chain dimension: imported `/r/` realms are upgradeable from the dependency side, so audit validity is per-version.
 
 ## Evidence-gating rule
 
@@ -111,7 +113,7 @@ First-pass: <count> findings. After FP filter: <count> findings (Δ <count> down
 
 #### R1 — <name> — confidence: <0-100>%
 **Location**: file:line(s)
-**Class**: cite `security.md` class number, e.g. `§9 attached-method`. For operational signals: `security.md § operational`.
+**Class**: cite `security.md` class number, e.g. `Class 4 closed-over-authority`. For operational signals: `security.md § operational`.
 **Evidence**: 1-2 sentences with the input → sink trace.
 **Why this is exploitable today**: 1-2 sentences.
 **Considered objection**: from the FP filter pass — what an experienced reviewer might say, and why it doesn't apply.
@@ -134,11 +136,10 @@ References loaded during this audit (security.md, interrealm.md, etc.).
 
 ## Cross-references
 
-- `security.md` — bug-class catalog (§1–§10) and operational signals; cite class numbers in findings
+- `security.md` — five-class taxonomy (Class 1a/1b/2/3/4) and operational signals; cite class numbers in findings
 - `interrealm.md` — spec model for cross-realm reasoning in Phase 3
 - `patterns.md` — idioms that disqualify candidate findings (e.g., `Must*` wrappers are safe, not bugs)
 - `render.md` — for realms with `Render(path string) string`
-- `future.md` — check before flagging in-flight migrations as bugs
 
 ## Source
 

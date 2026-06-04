@@ -1,0 +1,1 @@
+@./skills/gno/SKILL.md

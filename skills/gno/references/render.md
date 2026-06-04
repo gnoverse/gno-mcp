@@ -1,6 +1,6 @@
 # Render() and gnoweb markdown surface
 
-> **Category: rendering / on-chain content.** Update when gnoweb's markdown extension surface or render pipeline changes in master. In-flight rendering changes (e.g., `<gno-form exec>` wire format) live in `future.md`.
+> **Category: rendering / on-chain content.** Update when gnoweb's markdown extension surface or render pipeline changes in master.
 
 ## Purpose
 
@@ -67,7 +67,7 @@ content 2
 
 **Status**: STABLE.
 
-### `ext_forms` — Markdown → tx submission **(experimental, in flight)**
+### `ext_forms` — Markdown → tx submission
 
 The only Markdown → transaction primitive. `<gno-form exec="FuncName">` becomes a wallet-mediated `MsgCall` submission.
 
@@ -97,7 +97,7 @@ The only Markdown → transaction primitive. `<gno-form exec="FuncName">` become
 - Realm must implement an exported function matching `exec="FuncName"` to handle the call.
 - CSP `form-action 'self'` is set; cross-site form post is blocked (PR #5046).
 
-**Status**: EXPERIMENTAL. Wire format is changing — `exec` attribute (#4858), `required` (#4974), multiline textarea (#4978), checkbox/radio display fixes (#5018), security hardening (#5046), Adena wallet integration tracked at #5002 (in flight). See `future.md`. Treat any specific HTML shape as a moving target; pin to a gnoweb commit when documenting examples.
+**Status**: STABLE (author surface). The `<gno-form exec>` surface and its input tags are registered unconditionally alongside the other stable extensions; the PR train that introduced it (#4858 → #4978 → #4974 → #5002 → #5046) landed by early 2026. Caveat: gnoweb as a whole is in Beta, and the exact rendered HTML (`<form class="gno-form" ...>`) is an implementation detail — if downstream tooling parses the literal markup, pin to a gnoweb commit.
 
 ### `ext_imgvalidator` — image URL filtering (two-layered)
 
@@ -158,8 +158,8 @@ There is **no enforced routing framework**. Each realm parses `path` itself. Thr
 | Pattern | Used in | Shape |
 |---|---|---|
 | **No routing** | `r/gnoland/home`, `r/sys/users`, `r/sys/cla` | Ignores `path`; always renders the same content |
-| **`p/demo/mux` router** | `r/gnoland/boards2/v1`, `r/gnoland/coins`, `r/demo/profile`, `r/gnoland/blog` | mux-style segment dispatch |
-| **`p/demo/realmpath` parse** | `r/sys/namereg/v1` | single-segment dispatch |
+| **`p/nt/mux/v0` router** | `r/gnoland/boards2/v1`, `r/gnoland/coins`, `r/demo/profile`, `r/gnoland/blog` | mux-style segment dispatch |
+| **`p/moul/realmpath` parse** | `r/sys/namereg/v1` | single-segment dispatch |
 
 For agents: pick mux for any realm with more than 2 distinct views. Static home + a handful of detail views → static is fine.
 
@@ -187,10 +187,9 @@ When reviewing a realm's `Render()`:
 - `security.md` — XSS / untrusted-content posture for general (non-Render) state echoed in `Render()`
 - `patterns.md` — Render() conventions (routing, pagination, error pages)
 - `stdlib.md` — `vm/qrender` query surface (chain side)
-- `future.md` — `<gno-form exec>` wire format and Adena integration in flight
 
 ## Source
 
 Behavior documented here is empirically observed via the per-extension example tables. For unfamiliar edge cases, the gnomcp design exposes `gno_render <pkgPath>` which executes the same pipeline a real gnoweb load uses; query that for exact rendered output rather than guessing.
 
-ext_forms is the only extension whose wire format is changing; see `future.md` for the PR train (#4438 → #4858 → #5046, Adena integration #5002).
+The exact rendered HTML for every extension is a gnoweb implementation detail (gnoweb is in Beta) — if downstream tooling parses literal markup rather than re-rendering via `gno_render`, pin to a gnoweb commit.

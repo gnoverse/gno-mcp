@@ -1,0 +1,43 @@
+{
+  "name": "gnomcp",
+  "version": "0.1.0",
+  "description": "Gno smart-contract skills + MCP server: interrealm semantics, security audit, idiomatic patterns, Render() authoring, on-chain payments, project setup.",
+  "author": {
+    "name": "gfanton",
+    "url": "https://github.com/gfanton"
+  },
+  "homepage": "https://github.com/gnoverse/gno-mcp",
+  "repository": "https://github.com/gnoverse/gno-mcp",
+  "license": "Apache-2.0",
+  "keywords": [
+    "gno",
+    "gnoland",
+    "blockchain",
+    "smart-contracts",
+    "interrealm",
+    "audit",
+    "mcp",
+    "skills"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Gno MCP",
+    "shortDescription": "Write, audit, and ship Gno smart contracts with on-chain tools",
+    "longDescription": "Use gnomcp to author, test, audit, and reason about Gno realms — the smart-contract language for gno.land. Bundles the gno skill (interrealm spec, security taxonomy, idiomatic patterns, Render() conventions, build/test setup) with an MCP server that exposes on-chain tools (gno_read, gno_inspect, gno_render, gno_eval, gno_call, gno_run, gno_session_propose).",
+    "developerName": "gfanton",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Help me write a Gno realm for X.",
+      "Audit this Gno contract before I send funds to it.",
+      "Explain how cross(cur) works in interrealm v2."
+    ],
+    "websiteURL": "https://github.com/gnoverse/gno-mcp",
+    "brandColor": "#226c57",
+    "screenshots": []
+  }
+}
