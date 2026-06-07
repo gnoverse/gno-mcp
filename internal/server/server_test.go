@@ -39,6 +39,27 @@ func TestServer_noProfileHasIndexer(t *testing.T) {
 	}
 }
 
+func TestServer_anyProfileLocal(t *testing.T) {
+	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
+		"dev":      {ChainType: "local", RPCURL: "x", ChainID: "dev"},
+		"testnet5": {ChainType: "testnet", RPCURL: "y", ChainID: "test5"},
+	}}
+	s := NewServer(cfg, "")
+	if !s.AnyProfileLocal() {
+		t.Error("AnyProfileLocal should be true")
+	}
+}
+
+func TestServer_noProfileLocal(t *testing.T) {
+	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
+		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
+	}}
+	s := NewServer(cfg, "")
+	if s.AnyProfileLocal() {
+		t.Error("AnyProfileLocal should be false")
+	}
+}
+
 func TestServer_callsRegisteredTool(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"local": {RPCURL: "x", ChainID: "dev"},

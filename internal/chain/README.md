@@ -3,6 +3,10 @@
 Captured during Milestone B Task 2.3 against `github.com/gnolang/gno v1.1.0`.
 Update this file if gno dependencies change.
 
+The chain Client exposes two write paths: **session** (`CallAsUser`/`RunAsUser` — act as the user,
+signed by an ed25519 session key) and **agent** (`Call`/`Run`/`AddPackage` — act as the agent's own
+dev/test key, signed by a `gnoclient.Signer`). See "gnoclient.Signer adapter" below.
+
 ## Call / Run signatures
 
 Verified from `go doc -all github.com/gnolang/gno/gno.land/pkg/gnoclient`:
@@ -137,19 +141,19 @@ type keys.Info interface {
 }
 ```
 
-The `chain.Signer` interface (defined in `client.go`) is **not** directly
-compatible with `gnoclient.Signer`. The adapter pattern for Real.Call/Run:
+The two write paths sign differently:
 
-- `chain.Signer.Address()` → bech32 string → `crypto.AddressFromBech32()` →
-  `MsgCall.Caller` / `MsgRun.Caller`.
-- `chain.Signer.Sign(payload)` → raw ed25519 bytes. This does NOT map to
-  `gnoclient.Signer.Sign(SignCfg)`, which signs a full `std.Tx`.
-
-Therefore Real.Call/Run must NOT wrap `chain.Signer` as a `gnoclient.Signer`.
-Instead they must use `gnoclient.SignerFromBip39` or `gnoclient.SignerFromKeybase`
-and inject it into `gnoclient.Client.Signer`. The `chain.Signer` abstraction
-provides the address lookup only; the actual tx signing uses the session
-keypair material stored on disk (Task 3.x manages this).
+- **Session path** (`Real.CallAsUser` / `Real.RunAsUser`): takes a `chain.Signer` (ed25519,
+  defined in `client.go`) plus the `master` address. It does NOT wrap `chain.Signer` as a
+  `gnoclient.Signer` — instead it builds the unsigned tx (`gnoclient.NewCallTx`/`NewRunTx`),
+  computes sign-bytes, signs with the session keypair, and injects `Signature.SessionAddr`
+  (`signTxForSession`). The tx `Caller` is the **master** address; the chain's session ante
+  verifies the session record.
+- **Agent path** (`Real.Call` / `Real.Run` / `Real.AddPackage`, dev/test only): takes a
+  **`gnoclient.Signer`** (from `internal/keystore`, built via `gnoclient.SignerFromBip39`),
+  injects it into a per-call `gnoclient.Client`, and uses gnoclient's high-level
+  `Call`/`Run`/`AddPackage`. The tx `Caller` is the agent's **own** address
+  (`signer.Info().GetAddress()`) — a standard tx, no `SessionAddr`.
 
 Account number + sequence: when `BaseTxCfg.AccountNumber == 0 &&
 SequenceNumber == 0`, `(*Client).SignTx` auto-queries the chain via

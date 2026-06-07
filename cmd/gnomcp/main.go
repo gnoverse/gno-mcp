@@ -23,6 +23,7 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/audit"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/indexer"
+	"github.com/gnoverse/gno-mcp/internal/keystore"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
@@ -92,6 +93,9 @@ func main() {
 		log.Printf("session hydration warning: %v", err)
 	}
 
+	// ---- keystore (agent identity for local/dev profiles)
+	ks := keystore.New()
+
 	// ---- register tools
 	readtools.RegisterRender(s, chainResolver)
 	readtools.RegisterEval(s, chainResolver)
@@ -105,18 +109,25 @@ func main() {
 		idxtools.RegisterActivity(s, indexerResolver)
 	}
 
-	writetools.RegisterCall(s, sessionMgr, chainResolver, auditLog)
-	writetools.RegisterRun(s, sessionMgr, chainResolver, auditLog)
+	writetools.RegisterCall(s, ks, sessionMgr, chainResolver, auditLog)
+	writetools.RegisterRun(s, ks, sessionMgr, chainResolver, auditLog)
 	writetools.RegisterAuthStatus(s, sessionMgr, chainResolver)
 	writetools.RegisterSessionPropose(s, sessionMgr)
 	writetools.RegisterSessionRevoke(s, sessionMgr)
+
+	if s.AnyProfileLocal() { // agent-only tools — only when a local profile exists
+		writetools.RegisterAddPkg(s, ks, chainResolver, auditLog)
+		writetools.RegisterKeyAddress(s, ks)
+	}
 
 	// ---- build MCP SDK server
 	instructions := "gnomcp serves Gno realm reads via the official MCP Go SDK. " +
 		"Tools are registered conditionally based on profile capabilities (see profiles.toml). " +
 		"Write tools (gno_call, gno_run) require an active " +
 		"chain-bounded session — call gno_session_propose first to authorize " +
-		"one via your own gnokey."
+		"one via your own gnokey. " +
+		"On local (dev) chains the agent writes with its own test1 account; on other chains writes go through a user-authorized session. " +
+		"For ANY write (gno_call/gno_run/gno_addpkg) always tell the user which account signed — the agent's own key or a session — so the acting identity is never ambiguous."
 	mcpServer := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "gnomcp",
 		Version: version,

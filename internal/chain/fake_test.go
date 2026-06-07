@@ -105,20 +105,20 @@ func (fakeSignerStub) Sign(_ []byte) ([]byte, error) { return nil, nil }
 func TestFake_Call_returnsSeededResult(t *testing.T) {
 	f := NewFake()
 	want := CallResult{TxHash: "0xabc", Result: "ok"}
-	f.SetCall("gno.land/r/x", "Foo", []string{"hi"}, want)
+	f.SetCallAsUser("gno.land/r/x", "Foo", []string{"hi"}, want)
 
-	got, err := f.Call(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, false)
+	got, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, false)
 	if err != nil {
-		t.Fatalf("Call: %v", err)
+		t.Fatalf("CallAsUser: %v", err)
 	}
 	if got != want {
-		t.Errorf("Call = %+v, want %+v", got, want)
+		t.Errorf("CallAsUser = %+v, want %+v", got, want)
 	}
 }
 
 func TestFake_Call_unseededReturnsError(t *testing.T) {
 	f := NewFake()
-	_, err := f.Call(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Bar", nil, false)
+	_, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Bar", nil, false)
 	if err == nil {
 		t.Fatal("expected error for unseeded call")
 	}
@@ -129,11 +129,11 @@ func TestFake_Call_unseededReturnsError(t *testing.T) {
 
 func TestFake_Call_simulateReturnsSeededWithSimulatedTrue(t *testing.T) {
 	f := NewFake()
-	f.SetCall("gno.land/r/x", "Foo", []string{"hi"}, CallResult{TxHash: "0xabc", Result: "ok", Simulated: false})
+	f.SetCallAsUser("gno.land/r/x", "Foo", []string{"hi"}, CallResult{TxHash: "0xabc", Result: "ok", Simulated: false})
 
-	got, err := f.Call(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, true)
+	got, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, true)
 	if err != nil {
-		t.Fatalf("Call: %v", err)
+		t.Fatalf("CallAsUser: %v", err)
 	}
 	if !got.Simulated {
 		t.Error("expected Simulated=true when simulate=true")
@@ -145,12 +145,12 @@ func TestFake_Call_simulateReturnsSeededWithSimulatedTrue(t *testing.T) {
 
 func TestFake_Call_setCallErrorTakesPriority(t *testing.T) {
 	f := NewFake()
-	f.SetCall("gno.land/r/x", "Foo", []string{}, CallResult{TxHash: "0xok"})
-	f.SetCallError("gno.land/r/x", "Foo", ErrSimulateUnsupported)
+	f.SetCallAsUser("gno.land/r/x", "Foo", []string{}, CallResult{TxHash: "0xok"})
+	f.SetCallAsUserError("gno.land/r/x", "Foo", ErrSimulateUnsupported)
 
-	_, err := f.Call(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{}, true)
+	_, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{}, true)
 	if err == nil {
-		t.Fatal("expected error from SetCallError")
+		t.Fatal("expected error from SetCallAsUserError")
 	}
 	if !errors.Is(err, ErrSimulateUnsupported) {
 		t.Errorf("error = %v, want ErrSimulateUnsupported", err)
@@ -162,20 +162,20 @@ func TestFake_Call_setCallErrorTakesPriority(t *testing.T) {
 func TestFake_Run_returnsSeededResult(t *testing.T) {
 	f := NewFake()
 	want := RunResult{TxHash: "0xdef", Output: "hello"}
-	f.SetRun("package main\nfunc main() {}", want)
+	f.SetRunAsUser("package main\nfunc main() {}", want)
 
-	got, err := f.Run(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", false)
+	got, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", false)
 	if err != nil {
-		t.Fatalf("Run: %v", err)
+		t.Fatalf("RunAsUser: %v", err)
 	}
 	if got != want {
-		t.Errorf("Run = %+v, want %+v", got, want)
+		t.Errorf("RunAsUser = %+v, want %+v", got, want)
 	}
 }
 
 func TestFake_Run_unseededReturnsError(t *testing.T) {
 	f := NewFake()
-	_, err := f.Run(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", false)
+	_, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", false)
 	if err == nil {
 		t.Fatal("expected error for unseeded run")
 	}
@@ -187,12 +187,12 @@ func TestFake_Run_unseededReturnsError(t *testing.T) {
 func TestFake_Run_setRunErrorTakesPriority(t *testing.T) {
 	f := NewFake()
 	code := "package main\nfunc main() {}"
-	f.SetRun(code, RunResult{Output: "ok"})
-	f.SetRunError(code, ErrSimulateUnsupported)
+	f.SetRunAsUser(code, RunResult{Output: "ok"})
+	f.SetRunAsUserError(code, ErrSimulateUnsupported)
 
-	_, err := f.Run(context.Background(), fakeSignerStub{}, "", code, true)
+	_, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", code, true)
 	if err == nil {
-		t.Fatal("expected error from SetRunError")
+		t.Fatal("expected error from SetRunAsUserError")
 	}
 	if !errors.Is(err, ErrSimulateUnsupported) {
 		t.Errorf("error = %v, want ErrSimulateUnsupported", err)
@@ -202,11 +202,11 @@ func TestFake_Run_setRunErrorTakesPriority(t *testing.T) {
 func TestFake_Run_simulateSetSimulatedTrue(t *testing.T) {
 	f := NewFake()
 	code := "package main\nfunc main() {}"
-	f.SetRun(code, RunResult{Output: "hi", Simulated: false})
+	f.SetRunAsUser(code, RunResult{Output: "hi", Simulated: false})
 
-	got, err := f.Run(context.Background(), fakeSignerStub{}, "", code, true)
+	got, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", code, true)
 	if err != nil {
-		t.Fatalf("Run: %v", err)
+		t.Fatalf("RunAsUser: %v", err)
 	}
 	if !got.Simulated {
 		t.Error("expected Simulated=true when simulate=true")

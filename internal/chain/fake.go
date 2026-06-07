@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
+	"github.com/gnolang/gno/tm2/pkg/std"
 )
 
 // Fake is an in-memory Client implementation for use in unit tests.
@@ -19,20 +22,29 @@ type Fake struct {
 	runs       map[string]RunResult
 	runErrors  map[string]error
 	sessions   map[string]SessionStatus // key: master+"|"+sessionAddr
+	// agent-identity (standard tx, no session) maps
+	agentCalls      map[string]CallResult
+	agentRuns       map[string]RunResult
+	addPkgs         map[string]AddPackageResult
+	lastAddPkgFiles map[string][]*std.MemFile // key: deployPath; set on every AddPackage call
 }
 
 func NewFake() *Fake {
 	return &Fake{
-		renders:    map[string]string{},
-		evals:      map[string]string{},
-		files:      map[string]string{},
-		listings:   map[string][]string{},
-		docs:       map[string]string{},
-		calls:      map[string]CallResult{},
-		callErrors: map[string]error{},
-		runs:       map[string]RunResult{},
-		runErrors:  map[string]error{},
-		sessions:   map[string]SessionStatus{},
+		renders:         map[string]string{},
+		evals:           map[string]string{},
+		files:           map[string]string{},
+		listings:        map[string][]string{},
+		docs:            map[string]string{},
+		calls:           map[string]CallResult{},
+		callErrors:      map[string]error{},
+		runs:            map[string]RunResult{},
+		runErrors:       map[string]error{},
+		sessions:        map[string]SessionStatus{},
+		agentCalls:      map[string]CallResult{},
+		agentRuns:       map[string]RunResult{},
+		addPkgs:         map[string]AddPackageResult{},
+		lastAddPkgFiles: map[string][]*std.MemFile{},
 	}
 }
 
@@ -82,10 +94,10 @@ func (f *Fake) Doc(_ context.Context, realm string) (string, error) {
 	return v, nil
 }
 
-// Call ignores master; the in-memory map is keyed by (realm, fn, args) only.
+// CallAsUser ignores master; the in-memory map is keyed by (realm, fn, args) only.
 // Tools tests don't assert on master because Fake is meant for tool-layer
 // integration where master plumbing is exercised separately.
-func (f *Fake) Call(_ context.Context, _ Signer, _, realm, fn string, args []string, simulate bool) (CallResult, error) {
+func (f *Fake) CallAsUser(_ context.Context, _ Signer, _, realm, fn string, args []string, simulate bool) (CallResult, error) {
 	if err, ok := f.callErrors[callKey(realm, fn, nil)]; ok {
 		return CallResult{}, err
 	}
@@ -99,8 +111,8 @@ func (f *Fake) Call(_ context.Context, _ Signer, _, realm, fn string, args []str
 	return r, nil
 }
 
-// Run ignores master; the in-memory map is keyed by code only.
-func (f *Fake) Run(_ context.Context, _ Signer, _, code string, simulate bool) (RunResult, error) {
+// RunAsUser ignores master; the in-memory map is keyed by code only.
+func (f *Fake) RunAsUser(_ context.Context, _ Signer, _, code string, simulate bool) (RunResult, error) {
 	if err, ok := f.runErrors[code]; ok {
 		return RunResult{}, err
 	}
@@ -121,22 +133,22 @@ func (f *Fake) QuerySession(_ context.Context, master, sessionAddr string) (Sess
 	return f.sessions[sessionKey(master, sessionAddr)], nil
 }
 
-func (f *Fake) SetCall(realm, fn string, args []string, result CallResult) {
+func (f *Fake) SetCallAsUser(realm, fn string, args []string, result CallResult) {
 	f.calls[callKey(realm, fn, args)] = result
 }
 
-func (f *Fake) SetCallError(realm, fn string, err error) {
+func (f *Fake) SetCallAsUserError(realm, fn string, err error) {
 	f.callErrors[callKey(realm, fn, nil)] = err
 }
 
-func (f *Fake) SetRun(code string, result RunResult) {
+func (f *Fake) SetRunAsUser(code string, result RunResult) {
 	f.runs[code] = result
 }
 
-// SetRunError seeds an error returned by Run for the given code string.
+// SetRunAsUserError seeds an error returned by RunAsUser for the given code string.
 // Checked before the runs map. Use with ErrSimulateUnsupported to exercise
 // the simulate_unsupported error path in tool tests.
-func (f *Fake) SetRunError(code string, err error) {
+func (f *Fake) SetRunAsUserError(code string, err error) {
 	f.runErrors[code] = err
 }
 
@@ -144,6 +156,62 @@ func (f *Fake) SetRunError(code string, err error) {
 // (master, sessionAddr) pair.
 func (f *Fake) SetSession(master, sessionAddr string, status SessionStatus) {
 	f.sessions[sessionKey(master, sessionAddr)] = status
+}
+
+// Call returns the seeded result for (realm, fn, args), ignoring signer.
+func (f *Fake) Call(_ context.Context, _ gnoclient.Signer, realm, fn string, args []string, simulate bool) (CallResult, error) {
+	r, ok := f.agentCalls[callKey(realm, fn, args)]
+	if !ok {
+		return CallResult{}, fmt.Errorf("fake: no call for realm=%q fn=%q args=%v", realm, fn, args)
+	}
+	if simulate {
+		r.Simulated = true
+	}
+	return r, nil
+}
+
+// Run returns the seeded result for the given code, ignoring signer.
+func (f *Fake) Run(_ context.Context, _ gnoclient.Signer, code string, simulate bool) (RunResult, error) {
+	r, ok := f.agentRuns[code]
+	if !ok {
+		return RunResult{}, fmt.Errorf("fake: no run for code (%d chars)", len(code))
+	}
+	if simulate {
+		r.Simulated = true
+	}
+	return r, nil
+}
+
+// AddPackage returns the seeded result for deployPath, ignoring signer.
+// Records files so Task 5 addpkg tests can assert the file list.
+func (f *Fake) AddPackage(_ context.Context, _ gnoclient.Signer, deployPath string, files []*std.MemFile, simulate bool) (AddPackageResult, error) {
+	f.lastAddPkgFiles[deployPath] = files
+	r, ok := f.addPkgs[deployPath]
+	if !ok {
+		return AddPackageResult{}, fmt.Errorf("fake: no addpackage for deployPath=%q", deployPath)
+	}
+	if simulate {
+		r.Simulated = true
+	}
+	return r, nil
+}
+
+func (f *Fake) SetCall(realm, fn string, args []string, result CallResult) {
+	f.agentCalls[callKey(realm, fn, args)] = result
+}
+
+func (f *Fake) SetRun(code string, result RunResult) {
+	f.agentRuns[code] = result
+}
+
+func (f *Fake) SetAddPackage(deployPath string, result AddPackageResult) {
+	f.addPkgs[deployPath] = result
+}
+
+// LastAddPackageFiles returns the files recorded by the most recent AddPackage
+// call for deployPath (test introspection).
+func (f *Fake) LastAddPackageFiles(deployPath string) []*std.MemFile {
+	return f.lastAddPkgFiles[deployPath]
 }
 
 func callKey(realm, fn string, args []string) string {

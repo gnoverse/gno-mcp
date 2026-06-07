@@ -45,6 +45,18 @@ func newReadOnlyTestServer(t *testing.T) *server.Server {
 	return server.NewServer(cfg, "")
 }
 
+// newLocalTestServer builds a Server with one "local" profile (dev, no master).
+func newLocalTestServer(t *testing.T) *server.Server {
+	t.Helper()
+	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
+		"local": {ChainType: profiles.ChainTypeLocal, RPCURL: "x", ChainID: "dev"},
+	}}
+	if _, err := cfg.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	return server.NewServer(cfg, "")
+}
+
 // constSessionMgr returns a session.Manager pre-seeded via f. f receives
 // the freshly constructed manager and may add sessions before it is used.
 func constSessionMgr(t *testing.T, f func(*session.Manager)) *session.Manager {

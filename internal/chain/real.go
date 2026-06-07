@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	"github.com/gnolang/gno/gno.land/pkg/gnoland"
+	"github.com/gnolang/gno/gno.land/pkg/gnoland/ugnot"
 	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
 	"github.com/gnolang/gno/tm2/pkg/amino"
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
@@ -125,25 +127,25 @@ func (r *Real) Doc(_ context.Context, realm string) (string, error) {
 	return string(qres.Response.Data), nil
 }
 
-// Call broadcasts (or simulates) a session-signed vm/MsgCall through gnoclient.
-// MsgCall.Caller is the master address; the signature carries the session's
-// pubkey and SessionAddr so the chain's ante handler verifies against the
-// session record at auth/accounts/<master>/session/<sessionAddr>.
-func (r *Real) Call(_ context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error) {
+// CallAsUser broadcasts (or simulates) a session-signed vm/MsgCall through
+// gnoclient. MsgCall.Caller is the master address; the signature carries the
+// session's pubkey and SessionAddr so the chain's ante handler verifies against
+// the session record at auth/accounts/<master>/session/<sessionAddr>.
+func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error) {
 	if signer == nil {
-		return CallResult{}, fmt.Errorf("call: signer required (got nil)")
+		return CallResult{}, fmt.Errorf("call as user: signer required (got nil)")
 	}
 	if master == "" {
-		return CallResult{}, fmt.Errorf("call: master address required for session-signed tx")
+		return CallResult{}, fmt.Errorf("call as user: master address required for session-signed tx")
 	}
 
 	masterAddr, err := crypto.AddressFromBech32(master)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call: invalid master address %q: %w", master, err)
+		return CallResult{}, fmt.Errorf("call as user: invalid master address %q: %w", master, err)
 	}
 	sessionAddr, err := crypto.AddressFromBech32(signer.Address())
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call: invalid session address %q: %w", signer.Address(), err)
+		return CallResult{}, fmt.Errorf("call as user: invalid session address %q: %w", signer.Address(), err)
 	}
 
 	msg := vm.MsgCall{
@@ -154,18 +156,18 @@ func (r *Real) Call(_ context.Context, signer Signer, master, realm, fn string, 
 	}
 	unsignedTx, err := gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call: build unsigned tx: %w", err)
+		return CallResult{}, fmt.Errorf("call as user: build unsigned tx: %w", err)
 	}
 
 	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call: sign tx: %w", err)
+		return CallResult{}, fmt.Errorf("call as user: sign tx: %w", err)
 	}
 
 	if simulate {
 		deliver, err := r.cli.Simulate(signedTx)
 		if err != nil {
-			return CallResult{}, fmt.Errorf("call: simulate: %w", err)
+			return CallResult{}, fmt.Errorf("call as user: simulate: %w", err)
 		}
 		return CallResult{
 			Simulated: true,
@@ -176,7 +178,7 @@ func (r *Real) Call(_ context.Context, signer Signer, master, realm, fn string, 
 
 	res, err := r.cli.BroadcastTxCommit(signedTx)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call: broadcast tx: %w", err)
+		return CallResult{}, fmt.Errorf("call as user: broadcast tx: %w", err)
 	}
 	return CallResult{
 		TxHash:  hex.EncodeToString(res.Hash),
@@ -186,41 +188,41 @@ func (r *Real) Call(_ context.Context, signer Signer, master, realm, fn string, 
 	}, nil
 }
 
-// Run broadcasts (or simulates) a session-signed vm/MsgRun. The code is
+// RunAsUser broadcasts (or simulates) a session-signed vm/MsgRun. The code is
 // wrapped in a single-file MemPackage with package name "main".
-func (r *Real) Run(_ context.Context, signer Signer, master, code string, simulate bool) (RunResult, error) {
+func (r *Real) RunAsUser(_ context.Context, signer Signer, master, code string, simulate bool) (RunResult, error) {
 	if signer == nil {
-		return RunResult{}, fmt.Errorf("run: signer required (got nil)")
+		return RunResult{}, fmt.Errorf("run as user: signer required (got nil)")
 	}
 	if master == "" {
-		return RunResult{}, fmt.Errorf("run: master address required for session-signed tx")
+		return RunResult{}, fmt.Errorf("run as user: master address required for session-signed tx")
 	}
 
 	masterAddr, err := crypto.AddressFromBech32(master)
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run: invalid master address %q: %w", master, err)
+		return RunResult{}, fmt.Errorf("run as user: invalid master address %q: %w", master, err)
 	}
 	sessionAddr, err := crypto.AddressFromBech32(signer.Address())
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run: invalid session address %q: %w", signer.Address(), err)
+		return RunResult{}, fmt.Errorf("run as user: invalid session address %q: %w", signer.Address(), err)
 	}
 
 	files := []*std.MemFile{{Name: "main.gno", Body: code}}
 	msg := vm.NewMsgRun(masterAddr, nil, files)
 	unsignedTx, err := gnoclient.NewRunTx(defaultBaseTxCfg(), msg)
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run: build unsigned tx: %w", err)
+		return RunResult{}, fmt.Errorf("run as user: build unsigned tx: %w", err)
 	}
 
 	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run: sign tx: %w", err)
+		return RunResult{}, fmt.Errorf("run as user: sign tx: %w", err)
 	}
 
 	if simulate {
 		deliver, err := r.cli.Simulate(signedTx)
 		if err != nil {
-			return RunResult{}, fmt.Errorf("run: simulate: %w", err)
+			return RunResult{}, fmt.Errorf("run as user: simulate: %w", err)
 		}
 		return RunResult{
 			Simulated: true,
@@ -231,7 +233,7 @@ func (r *Real) Run(_ context.Context, signer Signer, master, code string, simula
 
 	res, err := r.cli.BroadcastTxCommit(signedTx)
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run: broadcast tx: %w", err)
+		return RunResult{}, fmt.Errorf("run as user: broadcast tx: %w", err)
 	}
 	return RunResult{
 		TxHash:  hex.EncodeToString(res.Hash),
@@ -391,6 +393,122 @@ func isSessionNotFoundErr(err error) bool {
 // fee, not the gas actually used), so session spend tracking must deduct this —
 // not GasUsed — to stay in sync with the chain's accounting.
 const DefaultGasFeeUgnot int64 = 10_000_000
+
+// DefaultMaxDepositUgnot caps the storage deposit for an agent AddPackage. Sufficient
+// for typical realms; a deploy rejected for an insufficient deposit is the signal to raise it.
+const DefaultMaxDepositUgnot int64 = 10_000_000
+
+// agentClient returns a gnoclient.Client bound to the agent signer for a
+// standard (non-session) tx, reusing Real's RPC connection.
+func (r *Real) agentClient(signer gnoclient.Signer) *gnoclient.Client {
+	return &gnoclient.Client{RPCClient: r.cli.RPCClient, Signer: signer}
+}
+
+// Call broadcasts (or simulates) a STANDARD vm/MsgCall signed by the agent key.
+// Caller is the signer's own address; no session machinery is involved.
+func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string, args []string, simulate bool) (CallResult, error) {
+	if signer == nil {
+		return CallResult{}, fmt.Errorf("call: signer required (got nil)")
+	}
+	info, err := signer.Info()
+	if err != nil {
+		return CallResult{}, fmt.Errorf("call: signer info: %w", err)
+	}
+	cli := r.agentClient(signer)
+	msg := vm.MsgCall{Caller: info.GetAddress(), PkgPath: realm, Func: fn, Args: args}
+	if simulate {
+		unsigned, err := gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
+		if err != nil {
+			return CallResult{}, fmt.Errorf("call: build tx: %w", err)
+		}
+		signed, err := cli.SignTx(*unsigned, 0, 0)
+		if err != nil {
+			return CallResult{}, fmt.Errorf("call: sign: %w", err)
+		}
+		deliver, err := cli.Simulate(signed)
+		if err != nil {
+			return CallResult{}, fmt.Errorf("call: simulate: %w", err)
+		}
+		return CallResult{Simulated: true, GasUsed: deliver.GasUsed, Result: string(deliver.Data)}, nil
+	}
+	res, err := cli.Call(defaultBaseTxCfg(), msg)
+	if err != nil {
+		return CallResult{}, fmt.Errorf("call: broadcast: %w", err)
+	}
+	return CallResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, Result: string(res.DeliverTx.Data), GasUsed: res.DeliverTx.GasUsed}, nil
+}
+
+// Run broadcasts (or simulates) a STANDARD vm/MsgRun signed by the agent key.
+// The code is wrapped in a single-file MemPackage with package name "main".
+func (r *Real) Run(_ context.Context, signer gnoclient.Signer, code string, simulate bool) (RunResult, error) {
+	if signer == nil {
+		return RunResult{}, fmt.Errorf("run: signer required (got nil)")
+	}
+	info, err := signer.Info()
+	if err != nil {
+		return RunResult{}, fmt.Errorf("run: signer info: %w", err)
+	}
+	cli := r.agentClient(signer)
+	files := []*std.MemFile{{Name: "main.gno", Body: code}}
+	msg := vm.NewMsgRun(info.GetAddress(), nil, files)
+	if simulate {
+		unsigned, err := gnoclient.NewRunTx(defaultBaseTxCfg(), msg)
+		if err != nil {
+			return RunResult{}, fmt.Errorf("run: build tx: %w", err)
+		}
+		signed, err := cli.SignTx(*unsigned, 0, 0)
+		if err != nil {
+			return RunResult{}, fmt.Errorf("run: sign: %w", err)
+		}
+		deliver, err := cli.Simulate(signed)
+		if err != nil {
+			return RunResult{}, fmt.Errorf("run: simulate: %w", err)
+		}
+		return RunResult{Simulated: true, GasUsed: deliver.GasUsed, Output: string(deliver.Data)}, nil
+	}
+	res, err := cli.Run(defaultBaseTxCfg(), msg)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("run: broadcast: %w", err)
+	}
+	return RunResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, Output: string(res.DeliverTx.Data), GasUsed: res.DeliverTx.GasUsed}, nil
+}
+
+// AddPackage broadcasts (or simulates) a vm/MsgAddPackage signed by the agent key.
+// Defense-in-depth: MemPackage.ValidateBasic rejects unsorted files. The addpkg handler
+// (Task 5) sorts authoritatively; this guards any direct caller.
+func (r *Real) AddPackage(_ context.Context, signer gnoclient.Signer, deployPath string, files []*std.MemFile, simulate bool) (AddPackageResult, error) {
+	if signer == nil {
+		return AddPackageResult{}, fmt.Errorf("addpackage: signer required (got nil)")
+	}
+	info, err := signer.Info()
+	if err != nil {
+		return AddPackageResult{}, fmt.Errorf("addpackage: signer info: %w", err)
+	}
+	slices.SortFunc(files, func(a, b *std.MemFile) int { return strings.Compare(a.Name, b.Name) })
+	cli := r.agentClient(signer)
+	msg := vm.NewMsgAddPackage(info.GetAddress(), deployPath, files)
+	msg.MaxDeposit = std.Coins{{Denom: ugnot.Denom, Amount: DefaultMaxDepositUgnot}}
+	if simulate {
+		unsigned, err := gnoclient.NewAddPackageTx(defaultBaseTxCfg(), msg)
+		if err != nil {
+			return AddPackageResult{}, fmt.Errorf("addpackage: build tx: %w", err)
+		}
+		signed, err := cli.SignTx(*unsigned, 0, 0)
+		if err != nil {
+			return AddPackageResult{}, fmt.Errorf("addpackage: sign: %w", err)
+		}
+		deliver, err := cli.Simulate(signed)
+		if err != nil {
+			return AddPackageResult{}, fmt.Errorf("addpackage: simulate: %w", err)
+		}
+		return AddPackageResult{Simulated: true, GasUsed: deliver.GasUsed}, nil
+	}
+	res, err := cli.AddPackage(defaultBaseTxCfg(), msg)
+	if err != nil {
+		return AddPackageResult{}, fmt.Errorf("addpackage: broadcast: %w", err)
+	}
+	return AddPackageResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, GasUsed: res.DeliverTx.GasUsed}, nil
+}
 
 // defaultBaseTxCfg returns the gas/fee defaults for write txs.
 // Chain requires 1ugnot per 1000 gas; padded to 10000000ugnot @ 10M gas.

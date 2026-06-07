@@ -35,6 +35,17 @@ func (s *Server) AnyProfileHasIndexer() bool {
 	return false
 }
 
+// AnyProfileLocal reports whether any profile is a local (dev) chain — i.e. the
+// agent has a usable test1 key. Gates the agent-only tools (gno_addpkg, gno_key_address).
+func (s *Server) AnyProfileLocal() bool {
+	for _, p := range s.cfg.Profiles {
+		if p.ChainType == profiles.ChainTypeLocal {
+			return true
+		}
+	}
+	return false
+}
+
 // ProfileSchema returns the profile-arg schema for the current config + discovery.
 func (s *Server) ProfileSchema() ProfileSchema {
 	return ProfileArgSchema(s.cfg, s.discoveredLocal)

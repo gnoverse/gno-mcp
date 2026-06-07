@@ -9,6 +9,7 @@ import (
 
 	"github.com/gnoverse/gno-mcp/internal/audit"
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/gnoverse/gno-mcp/internal/keystore"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
 )
@@ -21,7 +22,7 @@ func TestRun_happyPath(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 
 	fake := chain.NewFake()
-	fake.SetRun(testCode, chain.RunResult{
+	fake.SetRunAsUser(testCode, chain.RunResult{
 		TxHash:  "0xrun1",
 		Height:  10,
 		Output:  "hello\n",
@@ -32,7 +33,7 @@ func TestRun_happyPath(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile": "testnet5",
@@ -70,7 +71,7 @@ func TestRun_missingProfile(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"code": testCode,
@@ -89,7 +90,7 @@ func TestRun_missingCode(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile": "testnet5",
@@ -108,7 +109,7 @@ func TestRun_authenticationRequired(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t) // no sessions
 	fake := chain.NewFake()
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile": "testnet5",
@@ -132,7 +133,7 @@ func TestRun_picksAnySessionWhenNoRealm(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 
 	fake := chain.NewFake()
-	fake.SetRun(testCode, chain.RunResult{
+	fake.SetRunAsUser(testCode, chain.RunResult{
 		TxHash:  "0xany",
 		Height:  5,
 		Output:  "ok\n",
@@ -145,7 +146,7 @@ func TestRun_picksAnySessionWhenNoRealm(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile": "testnet5",
@@ -166,7 +167,7 @@ func TestRun_simulateRequiresSession(t *testing.T) {
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t) // no session — simulate must still error
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -191,7 +192,7 @@ func TestRun_simulateWithSession(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 
 	fake := chain.NewFake()
-	fake.SetRun(testCode, chain.RunResult{
+	fake.SetRunAsUser(testCode, chain.RunResult{
 		Output:  "simulated\n",
 		GasUsed: 500,
 	})
@@ -199,7 +200,7 @@ func TestRun_simulateWithSession(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -228,12 +229,12 @@ func TestRun_simulateUnsupported(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 
 	fake := chain.NewFake()
-	fake.SetRunError(testCode, chain.ErrSimulateUnsupported)
+	fake.SetRunAsUserError(testCode, chain.ErrSimulateUnsupported)
 
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -258,7 +259,7 @@ func TestRun_updatesSessionSpend(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 
 	fake := chain.NewFake()
-	fake.SetRun(testCode, chain.RunResult{
+	fake.SetRunAsUser(testCode, chain.RunResult{
 		TxHash:  "0xspend",
 		GasUsed: 7000, // actual gas — must be IGNORED for spend (chain bills the GasFee)
 		Output:  "ok\n",
@@ -269,7 +270,7 @@ func TestRun_updatesSessionSpend(t *testing.T) {
 		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "100000000ugnot", true)
 	})
 
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile": "testnet5",
@@ -295,7 +296,7 @@ func TestRun_writesAuditEntry(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 
 	fake := chain.NewFake()
-	fake.SetRun(testCode, chain.RunResult{
+	fake.SetRunAsUser(testCode, chain.RunResult{
 		TxHash:  "0xaudit",
 		GasUsed: 2500,
 		Output:  "ok\n",
@@ -306,7 +307,7 @@ func TestRun_writesAuditEntry(t *testing.T) {
 		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile": "testnet5",
@@ -341,12 +342,12 @@ func TestRun_writesAuditEntry(t *testing.T) {
 func TestRun_simulateError_auditsSimErr(t *testing.T) {
 	s := newBaseTestServer(t)
 	f := chain.NewFake()
-	f.SetRunError(testCode, errors.New("node unavailable"))
+	f.SetRunAsUserError(testCode, errors.New("node unavailable"))
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 	var auditBuf bytes.Buffer
-	RegisterRun(s, mgr, constChainResolver(f), audit.NewLog(&auditBuf))
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(f), audit.NewLog(&auditBuf))
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -371,13 +372,13 @@ func TestRun_broadcastError_auditsResult(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 
 	fake := chain.NewFake()
-	fake.SetRunError(testCode, errors.New("broadcast failed"))
+	fake.SetRunAsUserError(testCode, errors.New("broadcast failed"))
 
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile": "testnet5",
@@ -393,5 +394,145 @@ func TestRun_broadcastError_auditsResult(t *testing.T) {
 	}
 	if entries[0].Result != "broadcast_err" {
 		t.Errorf("expected audit result=broadcast_err, got %q", entries[0].Result)
+	}
+}
+
+// ---- identity selector tests
+
+// TestRun_agentIdentity_local verifies that on a local profile with no identity
+// arg, gno_run defaults to "agent" and uses c.Run (not c.RunAsUser).
+func TestRun_agentIdentity_local(t *testing.T) {
+	s := newLocalTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New()
+
+	fake := chain.NewFake()
+	fake.SetRun(testCode, chain.RunResult{
+		TxHash:  "0xagentrun1",
+		Height:  5,
+		Output:  "hello\n",
+		GasUsed: 2000,
+	})
+
+	mgr := noSessionMgr(t) // no sessions — agent path must not need one
+	RegisterRun(s, ks, mgr, constChainResolver(fake), alog)
+
+	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile": "local",
+		"code":    testCode,
+	})
+	if err != nil {
+		t.Fatalf("Run (agent): %v", err)
+	}
+	if !strings.Contains(res.Text, "0xagentrun1") {
+		t.Errorf("expected tx hash in text:\n%s", res.Text)
+	}
+	if !strings.Contains(res.Text, "Signed by: agent test1 ("+keystore.Test1Address+")") {
+		t.Errorf("expected signed-by agent line in text:\n%s", res.Text)
+	}
+	sc := res.StructuredContent
+	if sc["identity"] != "agent" {
+		t.Errorf("expected identity=agent, got %v", sc["identity"])
+	}
+	if sc["signer_address"] != keystore.Test1Address {
+		t.Errorf("expected signer_address=%s, got %v", keystore.Test1Address, sc["signer_address"])
+	}
+	if _, ok := sc["master_address"]; ok {
+		t.Errorf("expected no master_address for agent identity, got %v", sc["master_address"])
+	}
+}
+
+// TestRun_sessionIdentity_explicit verifies that explicitly passing identity="session"
+// on a testnet profile uses c.RunAsUser and includes the signed-by session line.
+func TestRun_sessionIdentity_explicit(t *testing.T) {
+	s := newBaseTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New()
+
+	fake := chain.NewFake()
+	fake.SetRunAsUser(testCode, chain.RunResult{
+		TxHash:  "0xsessrun1",
+		Height:  8,
+		Output:  "hello\n",
+		GasUsed: 3500,
+	})
+
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
+	})
+	RegisterRun(s, ks, mgr, constChainResolver(fake), alog)
+
+	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "testnet5",
+		"code":     testCode,
+		"identity": "session",
+	})
+	if err != nil {
+		t.Fatalf("Run (session): %v", err)
+	}
+	if !strings.Contains(res.Text, "Signed by: session") {
+		t.Errorf("expected signed-by session line in text:\n%s", res.Text)
+	}
+	sc := res.StructuredContent
+	if sc["identity"] != "session" {
+		t.Errorf("expected identity=session, got %v", sc["identity"])
+	}
+	if sc["master_address"] == nil {
+		t.Errorf("expected master_address for session identity, got nil")
+	}
+}
+
+// TestRun_defaultSession_testnet verifies that on a testnet profile with no
+// identity arg, gno_run defaults to "session" and returns authentication_required
+// when there is no active session.
+func TestRun_defaultSession_testnet(t *testing.T) {
+	s := newBaseTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New()
+
+	fake := chain.NewFake()
+	mgr := noSessionMgr(t)
+	RegisterRun(s, ks, mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile": "testnet5",
+		"code":    testCode,
+	})
+	if err == nil {
+		t.Fatal("expected authentication_required error (default=session on testnet)")
+	}
+	te, ok := errors.AsType[*server.ToolError](err)
+	if !ok {
+		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
+	}
+	if te.Code != "authentication_required" {
+		t.Errorf("expected code=authentication_required, got %q", te.Code)
+	}
+}
+
+// TestRun_bogusIdentity verifies that an unknown identity value returns an error.
+func TestRun_bogusIdentity(t *testing.T) {
+	s := newLocalTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New()
+
+	fake := chain.NewFake()
+	mgr := noSessionMgr(t)
+	RegisterRun(s, ks, mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "local",
+		"code":     testCode,
+		"identity": "bogus",
+	})
+	if err == nil {
+		t.Fatal("expected error for bogus identity")
+	}
+	if !strings.Contains(err.Error(), "agent") || !strings.Contains(err.Error(), "session") {
+		t.Errorf("expected error mentioning agent and session, got: %v", err)
 	}
 }

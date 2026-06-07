@@ -11,7 +11,7 @@ import (
 	"github.com/gnolang/gno/tm2/pkg/std"
 )
 
-// ---- Real.Call tests
+// ---- Real.CallAsUser tests
 
 // TestReal_Call_nilSignerSimulate ensures simulate=true still needs a signer.
 func TestReal_Call_nilSignerSimulate(t *testing.T) {
@@ -19,7 +19,7 @@ func TestReal_Call_nilSignerSimulate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewReal: %v", err)
 	}
-	_, err = r.Call(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, true)
+	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, true)
 	if err == nil {
 		t.Fatal("expected error for nil signer (even with simulate=true)")
 	}
@@ -34,7 +34,7 @@ func TestReal_Call_nilSignerBroadcast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewReal: %v", err)
 	}
-	_, err = r.Call(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, false)
+	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, false)
 	if err == nil {
 		t.Fatal("expected error for nil signer in broadcast mode")
 	}
@@ -50,7 +50,7 @@ func TestReal_Call_emptyMaster(t *testing.T) {
 		t.Fatalf("NewReal: %v", err)
 	}
 	stub := &minimalSigner{addr: "g1notreal"}
-	_, err = r.Call(context.Background(), stub, "", "gno.land/r/x", "Foo", nil, false)
+	_, err = r.CallAsUser(context.Background(), stub, "", "gno.land/r/x", "Foo", nil, false)
 	if err == nil {
 		t.Fatal("expected error for empty master")
 	}
@@ -90,14 +90,14 @@ func TestNewReal_emptyChainID(t *testing.T) {
 	}
 }
 
-// ---- Real.Run tests
+// ---- Real.RunAsUser tests
 
 func TestReal_Run_simulateRequiresSigner(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
 	if err != nil {
 		t.Fatalf("NewReal: %v", err)
 	}
-	_, err = r.Run(context.Background(), nil, "g1master", "package main\nfunc main() {}", true)
+	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", true)
 	if err == nil {
 		t.Fatal("expected error for nil signer (even with simulate=true)")
 	}
@@ -111,7 +111,7 @@ func TestReal_Run_broadcastRequiresSigner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewReal: %v", err)
 	}
-	_, err = r.Run(context.Background(), nil, "g1master", "package main\nfunc main() {}", false)
+	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", false)
 	if err == nil {
 		t.Fatal("expected error for nil signer in broadcast mode")
 	}
@@ -126,7 +126,7 @@ func TestReal_Run_emptyMaster(t *testing.T) {
 		t.Fatalf("NewReal: %v", err)
 	}
 	stub := &minimalSigner{addr: "g1notreal"}
-	_, err = r.Run(context.Background(), stub, "", "package main\nfunc main() {}", false)
+	_, err = r.RunAsUser(context.Background(), stub, "", "package main\nfunc main() {}", false)
 	if err == nil {
 		t.Fatal("expected error for empty master")
 	}

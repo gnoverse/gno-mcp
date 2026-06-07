@@ -7,6 +7,7 @@ package write
 import (
 	"fmt"
 
+	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
@@ -62,31 +63,49 @@ func stringSliceArg(args map[string]any, name string) ([]string, error) {
 	return out, nil
 }
 
-// addProfileArg adds the `profile` arg to props, filtered to profiles
-// with a master-address set (writable profiles). If no writable profile
-// exists the enum is empty, so the agent has no writable target to pick.
-func addProfileArg(s *server.Server, props map[string]any, required *[]string) {
+func profileWritableBySession(p profiles.Profile) bool { return p.MasterAddress != "" }
+func profileWritableByAgent(p profiles.Profile) bool   { return p.ChainType == profiles.ChainTypeLocal }
+
+// addProfileArgFiltered populates props["profile"] with an enum filtered by keep.
+// desc is the human-readable description for the arg.
+func addProfileArgFiltered(s *server.Server, props map[string]any, required *[]string, keep func(profiles.Profile) bool, desc string) {
 	ps := s.ProfileSchema()
 	cfg := s.Config()
-	var enum []string
+	enum := []string{}
 	for _, name := range ps.Enum {
-		if cfg.Profiles[name].MasterAddress != "" {
+		if keep(cfg.Profiles[name]) {
 			enum = append(enum, name)
 		}
 	}
-	if enum == nil {
-		enum = []string{}
-	}
-	arg := map[string]any{
-		"type":        "string",
-		"enum":        enum,
-		"description": "Profile to use. Only profiles with a master-address (writable) are listed.",
-	}
-	if ps.Default != "" && cfg.Profiles[ps.Default].MasterAddress != "" {
+	arg := map[string]any{"type": "string", "enum": enum, "description": desc}
+	if ps.Default != "" && keep(cfg.Profiles[ps.Default]) {
 		arg["default"] = ps.Default
 	}
 	props["profile"] = arg
 	if ps.Required {
 		*required = append(*required, "profile")
 	}
+}
+
+// addProfileArg adds the `profile` arg to props, filtered to profiles
+// with a master-address set (session-writable profiles). If no such profile
+// exists the enum is empty, so the agent has no writable target to pick.
+func addProfileArg(s *server.Server, props map[string]any, required *[]string) {
+	addProfileArgFiltered(s, props, required, profileWritableBySession,
+		"Profile to use. Only profiles with a master-address (session-writable) are listed.")
+}
+
+// addAgentProfileArg adds the `profile` arg filtered to local (dev) profiles
+// where the agent has a test1 key available.
+func addAgentProfileArg(s *server.Server, props map[string]any, required *[]string) {
+	addProfileArgFiltered(s, props, required, profileWritableByAgent,
+		"Profile to use. Only local (dev) profiles with an agent key are listed.")
+}
+
+// addWritableProfileArg adds the `profile` arg listing all profiles writable
+// via an agent key (local) or a session (master-address).
+func addWritableProfileArg(s *server.Server, props map[string]any, required *[]string) {
+	addProfileArgFiltered(s, props, required, func(p profiles.Profile) bool {
+		return profileWritableByAgent(p) || profileWritableBySession(p)
+	}, "Profile to use. Lists profiles writable via an agent key (local) or a session (master-address).")
 }

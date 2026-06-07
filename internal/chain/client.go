@@ -4,12 +4,15 @@ package chain
 import (
 	"context"
 	"errors"
+
+	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
+	"github.com/gnolang/gno/tm2/pkg/std"
 )
 
 // Signer is the chain-bound session key abstraction used by write methods.
 // Implemented by the in-memory session keypair in internal/session/.
-// Pubkey returns the raw ed25519 public key bytes; Real.Call/Run wraps these
-// into a std.Signature alongside a non-zero SessionAddr so the ante handler
+// Pubkey returns the raw ed25519 public key bytes; Real.CallAsUser/RunAsUser wraps
+// these into a std.Signature alongside a non-zero SessionAddr so the ante handler
 // loads the matching session record from auth/accounts/<master>/session/<addr>.
 type Signer interface {
 	Address() string                     // bech32 g1...
@@ -17,9 +20,9 @@ type Signer interface {
 	Sign(payload []byte) ([]byte, error) // ed25519
 }
 
-// ErrSimulateUnsupported is returned by Real.Call/Run when the underlying
-// gnoclient does not expose a simulate primitive. Tools translate this to a
-// simulate_unsupported ToolError.
+// ErrSimulateUnsupported is returned by Real.CallAsUser/RunAsUser when the
+// underlying gnoclient does not expose a simulate primitive. Tools translate
+// this to a simulate_unsupported ToolError.
 var ErrSimulateUnsupported = errors.New("chain: simulate not supported by current gnoclient")
 
 // ErrSessionQueryUnsupported is returned when a chain client cannot resolve
@@ -42,6 +45,14 @@ type RunResult struct {
 	TxHash    string
 	Height    int64
 	Output    string
+	GasUsed   int64
+	Simulated bool
+}
+
+// AddPackageResult is the outcome of a vm/MsgAddPackage broadcast (or simulation).
+type AddPackageResult struct {
+	TxHash    string
+	Height    int64
 	GasUsed   int64
 	Simulated bool
 }
@@ -80,17 +91,18 @@ type Client interface {
 	// Backed by vm/qdoc.
 	Doc(ctx context.Context, realm string) (string, error)
 
-	// Call broadcasts (or simulates) a vm/MsgCall for the given realm function.
-	// master is the bech32 master address (g1...) the session was registered
-	// under; the broadcast MsgCall.Caller is set to master and the tx is signed
-	// by the session keypair (via signer) with Signature.SessionAddr pointing
-	// at signer.Address(). signer must be non-nil when simulate is false.
-	Call(ctx context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error)
+	// CallAsUser broadcasts (or simulates) a session-signed vm/MsgCall for the
+	// given realm function. master is the bech32 master address (g1...) the
+	// session was registered under; the broadcast MsgCall.Caller is set to
+	// master and the tx is signed by the session keypair (via signer) with
+	// Signature.SessionAddr pointing at signer.Address(). signer must be
+	// non-nil when simulate is false.
+	CallAsUser(ctx context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error)
 
-	// Run broadcasts (or simulates) a vm/MsgRun for ad-hoc gno code execution.
-	// master is the bech32 master address the session is registered under.
-	// signer must be non-nil when simulate is false.
-	Run(ctx context.Context, signer Signer, master, code string, simulate bool) (RunResult, error)
+	// RunAsUser broadcasts (or simulates) a session-signed vm/MsgRun for
+	// ad-hoc gno code execution. master is the bech32 master address the
+	// session is registered under. signer must be non-nil when simulate is false.
+	RunAsUser(ctx context.Context, signer Signer, master, code string, simulate bool) (RunResult, error)
 
 	// QuerySession returns the chain-side state for the session at
 	// auth/accounts/<master>/session/<sessionAddr>. Both arguments are bech32
@@ -99,4 +111,14 @@ type Client interface {
 	// query cannot be made (e.g. master is unknown to the caller); the
 	// session.Manager handles this by keeping local state authoritative.
 	QuerySession(ctx context.Context, master, sessionAddr string) (SessionStatus, error)
+
+	// Call broadcasts (or simulates) a STANDARD vm/MsgCall signed by the agent key
+	// (Caller = signer's own address; no master, no SessionAddr). signer is a gnoclient.Signer.
+	Call(ctx context.Context, signer gnoclient.Signer, realm, fn string, args []string, simulate bool) (CallResult, error)
+
+	// Run broadcasts (or simulates) a STANDARD vm/MsgRun signed by the agent key.
+	Run(ctx context.Context, signer gnoclient.Signer, code string, simulate bool) (RunResult, error)
+
+	// AddPackage broadcasts (or simulates) a vm/MsgAddPackage signed by the agent key.
+	AddPackage(ctx context.Context, signer gnoclient.Signer, deployPath string, files []*std.MemFile, simulate bool) (AddPackageResult, error)
 }
