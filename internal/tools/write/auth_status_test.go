@@ -58,6 +58,14 @@ func TestAuthStatus_activeSession_narrative(t *testing.T) {
 		}
 	})
 	fake := chain.NewFake()
+	// Chain confirms the session is still active (otherwise auth_status would
+	// correctly downgrade it — see TestAuthStatus_detectsRevocation).
+	fake.SetSession("g1master", seededAddr, chain.SessionStatus{
+		Active:         true,
+		AllowPaths:     []string{"gno.land/r/test/counter"},
+		SpendLimit:     "1000000ugnot",
+		SpendRemaining: "1000000ugnot",
+	})
 	RegisterAuthStatus(s, mgr, constChainResolver(fake))
 
 	res, err := s.Registry().Call(context.Background(), "gno_auth_status", map[string]any{
@@ -127,6 +135,57 @@ func TestAuthStatus_chainQueryRefreshes(t *testing.T) {
 	}
 	if updated.State != session.StateActive {
 		t.Errorf("expected manager state active after chain refresh, got %s", updated.State)
+	}
+}
+
+// TestAuthStatus_detectsRevocation verifies that a session which is active
+// locally but which the chain no longer reports active (revoked on chain) is
+// downgraded to [revoked] — not left showing [active].
+func TestAuthStatus_detectsRevocation(t *testing.T) {
+	s := newBaseTestServer(t)
+	const master = "g1master"
+	var seededAddr string
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		kp, err := session.NewKeypair()
+		if err != nil {
+			t.Fatalf("NewKeypair: %v", err)
+		}
+		scope := session.Scope{
+			AllowPaths: []string{"gno.land/r/test/counter"},
+			SpendLimit: "1000000ugnot",
+		}
+		meta, err := m.AddPending("testnet5", kp, scope, master)
+		if err != nil {
+			t.Fatalf("AddPending: %v", err)
+		}
+		seededAddr = meta.SessionAddress
+		if err := m.MarkActive("testnet5", seededAddr, chain.SessionStatus{
+			Active: true, AllowPaths: scope.AllowPaths, SpendLimit: scope.SpendLimit, SpendRemaining: scope.SpendLimit,
+		}); err != nil {
+			t.Fatalf("MarkActive: %v", err)
+		}
+	})
+
+	// Fake chain has NO record of the session → QuerySession reports !Active,
+	// as it would after an on-chain revoke.
+	fake := chain.NewFake()
+	RegisterAuthStatus(s, mgr, constChainResolver(fake))
+
+	res, err := s.Registry().Call(context.Background(), "gno_auth_status", map[string]any{
+		"profile": "testnet5",
+	})
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if !strings.Contains(res.Text, "[revoked]") {
+		t.Errorf("expected '[revoked]' after chain reports inactive:\n%s", res.Text)
+	}
+	if strings.Contains(res.Text, "[active]") {
+		t.Errorf("revoked session must not still show '[active]':\n%s", res.Text)
+	}
+	updated := mgr.Get("testnet5", seededAddr)
+	if updated == nil || updated.State != session.StateRevoked {
+		t.Errorf("expected manager state revoked, got %+v", updated)
 	}
 }
 

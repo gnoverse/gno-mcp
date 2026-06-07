@@ -103,7 +103,6 @@ func TestMain_writeToolsAbsent_whenAllReadOnly(t *testing.T) {
 chain-type = "testnet"
 rpc-url = "https://rpc.test5.gno.land:443"
 chain-id = "test5"
-allow-dangerous-tools = false
 `
 	cfg := t.TempDir()
 	cfgFile := filepath.Join(cfg, "profiles.toml")
@@ -125,18 +124,17 @@ allow-dangerous-tools = false
 
 	for _, tool := range []string{"gno_call", "gno_run", "gno_auth_status", "gno_session_propose", "gno_session_revoke"} {
 		if strings.Contains(string(out), tool) {
-			t.Errorf("write tool %q should not be in initialize response when allow-dangerous-tools=false", tool)
+			t.Errorf("write tool %q should not be in initialize response for read-only profile (no master-address)", tool)
 		}
 	}
 }
 
-func TestMain_writeToolsPresent_whenDangerousEnabled(t *testing.T) {
+func TestMain_writeToolsPresent_whenWritableProfile(t *testing.T) {
 	toml := `
 [testnet5]
 chain-type = "testnet"
 rpc-url = "https://rpc.test5.gno.land:443"
 chain-id = "test5"
-allow-dangerous-tools = true
 master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 `
 	cfg := t.TempDir()
@@ -210,18 +208,28 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 
 	for _, tool := range []string{"gno_call", "gno_run", "gno_session_propose", "gno_session_revoke", "gno_auth_status"} {
 		if !strings.Contains(out, tool) {
-			t.Errorf("write tool %q missing from initialize response when allow-dangerous-tools=true; response:\n%s", tool, out)
+			t.Errorf("write tool %q missing from initialize response for writable profile (master-address set); response:\n%s", tool, out)
 		}
 	}
 }
 
-func TestInitialize_instructions_mentionsSessions_whenDangerous(t *testing.T) {
+func TestResolveSources_Defaults(t *testing.T) {
+	t.Setenv("GNOMCP_CONFIG", "")
+	s := resolveSources("")
+	if s.GlobalPath == "" {
+		t.Error("expected a global path default")
+	}
+	if s.ProjectPath != "profiles.toml" {
+		t.Errorf("project path = %q, want profiles.toml", s.ProjectPath)
+	}
+}
+
+func TestInitialize_instructions_mentionsSessions_whenWritable(t *testing.T) {
 	toml := `
 [testnet5]
 chain-type = "testnet"
 rpc-url = "https://rpc.test5.gno.land:443"
 chain-id = "test5"
-allow-dangerous-tools = true
 master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 `
 	cfgDir := t.TempDir()

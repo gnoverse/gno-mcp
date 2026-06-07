@@ -26,11 +26,11 @@ func RegisterRead(s *server.Server, resolve chain.Resolver) {
 		InputSchema: readInputSchema(s),
 		OutputKind:  server.OutputResource,
 		Capability:  server.CapBaseRead,
-		Handler:     readHandler(resolve),
+		Handler:     readHandler(s, resolve),
 	})
 }
 
-func readHandler(resolve chain.Resolver) server.Handler {
+func readHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
 		realm, err := stringArg(args, "realm")
 		if err != nil {
@@ -58,6 +58,11 @@ func readHandler(resolve chain.Resolver) server.Handler {
 			if err != nil {
 				return server.Result{}, fmt.Errorf("gno_read: %w", err)
 			}
+			gnowebURL := ""
+			if p, ok := s.Config().Profiles[profile]; ok {
+				gnowebURL = gnowebURLFor(p.RPCURL, realm, "")
+			}
+			body, _ = budgetBody(body, gnowebURL)
 			return server.Result{
 				ResourceURI:  "gno://" + realm + "/" + file,
 				ResourceBody: body,
@@ -69,9 +74,15 @@ func readHandler(resolve chain.Resolver) server.Handler {
 		if err != nil {
 			return server.Result{}, fmt.Errorf("gno_read: %w", err)
 		}
+		listing := strings.Join(names, "\n") + "\n"
+		gnowebURL := ""
+		if p, ok := s.Config().Profiles[profile]; ok {
+			gnowebURL = gnowebURLFor(p.RPCURL, realm, "")
+		}
+		listing, _ = budgetBody(listing, gnowebURL)
 		return server.Result{
 			ResourceURI:  "gno://" + realm,
-			ResourceBody: strings.Join(names, "\n") + "\n",
+			ResourceBody: listing,
 			ResourceMIME: "text/plain",
 		}, nil
 	}

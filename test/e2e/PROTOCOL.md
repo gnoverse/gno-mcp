@@ -111,13 +111,13 @@ gno_call(profile=local, realm=gno.land/r/test/counter, func=Increment)
 
 Pass: `isError`, `code=authentication_required`, `next_action=gno_session_propose`.
 
-### Check 3 — dangerous_disabled on non-dangerous profile
+### Check 3 — authentication_required on profile without an active session
 
 ```
 gno_call(profile=local-safe, realm=gno.land/r/test/counter, func=Increment)
 ```
 
-Pass: `isError`, `code=dangerous_disabled`, text mentions editing `profiles.toml`.
+Pass: `isError`, `code=authentication_required`, text suggests `gno_session_propose`.
 
 ### Check 4 — Session propose returns a runnable gnokey command
 
@@ -133,7 +133,7 @@ Pass:
 
 ### Check 4b — Realm functions need `cur realm` for MsgCall
 
-Realms invoked by `gno_call` must declare an explicit `cur realm` first parameter (e.g. `func Increment(cur realm) int`). The chain refuses MsgCall against non-crossing functions with `function X is non-crossing and cannot be called with MsgCall; query with vm/qeval or use MsgRun`. The bundled `test/e2e/realms/*.gno` files conform; if you add your own realm to test session-signed writes, ensure every callable function follows this signature.
+Realms invoked by `gno_call` must declare an explicit `cur realm` first parameter (e.g. `func Increment(cur realm) int`). The chain refuses MsgCall against non-crossing functions with `function X is non-crossing and cannot be called with MsgCall; query with vm/qeval or use MsgRun`. The bundled `test/e2e/realms/gno.land/r/test/*/*.gno` files conform; if you add your own realm to test session-signed writes, ensure every callable function follows this signature.
 
 ### Check 5 — User signs and session activates
 

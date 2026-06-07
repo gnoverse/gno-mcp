@@ -9,18 +9,17 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/session"
 )
 
-// newBaseTestServer builds a Server with one "testnet5" profile that has
-// AllowDangerousTools=true. No tools registered; callers register only the
+// newBaseTestServer builds a Server with one "testnet5" profile that has a
+// master-address (writable). No tools registered; callers register only the
 // tool under test.
 func newBaseTestServer(t *testing.T) *server.Server {
 	t.Helper()
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"testnet5": {
-			ChainType:           "testnet",
-			RPCURL:              "x",
-			ChainID:             "test5",
-			AllowDangerousTools: true,
-			MasterAddress:       "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
+			ChainType:     "testnet",
+			RPCURL:        "x",
+			ChainID:       "test5",
+			MasterAddress: "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 		},
 	}}
 	if _, err := cfg.Validate(); err != nil {
@@ -30,15 +29,14 @@ func newBaseTestServer(t *testing.T) *server.Server {
 }
 
 // newReadOnlyTestServer builds a Server with one "testnet5" profile that has
-// AllowDangerousTools=false. Used to exercise dangerous_disabled error paths.
+// no master-address (read-only). Used to test behavior with a read-only profile.
 func newReadOnlyTestServer(t *testing.T) *server.Server {
 	t.Helper()
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"testnet5": {
-			ChainType:           "testnet",
-			RPCURL:              "x",
-			ChainID:             "test5",
-			AllowDangerousTools: false,
+			ChainType: "testnet",
+			RPCURL:    "x",
+			ChainID:   "test5",
 		},
 	}}
 	if _, err := cfg.Validate(); err != nil {

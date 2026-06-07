@@ -59,7 +59,7 @@ func TestLoad_parsesWriteAuthFields(t *testing.T) {
 [local]
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
-allow-dangerous-tools = true
+master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 default-spend-limit = "1000000ugnot"
 default-expires-in = "4h"
 bypass-hard-limits = true
@@ -69,8 +69,8 @@ bypass-hard-limits = true
 		t.Fatalf("Load: %v", err)
 	}
 	p := cfg.Profiles["local"]
-	if !p.AllowDangerousTools {
-		t.Error("expected allow-dangerous-tools=true")
+	if p.MasterAddress != "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3" {
+		t.Errorf("expected master-address=g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3, got %q", p.MasterAddress)
 	}
 	if got := p.DefaultSpendLimit; got != "1000000ugnot" {
 		t.Errorf("expected default-spend-limit=1000000ugnot, got %q", got)

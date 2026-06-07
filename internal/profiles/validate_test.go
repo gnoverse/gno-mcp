@@ -36,7 +36,7 @@ func TestValidate_chainTypeDefaultsToTestnet(t *testing.T) {
 	cfg, err := Load(strings.NewReader(`
 [mystery]
 rpc-url = "https://rpc.example/"
-chain-id = "x"
+chain-id = "test5"
 `))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -138,52 +138,6 @@ default-spend-limit = %q
 	}
 }
 
-func TestValidate_rejectsBypassWithoutDangerous(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
-[local]
-rpc-url = "http://127.0.0.1:26657"
-chain-id = "dev"
-bypass-hard-limits = true
-allow-dangerous-tools = false
-`))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	_, err = cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error for bypass-hard-limits without allow-dangerous-tools")
-	}
-	if !strings.Contains(err.Error(), "bypass-hard-limits requires allow-dangerous-tools") {
-		t.Errorf("error %q should explain the dependency", err)
-	}
-}
-
-func TestValidate_mainnetDangerousEmitsWarning(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
-[prod]
-chain-type = "mainnet"
-rpc-url = "https://rpc.gno.land:443"
-chain-id = "portal-loop"
-allow-dangerous-tools = true
-master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
-`))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	warn, validateErr := cfg.Validate()
-
-	if validateErr != nil {
-		t.Fatalf("Validate returned unexpected error: %v", validateErr)
-	}
-	if warn == nil {
-		t.Fatal("expected non-nil warning for mainnet+allow-dangerous-tools")
-	}
-	if !strings.Contains(warn.Error(), "mainnet with allow-dangerous-tools") {
-		t.Errorf("warning %q should mention mainnet with allow-dangerous-tools", warn)
-	}
-}
-
 func TestValidate_acceptsValidExpiresIn(t *testing.T) {
 	cases := []string{"0s", "500ms", "2h", "72h30m", "168h"}
 	for _, val := range cases {
@@ -210,7 +164,6 @@ func TestValidate_acceptsValidWriteFields(t *testing.T) {
 chain-type = "local"
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
-allow-dangerous-tools = true
 master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 default-spend-limit = "500000ugnot"
 default-expires-in = "2h"
@@ -224,31 +177,11 @@ bypass-hard-limits = true
 	}
 }
 
-func TestValidate_requiresMasterAddressWhenDangerous(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
-[local]
-rpc-url = "http://127.0.0.1:26657"
-chain-id = "dev"
-allow-dangerous-tools = true
-`))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	_, err = cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error when allow-dangerous-tools=true and master-address empty")
-	}
-	if !strings.Contains(err.Error(), "master-address is required") {
-		t.Errorf("error %q should explain master-address requirement", err)
-	}
-}
-
 func TestValidate_rejectsMalformedMasterAddress(t *testing.T) {
 	cfg, err := Load(strings.NewReader(`
 [local]
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
-allow-dangerous-tools = true
 master-address = "not-a-bech32-address"
 `))
 	if err != nil {
@@ -296,5 +229,86 @@ chain-id = "dev"
 	}
 	if _, err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate: unexpected error for read-only profile without master-address: %v", err)
+	}
+}
+
+func TestValidate_ChainIDAllowlist(t *testing.T) {
+	cases := []struct {
+		name    string
+		chainID string
+		wantErr bool
+	}{
+		{"dev-ok", "dev", false},
+		{"test11-ok", "test11", false},
+		{"test-13-hyphen-ok", "test-13", false},
+		{"betanet-rejected", "gnoland1", true},
+		{"staging-rejected", "staging", true},
+		{"arbitrary-rejected", "mychain", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{Profiles: map[string]Profile{
+				"p": {RPCURL: "https://rpc.example:443", ChainID: tc.chainID},
+			}}
+			_, err := cfg.Validate()
+			if tc.wantErr && err == nil {
+				t.Fatalf("chain-id %q: expected reject, got nil", tc.chainID)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("chain-id %q: expected ok, got %v", tc.chainID, err)
+			}
+		})
+	}
+}
+
+func TestValidate_MasterAddressOptional(t *testing.T) {
+	// No master-address → valid (read-only profile).
+	cfg := &Config{Profiles: map[string]Profile{
+		"testnet": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
+	}}
+	if _, err := cfg.Validate(); err != nil {
+		t.Fatalf("read-only profile should validate, got %v", err)
+	}
+}
+
+func TestValidate_BypassRequiresMaster(t *testing.T) {
+	cfg := &Config{Profiles: map[string]Profile{
+		"p": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11", BypassHardLimits: true},
+	}}
+	if _, err := cfg.Validate(); err == nil {
+		t.Fatal("bypass-hard-limits without master-address should be rejected")
+	}
+}
+
+func TestValidate_BypassWithMasterAccepted(t *testing.T) {
+	// bypass-hard-limits + a master-address is now valid. Under the old
+	// allow-dangerous-tools model this required dangerous=true and would
+	// have been rejected — this is the distinguishing behavior change.
+	cfg := &Config{Profiles: map[string]Profile{
+		"p": {
+			RPCURL:           "https://rpc.test11.testnets.gno.land:443",
+			ChainID:          "test11",
+			BypassHardLimits: true,
+			MasterAddress:    "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
+		},
+	}}
+	if _, err := cfg.Validate(); err != nil {
+		t.Fatalf("bypass + master-address should be accepted, got %v", err)
+	}
+}
+
+func TestValidate_DerivesChainType(t *testing.T) {
+	cfg := &Config{Profiles: map[string]Profile{
+		"local":   {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
+		"testnet": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
+	}}
+	if _, err := cfg.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if got := cfg.Profiles["local"].ChainType; got != ChainTypeLocal {
+		t.Errorf("local chain-type = %q, want %q", got, ChainTypeLocal)
+	}
+	if got := cfg.Profiles["testnet"].ChainType; got != ChainTypeTestnet {
+		t.Errorf("testnet chain-type = %q, want %q", got, ChainTypeTestnet)
 	}
 }

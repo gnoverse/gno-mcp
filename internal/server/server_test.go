@@ -39,32 +39,6 @@ func TestServer_noProfileHasIndexer(t *testing.T) {
 	}
 }
 
-func TestServer_anyProfileAllowsDangerous_true(t *testing.T) {
-	cfg := &profiles.Config{
-		Profiles: map[string]profiles.Profile{
-			"safe":      {ChainType: "testnet", RPCURL: "http://x:26657", ChainID: "t", AllowDangerousTools: false},
-			"dangerous": {ChainType: "local", RPCURL: "http://x:26657", ChainID: "dev", AllowDangerousTools: true},
-		},
-	}
-	s := NewServer(cfg, "")
-	if !s.AnyProfileAllowsDangerous() {
-		t.Error("expected true when at least one profile has AllowDangerousTools=true")
-	}
-}
-
-func TestServer_anyProfileAllowsDangerous_false(t *testing.T) {
-	cfg := &profiles.Config{
-		Profiles: map[string]profiles.Profile{
-			"a": {ChainType: "testnet", RPCURL: "http://x:26657", ChainID: "t", AllowDangerousTools: false},
-			"b": {ChainType: "testnet", RPCURL: "http://y:26657", ChainID: "t", AllowDangerousTools: false},
-		},
-	}
-	s := NewServer(cfg, "")
-	if s.AnyProfileAllowsDangerous() {
-		t.Error("expected false when no profile has AllowDangerousTools=true")
-	}
-}
-
 func TestServer_callsRegisteredTool(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"local": {RPCURL: "x", ChainID: "dev"},

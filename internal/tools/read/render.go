@@ -21,11 +21,11 @@ func RegisterRender(s *server.Server, resolve chain.Resolver) {
 		InputSchema: renderInputSchema(s),
 		OutputKind:  server.OutputResource,
 		Capability:  server.CapBaseRead,
-		Handler:     renderHandler(resolve),
+		Handler:     renderHandler(s, resolve),
 	})
 }
 
-func renderHandler(resolve chain.Resolver) server.Handler {
+func renderHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
 		realm, err := stringArg(args, "realm")
 		if err != nil {
@@ -51,6 +51,11 @@ func renderHandler(resolve chain.Resolver) server.Handler {
 		if err != nil {
 			return server.Result{}, fmt.Errorf("gno_render: %w", err)
 		}
+		gnowebURL := ""
+		if p, ok := s.Config().Profiles[profile]; ok {
+			gnowebURL = gnowebURLFor(p.RPCURL, realm, path)
+		}
+		body, _ = budgetBody(body, gnowebURL)
 		uri := "gno://" + realm
 		if path != "" {
 			uri += "/" + path

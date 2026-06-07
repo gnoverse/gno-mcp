@@ -12,25 +12,34 @@ import (
 const (
 	ChainTypeLocal   = "local"
 	ChainTypeTestnet = "testnet"
-	ChainTypeMainnet = "mainnet"
 )
 
 var (
 	validChainTypes = map[string]bool{
 		ChainTypeLocal:   true,
 		ChainTypeTestnet: true,
-		ChainTypeMainnet: true,
 	}
 
 	// spendLimitRE matches a single-denomination coin amount: digits followed by
 	// lowercase letters (e.g. "1000000ugnot", "10gnot"). Cross-denom mixes rejected.
 	spendLimitRE = regexp.MustCompile(`^[0-9]+[a-z]+$`)
+
+	// chainIDRE is the allowlist: only local dev and numbered testnets.
+	// Admits "test11" and the hyphenated "test-13" form. Betanet ("gnoland1"),
+	// "staging", and arbitrary ids are rejected — they cannot enter the config.
+	chainIDRE = regexp.MustCompile(`^(dev|test-?\d+)$`)
 )
+
+// ChainIDAllowed reports whether a chain-id is permitted (local dev or a
+// numbered testnet). Betanet/mainnet/staging are rejected.
+func ChainIDAllowed(chainID string) bool {
+	return chainIDRE.MatchString(chainID)
+}
 
 // Validate checks required fields and applies defaults in place.
 // The returned warning is non-nil when a valid but potentially dangerous
-// configuration is detected (e.g. mainnet with allow-dangerous-tools=true).
-// The caller decides how to surface the warning (log, stderr, ignore).
+// configuration is detected. The caller decides how to surface the warning
+// (log, stderr, ignore).
 func (c *Config) Validate() (warn error, err error) {
 	if len(c.Profiles) == 0 {
 		return nil, fmt.Errorf("no profiles loaded")
@@ -42,11 +51,18 @@ func (c *Config) Validate() (warn error, err error) {
 		if p.ChainID == "" {
 			return nil, fmt.Errorf("profile %q: missing required chain-id", name)
 		}
+		if !ChainIDAllowed(p.ChainID) {
+			return nil, fmt.Errorf("profile %q: chain-id %q is not allowed (only dev or testNN are permitted; betanet/mainnet/staging are forbidden)", name, p.ChainID)
+		}
 		if p.ChainType == "" {
-			p.ChainType = ChainTypeTestnet
+			if p.ChainID == "dev" {
+				p.ChainType = ChainTypeLocal
+			} else {
+				p.ChainType = ChainTypeTestnet
+			}
 		}
 		if !validChainTypes[p.ChainType] {
-			return nil, fmt.Errorf("profile %q: unknown chain-type %q (must be local/testnet/mainnet)", name, p.ChainType)
+			return nil, fmt.Errorf("profile %q: unknown chain-type %q (must be local or testnet)", name, p.ChainType)
 		}
 
 		if p.DefaultExpiresIn != "" {
@@ -59,22 +75,16 @@ func (c *Config) Validate() (warn error, err error) {
 				return nil, fmt.Errorf("profile %q: invalid default-spend-limit %q (expected like \"1000ugnot\")", name, p.DefaultSpendLimit)
 			}
 		}
-		if p.BypassHardLimits && !p.AllowDangerousTools {
-			return nil, fmt.Errorf("profile %q: bypass-hard-limits requires allow-dangerous-tools=true (bypass is meaningless without write tools)", name)
+		if p.BypassHardLimits && p.MasterAddress == "" {
+			return nil, fmt.Errorf("profile %q: bypass-hard-limits requires master-address (bypass only affects write sessions)", name)
 		}
 		if p.MasterAddress != "" {
 			if _, err := crypto.AddressFromBech32(p.MasterAddress); err != nil {
 				return nil, fmt.Errorf("profile %q: invalid master-address %q: %w", name, p.MasterAddress, err)
 			}
-		} else if p.AllowDangerousTools {
-			return nil, fmt.Errorf("profile %q: master-address is required when allow-dangerous-tools=true", name)
 		}
 
 		c.Profiles[name] = p
-
-		if p.ChainType == ChainTypeMainnet && p.AllowDangerousTools {
-			warn = fmt.Errorf("profile %q: mainnet with allow-dangerous-tools=true. Real funds at stake", name)
-		}
 	}
 	return warn, nil
 }

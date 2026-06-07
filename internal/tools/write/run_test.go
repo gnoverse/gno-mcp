@@ -102,30 +102,6 @@ func TestRun_missingCode(t *testing.T) {
 	}
 }
 
-func TestRun_dangerousDisabled(t *testing.T) {
-	s := newReadOnlyTestServer(t)
-	var auditBuf bytes.Buffer
-	alog := audit.NewLog(&auditBuf)
-	mgr := noSessionMgr(t)
-	fake := chain.NewFake()
-	RegisterRun(s, mgr, constChainResolver(fake), alog)
-
-	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
-		"profile": "testnet5",
-		"code":    testCode,
-	})
-	if err == nil {
-		t.Fatal("expected dangerous_disabled error")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "dangerous_disabled" {
-		t.Errorf("expected code=dangerous_disabled, got %q", te.Code)
-	}
-}
-
 func TestRun_authenticationRequired(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
@@ -284,13 +260,13 @@ func TestRun_updatesSessionSpend(t *testing.T) {
 	fake := chain.NewFake()
 	fake.SetRun(testCode, chain.RunResult{
 		TxHash:  "0xspend",
-		GasUsed: 7000,
+		GasUsed: 7000, // actual gas — must be IGNORED for spend (chain bills the GasFee)
 		Output:  "ok\n",
 	})
 
 	var sessionAddr string
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
+		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "100000000ugnot", true)
 	})
 
 	RegisterRun(s, mgr, constChainResolver(fake), alog)
@@ -307,8 +283,9 @@ func TestRun_updatesSessionSpend(t *testing.T) {
 	if meta == nil {
 		t.Fatal("session not found after run")
 	}
-	if meta.SpendRemaining == "1000000ugnot" {
-		t.Errorf("SpendRemaining was not updated: %s", meta.SpendRemaining)
+	// The chain bills the full GasFee (10M), not GasUsed (7000): 100M - 10M = 90M (guards #5).
+	if meta.SpendRemaining != "90000000ugnot" {
+		t.Errorf("SpendRemaining: got %s, want 90000000ugnot (deduct GasFee, not GasUsed)", meta.SpendRemaining)
 	}
 }
 

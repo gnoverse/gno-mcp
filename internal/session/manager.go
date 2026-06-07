@@ -387,6 +387,29 @@ func (m *Manager) MarkActive(profile, sessionAddr string, status chain.SessionSt
 	return nil
 }
 
+// ---- MarkInactive
+
+// MarkInactive transitions a known session to a terminal state (StateRevoked or
+// StateExpired) and persists it. Used by gno_auth_status when the chain no
+// longer reports a previously-active session as active. Returns an error if the
+// session is not found.
+func (m *Manager) MarkInactive(profile, sessionAddr, state string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ss := m.getStateLocked(profile, sessionAddr)
+	if ss == nil {
+		return fmt.Errorf("session/manager: MarkInactive: session %q not found for profile %q", sessionAddr, profile)
+	}
+	ss.meta.State = state
+	ss.state = state
+
+	if err := m.store.Write(profile, ss.meta); err != nil {
+		return fmt.Errorf("session/manager: MarkInactive: persist: %w", err)
+	}
+	return nil
+}
+
 // ---- Internal helpers
 
 // insertState is the unlocked wrapper — acquires the lock, then calls insertStateLocked.

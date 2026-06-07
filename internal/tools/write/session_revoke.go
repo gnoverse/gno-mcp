@@ -62,13 +62,6 @@ func sessionRevokeHandler(
 	if !ok {
 		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
 	}
-	if !profile.AllowDangerousTools {
-		return server.Result{}, &server.ToolError{
-			Code:    "dangerous_disabled",
-			Message: fmt.Sprintf("profile %q: allow-dangerous-tools is not set — edit profiles.toml to enable write tools", profileName),
-			Extra:   map[string]any{"profile": profileName},
-		}
-	}
 
 	meta := sessionMgr.Get(profileName, sessionAddr)
 	if meta == nil {

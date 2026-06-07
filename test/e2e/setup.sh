@@ -159,7 +159,7 @@ done
 deploy_realm() {
   local name="$1"
   local pkgpath="gno.land/r/test/${name}"
-  local pkgdir="${REALMS_DIR}/${name}"
+  local pkgdir="${REALMS_DIR}/gno.land/r/test/${name}"
   echo "INFO: deploying ${pkgpath}..."
   # Tolerate "already deployed" errors from gnodev (idempotent re-runs).
   # Empty password from stdin (master key was created with no passphrase).

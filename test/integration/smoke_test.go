@@ -50,11 +50,10 @@ func TestSmoke_sessionPropose_returnsValidCommand(t *testing.T) {
 	cfg := &profiles.Config{
 		Profiles: map[string]profiles.Profile{
 			"test11": {
-				ChainType:           "testnet",
-				RPCURL:              "https://rpc.test11.testnets.gno.land:443",
-				ChainID:             "test11",
-				AllowDangerousTools: true,
-				MasterAddress:       "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
+				ChainType:     "testnet",
+				RPCURL:        "https://rpc.test11.testnets.gno.land:443",
+				ChainID:       "test11",
+				MasterAddress: "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 			},
 		},
 	}

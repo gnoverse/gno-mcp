@@ -69,8 +69,8 @@ func TestResolveScope_hardcodedFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if scope.SpendLimit != "100000ugnot" {
-		t.Errorf("SpendLimit: got %q, want hardcoded 100000ugnot", scope.SpendLimit)
+	if scope.SpendLimit != "100000000ugnot" {
+		t.Errorf("SpendLimit: got %q, want hardcoded 100000000ugnot", scope.SpendLimit)
 	}
 	if scope.ExpiresIn != time.Hour {
 		t.Errorf("ExpiresIn: got %v, want hardcoded 1h", scope.ExpiresIn)
@@ -80,18 +80,18 @@ func TestResolveScope_hardcodedFallback(t *testing.T) {
 // ---- Layer 4: hard-limit clamps
 
 func TestResolveScope_clampsSpendLimit(t *testing.T) {
-	// mainnet cap is 1000ugnot; agent asks for 5000ugnot
-	p := testProfile(profiles.ChainTypeMainnet)
+	// testnet cap is 100000000ugnot; agent asks for 500000000ugnot
+	p := testProfile(profiles.ChainTypeTestnet)
 	args := ScopeArgs{
-		SpendLimit: "5000ugnot",
+		SpendLimit: "500000000ugnot",
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 	}
 	scope, warns, err := ResolveScope(args, p)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if scope.SpendLimit != "1000ugnot" {
-		t.Errorf("SpendLimit: got %q, want 1000ugnot (clamped)", scope.SpendLimit)
+	if scope.SpendLimit != "100000000ugnot" {
+		t.Errorf("SpendLimit: got %q, want 100000000ugnot (clamped)", scope.SpendLimit)
 	}
 	if len(warns) == 0 {
 		t.Error("expected a warning for clamped spend_limit")
@@ -102,22 +102,22 @@ func TestResolveScope_clampsSpendLimit(t *testing.T) {
 }
 
 func TestResolveScope_clampsExpiresIn(t *testing.T) {
-	// mainnet cap is 1h; agent asks for 48h
-	p := testProfile(profiles.ChainTypeMainnet)
+	// testnet cap is 7*24h; agent asks for 30*24h
+	p := testProfile(profiles.ChainTypeTestnet)
 	args := ScopeArgs{
 		SpendLimit: "100ugnot",
-		ExpiresIn:  "48h",
+		ExpiresIn:  "720h",
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 	}
 	scope, warns, err := ResolveScope(args, p)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if scope.ExpiresIn != time.Hour {
-		t.Errorf("ExpiresIn: got %v, want 1h (clamped)", scope.ExpiresIn)
+	if scope.ExpiresIn != 7*24*time.Hour {
+		t.Errorf("ExpiresIn: got %v, want 168h (clamped)", scope.ExpiresIn)
 	}
-	if scope.SpendPeriod != time.Hour {
-		t.Errorf("SpendPeriod: got %v, want 1h (clamped)", scope.SpendPeriod)
+	if scope.SpendPeriod != 7*24*time.Hour {
+		t.Errorf("SpendPeriod: got %v, want 168h (clamped)", scope.SpendPeriod)
 	}
 	if len(warns) == 0 {
 		t.Error("expected a warning for clamped expires_in")
@@ -128,10 +128,10 @@ func TestResolveScope_clampsExpiresIn(t *testing.T) {
 }
 
 func TestResolveScope_clampsAllowPathsCount(t *testing.T) {
-	// mainnet cap is 3; agent supplies 10
-	p := testProfile(profiles.ChainTypeMainnet)
+	// testnet cap is 10; agent supplies 15
+	p := testProfile(profiles.ChainTypeTestnet)
 	var paths []string
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 15; i++ {
 		paths = append(paths, "gno.land/r/myorg/p"+string(rune('0'+i)))
 	}
 	args := ScopeArgs{
@@ -142,8 +142,8 @@ func TestResolveScope_clampsAllowPathsCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(scope.AllowPaths) != 3 {
-		t.Errorf("AllowPaths count: got %d, want 3 (clamped)", len(scope.AllowPaths))
+	if len(scope.AllowPaths) != 10 {
+		t.Errorf("AllowPaths count: got %d, want 10 (clamped)", len(scope.AllowPaths))
 	}
 	if len(warns) == 0 {
 		t.Error("expected a warning for clamped allow_paths")
@@ -157,7 +157,7 @@ func TestResolveScope_clampsAllowPathsCount(t *testing.T) {
 
 func TestResolveScope_bypassSkipsClamps(t *testing.T) {
 	p := &profiles.Profile{
-		ChainType:        profiles.ChainTypeMainnet,
+		ChainType:        profiles.ChainTypeTestnet,
 		BypassHardLimits: true,
 	}
 	args := ScopeArgs{

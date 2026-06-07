@@ -97,11 +97,9 @@ func Test_stringSliceArg_nonStringElement_errors(t *testing.T) {
 
 // ---- addProfileArg tests
 
-func Test_addProfileArg_filtersToDangerous(t *testing.T) {
-	s := newBaseTestServer(t) // has "testnet5" with AllowDangerousTools=true
-	// Build a second server with an extra non-dangerous profile.
-	// We use the base server's profile count as a proxy:
-	// the enum must contain exactly the dangerous profiles.
+func Test_addProfileArg_filtersToWritable(t *testing.T) {
+	s := newBaseTestServer(t) // has "testnet5" with a master-address (writable)
+	// The enum must contain exactly the writable profiles.
 	props := map[string]any{}
 	var required []string
 	addProfileArg(s, props, &required)
@@ -114,7 +112,7 @@ func Test_addProfileArg_filtersToDangerous(t *testing.T) {
 	if !ok {
 		t.Fatal("enum field missing or wrong type")
 	}
-	// Base server has one dangerous profile: "testnet5"
+	// Base server has one writable profile: "testnet5"
 	if len(enum) != 1 || enum[0] != "testnet5" {
 		t.Errorf("enum = %v, want [testnet5]", enum)
 	}

@@ -14,7 +14,12 @@ type HardLimits struct {
 }
 
 const (
-	hardDefaultSpendLimit = "100000ugnot"
+	// hardDefaultSpendLimit must comfortably exceed the per-call gas-fee
+	// reservation (the chain's session ante reserves the full tx GasFee, 10M
+	// ugnot here, against the spend-limit before execution — see auth.ante
+	// Phase 2a). At 100M a default session covers ~10 calls. Only dev/test
+	// chains are allowed, so the spend-limit guards testnet funds only.
+	hardDefaultSpendLimit = "100000000ugnot"
 	hardDefaultExpiresIn  = time.Hour
 )
 
@@ -52,15 +57,9 @@ func (p Profile) HardLimits() HardLimits {
 			MaxExpiresIn:       30 * 24 * time.Hour,
 			MaxAllowPathsCount: 20,
 		}
-	case ChainTypeMainnet:
-		return HardLimits{
-			MaxSpendLimit:      "1000ugnot",
-			MaxExpiresIn:       time.Hour,
-			MaxAllowPathsCount: 3,
-		}
 	default:
 		return HardLimits{
-			MaxSpendLimit:      "10000000ugnot",
+			MaxSpendLimit:      "100000000ugnot",
 			MaxExpiresIn:       7 * 24 * time.Hour,
 			MaxAllowPathsCount: 10,
 		}

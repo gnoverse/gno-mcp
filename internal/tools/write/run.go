@@ -73,18 +73,11 @@ func runHandler(
 		return server.Result{}, err
 	}
 
-	// ---- Gate on AllowDangerousTools
+	// ---- Resolve profile + chain client
 
 	profile, ok := s.Config().Profiles[profileName]
 	if !ok {
 		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
-	}
-	if !profile.AllowDangerousTools {
-		return server.Result{}, &server.ToolError{
-			Code:    "dangerous_disabled",
-			Message: fmt.Sprintf("profile %q: allow-dangerous-tools is not set — edit profiles.toml to enable write tools", profileName),
-			Extra:   map[string]any{"profile": profileName},
-		}
 	}
 
 	// ---- Resolve chain client
@@ -112,8 +105,7 @@ func runHandler(
 				Extra: map[string]any{"profile": profileName},
 			}
 		}
-		var scopeMismatch *session.ErrScopeMismatch
-		if errors.As(pickErr, &scopeMismatch) {
+		if _, ok := errors.AsType[*session.ErrScopeMismatch](pickErr); ok {
 			return server.Result{}, &server.ToolError{
 				Code: "authentication_required",
 				Message: fmt.Sprintf(
@@ -158,8 +150,10 @@ func runHandler(
 
 	// ---- Update spend + audit (simulate skips spend update)
 
+	// The chain bills the session the full GasFee per tx, not GasUsed, so deduct
+	// that to keep local SpendRemaining in sync with the chain (see chain.DefaultGasFeeUgnot).
 	if !simulate {
-		_ = sessionMgr.UpdateSpend(profileName, sessionAddr, rr.GasUsed)
+		_ = sessionMgr.UpdateSpend(profileName, sessionAddr, chain.DefaultGasFeeUgnot)
 	}
 
 	result := "ok"

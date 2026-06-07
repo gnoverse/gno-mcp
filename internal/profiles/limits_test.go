@@ -24,21 +24,14 @@ func TestHardLimits(t *testing.T) {
 		{
 			name:        "testnet",
 			profile:     Profile{ChainType: ChainTypeTestnet},
-			wantSpend:   "10000000ugnot",
+			wantSpend:   "100000000ugnot",
 			wantExpires: 7 * 24 * time.Hour,
 			wantPaths:   10,
 		},
 		{
-			name:        "mainnet",
-			profile:     Profile{ChainType: ChainTypeMainnet},
-			wantSpend:   "1000ugnot",
-			wantExpires: time.Hour,
-			wantPaths:   3,
-		},
-		{
 			name:        "unknown falls back to testnet",
 			profile:     Profile{ChainType: "foobar"},
-			wantSpend:   "10000000ugnot",
+			wantSpend:   "100000000ugnot",
 			wantExpires: 7 * 24 * time.Hour,
 			wantPaths:   10,
 		},
@@ -66,6 +59,14 @@ func TestHardLimits(t *testing.T) {
 	}
 }
 
+func TestHardLimits_NoMainnetType(t *testing.T) {
+	// A testnet profile gets the moderate (default) limits.
+	p := Profile{ChainType: ChainTypeTestnet}
+	if got := p.HardLimits().MaxSpendLimit; got != "100000000ugnot" {
+		t.Errorf("testnet MaxSpendLimit = %q, want 100000000ugnot", got)
+	}
+}
+
 func TestEffectiveDefaults_profileSetWins(t *testing.T) {
 	p := Profile{
 		DefaultSpendLimit: "500000ugnot",
@@ -89,8 +90,8 @@ func TestEffectiveDefaults_fallbackToHardcoded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if spend != "100000ugnot" {
-		t.Errorf("spend: got %q, want hardcoded 100000ugnot", spend)
+	if spend != "100000000ugnot" {
+		t.Errorf("spend: got %q, want hardcoded 100000000ugnot", spend)
 	}
 	if expires != time.Hour {
 		t.Errorf("expires: got %v, want hardcoded 1h", expires)

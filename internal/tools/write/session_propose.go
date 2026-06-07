@@ -75,11 +75,15 @@ func sessionProposeHandler(
 	if !ok {
 		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
 	}
-	if !profile.AllowDangerousTools {
+
+	if profile.MasterAddress == "" {
 		return server.Result{}, &server.ToolError{
-			Code:    "dangerous_disabled",
-			Message: fmt.Sprintf("profile %q: allow-dangerous-tools is not set — edit profiles.toml to enable write tools", profileName),
-			Extra:   map[string]any{"profile": profileName},
+			Code: "no_master_address",
+			Message: fmt.Sprintf(
+				"profile %q has no master-address, so it is read-only — set master-address (g1...) for this profile to enable writes (edit profiles.toml or run: gnomcp profile add %s --rpc %s --chain-id %s --master <g1...>)",
+				profileName, profileName, profile.RPCURL, profile.ChainID,
+			),
+			Extra: map[string]any{"profile": profileName},
 		}
 	}
 

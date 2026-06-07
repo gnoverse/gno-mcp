@@ -17,10 +17,9 @@ type ProfileSchema struct {
 // and the result of local-gnodev discovery (discovered = profile name or "").
 //
 // Rules (per multichain ADR):
-//   - Single profile loaded: optional, default to the only profile.
-//   - Multiple profiles loaded, local discovered (and "local" is among them):
-//     optional, default to "local".
-//   - Multiple profiles loaded, no local discovered: required.
+//   - Zero profiles loaded: required (no enum, no default possible).
+//   - Local discovered (and present in cfg): optional, default to discovered name.
+//   - Otherwise: optional, default to "testnet" if present, else first profile.
 func ProfileArgSchema(cfg *profiles.Config, discoveredLocal string) ProfileSchema {
 	names := make([]string, 0, len(cfg.Profiles))
 	for n := range cfg.Profiles {
@@ -29,8 +28,7 @@ func ProfileArgSchema(cfg *profiles.Config, discoveredLocal string) ProfileSchem
 	sort.Strings(names)
 
 	// Defensive: if discovery returned a name that is not actually loaded,
-	// fall back to "required" rather than emit an invalid JSON Schema with
-	// default outside enum.
+	// treat as not discovered rather than emit a default outside the enum.
 	if discoveredLocal != "" {
 		if _, ok := cfg.Profiles[discoveredLocal]; !ok {
 			discoveredLocal = ""
@@ -38,11 +36,19 @@ func ProfileArgSchema(cfg *profiles.Config, discoveredLocal string) ProfileSchem
 	}
 
 	switch {
-	case len(names) == 1:
-		return ProfileSchema{Enum: names, Default: names[0]}
+	case len(names) == 0:
+		return ProfileSchema{Required: true}
 	case discoveredLocal != "":
 		return ProfileSchema{Enum: names, Default: discoveredLocal}
 	default:
-		return ProfileSchema{Enum: names, Required: true}
+		// Prefer "testnet" as the standing default; else the first profile.
+		def := names[0]
+		for _, n := range names {
+			if n == "testnet" {
+				def = "testnet"
+				break
+			}
+		}
+		return ProfileSchema{Enum: names, Default: def}
 	}
 }

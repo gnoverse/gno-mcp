@@ -1,7 +1,7 @@
 // Package write holds the chain-write MCP tools (gno_call, gno_run,
 // gno_auth_status, gno_session_propose, gno_session_revoke). Each tool
 // exposes a Register* function. All tools register only when at least
-// one profile has allow-dangerous-tools=true.
+// one profile has a master-address set (writable profile).
 package write
 
 import (
@@ -63,14 +63,14 @@ func stringSliceArg(args map[string]any, name string) ([]string, error) {
 }
 
 // addProfileArg adds the `profile` arg to props, filtered to profiles
-// where AllowDangerousTools == true. If no dangerous profile exists
-// the enum is empty (tools won't register anyway per the gate in main.go).
+// with a master-address set (writable profiles). If no writable profile
+// exists the enum is empty, so the agent has no writable target to pick.
 func addProfileArg(s *server.Server, props map[string]any, required *[]string) {
 	ps := s.ProfileSchema()
 	cfg := s.Config()
 	var enum []string
 	for _, name := range ps.Enum {
-		if cfg.Profiles[name].AllowDangerousTools {
+		if cfg.Profiles[name].MasterAddress != "" {
 			enum = append(enum, name)
 		}
 	}
@@ -80,9 +80,9 @@ func addProfileArg(s *server.Server, props map[string]any, required *[]string) {
 	arg := map[string]any{
 		"type":        "string",
 		"enum":        enum,
-		"description": "Profile to use. Only profiles with allow-dangerous-tools=true are listed.",
+		"description": "Profile to use. Only profiles with a master-address (writable) are listed.",
 	}
-	if ps.Default != "" && cfg.Profiles[ps.Default].AllowDangerousTools {
+	if ps.Default != "" && cfg.Profiles[ps.Default].MasterAddress != "" {
 		arg["default"] = ps.Default
 	}
 	props["profile"] = arg

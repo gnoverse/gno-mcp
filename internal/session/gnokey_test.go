@@ -110,6 +110,16 @@ func TestFormatCreate_noAllowRunOmitsVMRun(t *testing.T) {
 	}
 }
 
+func TestFormatGnokeyCreate_HasGasAndBroadcast(t *testing.T) {
+	p := &profiles.Profile{RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"}
+	cmd := FormatGnokeyCreateCommand(p, "gpub...", Scope{SpendLimit: "1000ugnot", ExpiresIn: time.Hour})
+	for _, want := range []string{"--gas-fee", "--gas-wanted", "--broadcast"} {
+		if !strings.Contains(cmd, want) {
+			t.Errorf("create command missing %q:\n%s", want, cmd)
+		}
+	}
+}
+
 func TestFormatRevoke_includesPubkey(t *testing.T) {
 	profile := testGnokeyProfile()
 	cmd := FormatGnokeyRevokeCommand(profile, "gpub1abcdef")

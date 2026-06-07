@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/server"
@@ -73,12 +74,27 @@ func authStatusHandler(
 			status, queryErr := client.QuerySession(ctx, meta.MasterAddress, meta.SessionAddress)
 			if queryErr == nil {
 				// Chain answered — apply transitions.
-				if status.Active && meta.State == session.StatePending {
+				switch {
+				case status.Active && meta.State == session.StatePending:
 					// Promote pending → active in the manager.
 					if markErr := sessionMgr.MarkActive(profileName, meta.SessionAddress, status); markErr == nil {
 						meta.State = session.StateActive
 					} else {
 						log.Printf("gno_auth_status: mark active %q: %v (showing pending)", meta.SessionAddress, markErr)
+					}
+				case !status.Active && meta.State == session.StateActive:
+					// Previously active, but the chain no longer reports it active
+					// → revoked or expired. (A still-pending session also reads
+					// !Active before authorization, so only downgrade an
+					// already-active one to avoid revoking un-authorized pendings.)
+					newState := session.StateRevoked
+					if meta.ExpiresAt > 0 && time.Now().Unix() >= meta.ExpiresAt {
+						newState = session.StateExpired
+					}
+					if markErr := sessionMgr.MarkInactive(profileName, meta.SessionAddress, newState); markErr == nil {
+						meta.State = newState
+					} else {
+						log.Printf("gno_auth_status: mark inactive %q: %v", meta.SessionAddress, markErr)
 					}
 				}
 			}

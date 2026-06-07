@@ -1,0 +1,17 @@
+version: 2
+builds:
+  - id: gnomcp
+    main: ./cmd/gnomcp
+    binary: gnomcp
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+checksum:
+  name_template: "checksums.txt"
+release:
+  github:
+    owner: gnoverse
+    name: gno-mcp

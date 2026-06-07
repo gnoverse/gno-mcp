@@ -386,11 +386,17 @@ func isSessionNotFoundErr(err error) bool {
 	return strings.Contains(err.Error(), "session not found")
 }
 
+// DefaultGasFeeUgnot is the ugnot amount of every write tx's GasFee. The chain
+// charges a session this full GasFee per tx (sessions are billed the offered
+// fee, not the gas actually used), so session spend tracking must deduct this —
+// not GasUsed — to stay in sync with the chain's accounting.
+const DefaultGasFeeUgnot int64 = 10_000_000
+
 // defaultBaseTxCfg returns the gas/fee defaults for write txs.
 // Chain requires 1ugnot per 1000 gas; padded to 10000000ugnot @ 10M gas.
 func defaultBaseTxCfg() gnoclient.BaseTxCfg {
 	return gnoclient.BaseTxCfg{
-		GasFee:    "10000000ugnot",
+		GasFee:    fmt.Sprintf("%dugnot", DefaultGasFeeUgnot),
 		GasWanted: 10_000_000,
 	}
 }

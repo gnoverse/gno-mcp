@@ -181,31 +181,6 @@ func TestCall_wrongTypeArgs(t *testing.T) {
 	}
 }
 
-func TestCall_dangerousDisabled(t *testing.T) {
-	s := newReadOnlyTestServer(t)
-	var auditBuf bytes.Buffer
-	alog := audit.NewLog(&auditBuf)
-	mgr := noSessionMgr(t)
-	fake := chain.NewFake()
-	RegisterCall(s, mgr, constChainResolver(fake), alog)
-
-	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/counter",
-		"func":    "Increment",
-	})
-	if err == nil {
-		t.Fatal("expected dangerous_disabled error")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "dangerous_disabled" {
-		t.Errorf("expected code=dangerous_disabled, got %q", te.Code)
-	}
-}
-
 func TestCall_authenticationRequired(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
@@ -370,13 +345,13 @@ func TestCall_updatesSessionSpend(t *testing.T) {
 	fake := chain.NewFake()
 	fake.SetCall("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{
 		TxHash:  "0xdef",
-		GasUsed: 3000,
+		GasUsed: 3000, // actual gas — must be IGNORED for spend (chain bills the GasFee)
 		Result:  "ok",
 	})
 
 	var sessionAddr string
 	mgr := constSessionMgr(t, func(m *session.Manager) {
-		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
+		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "100000000ugnot")
 	})
 
 	RegisterCall(s, mgr, constChainResolver(fake), alog)
@@ -394,9 +369,10 @@ func TestCall_updatesSessionSpend(t *testing.T) {
 	if meta == nil {
 		t.Fatal("session not found after call")
 	}
-	// SpendRemaining must have decreased from 1000000 by 3000.
-	if meta.SpendRemaining == "1000000ugnot" {
-		t.Errorf("SpendRemaining was not updated: %s", meta.SpendRemaining)
+	// The chain bills the full GasFee (10M), not GasUsed (3000): 100M - 10M = 90M.
+	// Guards #5: local spend tracking must match the chain's GasFee accounting.
+	if meta.SpendRemaining != "90000000ugnot" {
+		t.Errorf("SpendRemaining: got %s, want 90000000ugnot (deduct GasFee, not GasUsed)", meta.SpendRemaining)
 	}
 }
 
@@ -480,6 +456,32 @@ func TestCall_simulateError_auditsSimErr(t *testing.T) {
 	}
 	if entries[0].Result != "sim_err" {
 		t.Errorf("expected result=sim_err, got %q", entries[0].Result)
+	}
+}
+
+// TestCall_NoSession_ReadOnlyProfile verifies that a read-only profile (no
+// master-address) returns authentication_required when there is no active
+// session — the registration gate must not exist.
+func TestCall_NoSession_ReadOnlyProfile(t *testing.T) {
+	s := newReadOnlyTestServer(t) // no master-address (read-only)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	mgr := noSessionMgr(t) // empty session manager
+	fake := chain.NewFake()
+	RegisterCall(s, mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet5",
+		"realm":   "gno.land/r/test/echo",
+		"func":    "Echo",
+		"args":    []any{"hi"},
+	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	var te *server.ToolError
+	if !errors.As(err, &te) || te.Code != "authentication_required" {
+		t.Fatalf("want authentication_required, got %v", err)
 	}
 }
 

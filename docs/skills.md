@@ -1,0 +1,25 @@
+# Skills
+
+The `skills/` directory is a Claude plugin package. Each subdirectory is a single skill; `plugin.json` lists them. Skills are pure markdown — no Go code — and are designed to drive `gnomcp` tools through coherent workflows without dropping the security guardrails.
+
+## Bundled skills
+
+| Skill | Trigger |
+|---|---|
+| [`gno`](../skills/gno/) | Gno realm development, auditing, interrealm semantics, security review, and on-chain interaction via gnomcp tools. |
+
+## Authoring conventions (so future skills stay coherent)
+
+1. **Frontmatter `description`** must be specific enough that the skill router picks it correctly without overlap with sibling skills. Lead with the trigger.
+2. **`When to use`** section comes first — concrete user phrasings.
+3. **`Guardrails` / `Judgment`** sections call out the rails: untrusted-content envelope handling, no mnemonic, slice-don't-dump, session scope.
+4. **`Flow`** is a numbered list of tool calls. One step = one tool call where possible.
+5. **Failure modes** appear as a closing `If anything fails` section.
+
+When you add a new skill, also:
+- list it under `skills` in [`skills/plugin.json`](../skills/plugin.json)
+- mention it in [the README](../README.md) and in this file
+
+## Using gnomcp tools from skills
+
+Skills should use `gno_connect` to help users add a profile when they reference an unfamiliar gnoweb URL — it returns the exact `gnomcp profile add` command to run. Skills must never call write tools (`gno_call`, `gno_run`) without first confirming an active session exists via `gno_auth_status` and guiding the user through `gno_session_propose` if needed.

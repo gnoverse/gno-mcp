@@ -2,119 +2,121 @@
 
 MCP server for [gno.land](https://gno.land). Greenfield rewrite on the `v2` branch.
 
-> **Status:** Milestone A — read-only tools; no writes, no sessions, no a2a yet. The
+> **Status:** Milestone B — read + write tools; session-gated writes; multi-chain via profiles. The
 > `main` branch has the older v1 server with a different architecture; this branch is the
 > ground-up rebuild per the ADRs in `adr/`.
 
-## What works in Milestone A
+## Zero-config reads
 
-- 4 chain read tools (`vm/q*` ABCI queries):
-  - `gno_render` — fetch rendered realm markdown as an MCP resource
-  - `gno_eval` — evaluate a Gno expression in a realm's context
-  - `gno_read` — read a file (or list files) from a realm package
-  - `gno_inspect` — typed godoc for a realm package
-- 3 indexer read tools (only registered when at least one profile has `tx-indexer-url`):
-  - `gno_list` — filter-browse realms by namespace/tag/category
-  - `gno_history` — full transaction history for a realm
-  - `gno_activity` — MsgCall/MsgRun log with optional time range
-- Multi-chain via `profile` arg on every chain-bound tool; schema-conditional defaulting
-  (single profile, local-discovered, multi-no-local)
-- JSON-lines audit log (writes always; reads opt-in via `--audit-reads`). No writes in
-  Milestone A, so the log is empty unless reads are enabled.
-- `gnomcp version` and `gnomcp audit {tail|grep <pattern>}` subcommands.
+gnomcp ships with two built-in profiles that require no configuration:
 
-### Known limitations against the current tx-indexer schema
+| Profile | Chain-id | RPC |
+|---------|----------|-----|
+| `local` | `dev` | `http://127.0.0.1:26657` (auto-discovered local node) |
+| `testnet` | `test11` | `https://rpc.test11.testnets.gno.land:443` |
 
-- `gno_list` returns `error_unavailable: realms query not yet in schema`. The schema
-  upgrade (metadata indexing) is tracked upstream in tx-indexer; once it lands, the tool
-  starts returning data without code changes.
-- `gno_activity` rejects non-nil `since`/`until` with `error_unavailable`: the schema
-  has no time field on `Transaction`. Time-range filtering will work after the schema
-  exposes block time through the Transaction relation. Calling with no time bounds works
-  today — it returns all MsgCall/MsgRun events.
-
-## What's NOT in Milestone A
-
-- Write tools (`gno_call`, `gno_run`) — Milestone B
-- Session machinery (`gnokey maketx session create` flow) — Milestone B
-- a2a tools, card validation, HTTP transport — Milestone C
-- Docker image — Milestone D
-- Trust middleware (sanitization, provenance wrap, TOFU) — separate spec
-
-## Milestone B (sessions + writes)
-
-> Status: **In progress.** See `test/e2e/PROTOCOL.md` for the manual e2e checklist.
-
-### 5 new tools
-
-| Tool | Description |
-| --- | --- |
-| `gno_call` | Broadcast a `MsgCall` to a realm function. Requires an active session (`gno_session_propose` first). |
-| `gno_run` | Broadcast a `MsgRun` with ad-hoc Gno code. Requires an active session. |
-| `gno_auth_status` | Narrative view of all gnomcp-managed sessions for a profile (no master address needed). |
-| `gno_session_propose` | Generate an ephemeral ed25519 keypair and emit a ready-to-run `gnokey maketx session create` command. |
-| `gno_session_revoke` | Emit a `gnokey maketx session revoke` command for a gnomcp-managed session. |
-
-Registration gate: all five register only when at least one profile has `allow-dangerous-tools = true`. When unset, gnomcp behaves identically to Milestone A.
-
-### New profile fields (profiles.toml)
-
-```toml
-[local]
-chain-type = "local"
-rpc-url = "http://127.0.0.1:26657"
-chain-id = "dev"
-allow-dangerous-tools = true          # required to enable write tools
-default-spend-limit  = "100000ugnot" # optional; per-session default
-default-expires-in   = "1h"          # optional; Go duration string
-bypass-hard-limits   = false         # optional; disables per-chain-type clamps
-```
-
-### New env vars and flags
-
-| Name | Default | Purpose |
-| --- | --- | --- |
-| `GNOMCP_SESSIONS_PATH` | `~/.local/share/gnomcp/sessions` | Directory for session key files |
-| `GNOMCP_SESSION_PASSPHRASE` | (unset) | Enables scrypt+AES-256-GCM encryption at rest |
-| `--sessions-path` | same as `GNOMCP_SESSIONS_PATH` | CLI override for session storage |
-
-### E2E verification
-
-See `test/e2e/PROTOCOL.md` for the manual checklist (Section A = Milestone A regression, Section B = Milestone B writes).
-
-Run with:
-```bash
-make test-e2e   # prints instructions; run steps by hand
-```
+The four chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed.
 
 ## Quick start
 
+### Install
+
 ```bash
-# Build
-make build  # produces bin/gnomcp
-
-# Configure a profile
-mkdir -p ~/.config/gnomcp
-cat > ~/.config/gnomcp/profiles.toml <<'EOF'
-[test11]
-chain-type = "testnet"
-rpc-url = "https://rpc.test11.testnets.gno.land:443"
-chain-id = "test11"
-# Optional: enables the 3 indexer tools.
-# tx-indexer-url = "<your tx-indexer endpoint>"
-EOF
-
-# Configure Claude Code in ~/.claude.json or project-local .mcp.json:
-# {
-#   "mcpServers": {
-#     "gnomcp": { "command": "/absolute/path/to/bin/gnomcp" }
-#   }
-# }
+go install github.com/gnoverse/gno-mcp/cmd/gnomcp@latest
 ```
 
-`profiles.toml` rejects unknown keys, so premature write-field keys
-(`allow-dangerous-tools`, etc. from Milestone B) will fail loud rather than be silently
-ignored.
+### MCP client config (installed binary)
+
+```json
+{
+  "mcpServers": {
+    "gnomcp": { "command": "gnomcp", "args": [] }
+  }
+}
+```
+
+For in-repo development the `.mcp.json` at the repo root uses `go run ./cmd/gnomcp` instead.
+
+### Chain-id allowlist
+
+Only `dev` and `testNN` chain-ids are accepted. Betanet (`gnoland1`), `staging`, and mainnet ids are rejected at config validation — they cannot enter a profile.
+
+## Profiles
+
+Profiles are the source of truth for which chains gnomcp can reach. The built-in `local` and `testnet` are read-only defaults.
+
+### Adding a profile
+
+```bash
+# From a gnoweb URL (autofills rpc + chain-id from the page's gnoconnect meta-tags)
+gnomcp profile add mychain --from-gnoweb https://mychain.testnets.gno.land
+
+# Manual
+gnomcp profile add mychain --rpc https://rpc.mychain.gno.land:443 --chain-id test99
+
+# With master address to enable writes
+gnomcp profile add mychain --from-gnoweb https://mychain.testnets.gno.land \
+  --master g1youraddresshere
+```
+
+Profiles are written to `~/.config/gnomcp/profiles.toml`. A project-local `./profiles.toml` overlays the global file; the `-config` flag overrides both.
+
+**Config precedence:** built-in defaults < `~/.config/gnomcp/profiles.toml` < `./profiles.toml` < `-config` flag.
+
+A profile entry in a config file is a whole-profile replacement — an overlay redefining a built-in must re-supply `rpc-url` and `chain-id`, not just `master-address`.
+
+```bash
+gnomcp profile list    # show all active profiles
+gnomcp profile remove mychain
+```
+
+### Profile fields (profiles.toml)
+
+```toml
+[mychain]
+rpc-url              = "https://rpc.test99.testnets.gno.land:443"
+chain-id             = "test99"
+master-address       = "g1..."       # required to enable write tools (bech32)
+tx-indexer-url       = "..."         # optional; enables gno_list/gno_history/gno_activity
+default-spend-limit  = "100000ugnot" # optional; per-session default
+default-expires-in   = "1h"          # optional; Go duration string
+```
+
+## Write authorization
+
+Writes are session-gated:
+
+1. **Profile has a `master-address`** — without it, write tools are not registered.
+2. **Authorized chain-bound session** — call `gno_session_propose` to get a paste-ready `gnokey maketx session create` command; run it to authorize a session. The session carries explicit scope (`allow_paths`, `allow_run`, `spend_limit`, `expires_in`).
+
+```text
+# Typical flow
+gno_session_propose(profile="mychain", allow_paths=["gno.land/r/myorg/blog"])
+# → prints gnokey command; user runs it
+gno_call(profile="mychain", path="gno.land/r/myorg/blog", func="AddPost", ...)
+```
+
+Session key files are stored in `~/.local/share/gnomcp/sessions` (mode `0600`). Set `GNOMCP_SESSION_PASSPHRASE` to enable encryption at rest.
+
+## Tools
+
+See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary:
+
+| Tool | Category | Requires |
+|------|----------|---------|
+| `gno_render` | chain read | built-in profiles |
+| `gno_eval` | chain read | built-in profiles |
+| `gno_read` | chain read | built-in profiles |
+| `gno_inspect` | chain read | built-in profiles |
+| `gno_connect` | discovery | — |
+| `gno_list` | indexer read | profile with `tx-indexer-url` |
+| `gno_history` | indexer read | profile with `tx-indexer-url` |
+| `gno_activity` | indexer read | profile with `tx-indexer-url` |
+| `gno_session_propose` | session | profile with `master-address` |
+| `gno_session_revoke` | session | profile with `master-address` |
+| `gno_auth_status` | session | profile with `master-address` |
+| `gno_call` | write | profile with `master-address` + active session |
+| `gno_run` | write | profile with `master-address` + active session |
 
 ## Skill installation (for AI coding agents)
 
@@ -157,20 +159,25 @@ make test                # Unit tests (no network)
 make test-integration    # Live smoke against testnet11 (requires network)
 make lint                # go vet + gofmt -l
 make build               # bin/gnomcp
+make dev                 # go run ./cmd/gnomcp (starts MCP server)
 ```
 
 Project layout:
 
 ```
-cmd/gnomcp/              # Entry point — flags, wire-up, MCP SDK
+cmd/gnomcp/              # Entry point — flags, wire-up, MCP SDK, profile subcommand
 internal/
   audit/                 # JSON-lines audit log
   chain/                 # vm/q* abstraction (Client / Real / Fake / Resolver)
   indexer/               # tx-indexer GraphQL (Client / GraphQL / Fake / Resolver)
   profiles/              # profiles.toml loader + validator + local discovery
   server/                # MCP server scaffold, tool Registry, profile schema
-  tools/read/            # 4 chain read tool registrations
+  session/               # Session key management and scope enforcement
+  tools/read/            # 5 chain/discovery read tool registrations
   tools/indexer/         # 3 indexer read tool registrations
+  tools/write/           # 5 write/session tool registrations
+test/e2e/                # Manual e2e protocol (PROTOCOL.md)
 test/integration/        # Live smoke (build tag: integration)
 adr/                     # Architecture Decision Records
+docs/                    # tools.md, security.md, skills.md
 ```

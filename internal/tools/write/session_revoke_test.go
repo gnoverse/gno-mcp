@@ -73,20 +73,3 @@ func TestSessionRevoke_unknownSession_returnsUnmanaged(t *testing.T) {
 		t.Errorf("error missing manual gnokey hint: %v", err)
 	}
 }
-
-func TestSessionRevoke_dangerousDisabled(t *testing.T) {
-	s := newReadOnlyTestServer(t)
-	mgr := noSessionMgr(t)
-	RegisterSessionRevoke(s, mgr)
-
-	_, err := s.Registry().Call(context.Background(), "gno_session_revoke", map[string]any{
-		"profile":         "testnet5",
-		"session_address": "g1qyqdyjcz5dpylqsrk9zjhphq4uyg36aps3qvzq",
-	})
-	if err == nil {
-		t.Fatal("expected dangerous_disabled error")
-	}
-	if !strings.Contains(err.Error(), "dangerous_disabled") {
-		t.Errorf("error missing dangerous_disabled code: %v", err)
-	}
-}

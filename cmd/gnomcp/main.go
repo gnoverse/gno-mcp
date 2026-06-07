@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -41,11 +42,14 @@ func main() {
 		case "audit":
 			runAudit(os.Args[2:])
 			return
+		case "profile":
+			runProfile(os.Args[2:])
+			return
 		}
 	}
 
 	fs := flag.NewFlagSet("gnomcp", flag.ExitOnError)
-	configPath := fs.String("config", defaultConfigPath(), "path to profiles.toml")
+	configPath := fs.String("config", "", "explicit profiles.toml path (overrides discovery); empty uses defaults + ~/.config/gnomcp/profiles.toml + ./profiles.toml")
 	auditPath := fs.String("audit-path", defaultAuditPath(), "path to audit log file")
 	auditReads := fs.Bool("audit-reads", false, "also audit read-only tool calls")
 	sessionsPath := fs.String("sessions-path", defaultSessionsPath(), "path to session storage directory")
@@ -57,21 +61,9 @@ func main() {
 	defer stop()
 
 	// ---- load + validate profiles
-	f, err := os.Open(*configPath)
-	if err != nil {
-		log.Fatalf("open config: %v", err)
-	}
-	cfg, err := profiles.Load(f)
-	f.Close()
+	cfg, err := profiles.LoadResolved(resolveSources(*configPath))
 	if err != nil {
 		log.Fatalf("load config: %v", err)
-	}
-	warn, err := cfg.Validate()
-	if err != nil {
-		log.Fatalf("validate config: %v", err)
-	}
-	if warn != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: %v\n", warn)
 	}
 
 	// ---- local-gnodev discovery
@@ -105,6 +97,7 @@ func main() {
 	readtools.RegisterEval(s, chainResolver)
 	readtools.RegisterRead(s, chainResolver)
 	readtools.RegisterInspect(s, chainResolver)
+	readtools.RegisterConnect(s, &http.Client{Timeout: 10 * time.Second})
 
 	if s.AnyProfileHasIndexer() {
 		idxtools.RegisterList(s, indexerResolver)
@@ -112,22 +105,18 @@ func main() {
 		idxtools.RegisterActivity(s, indexerResolver)
 	}
 
-	if s.AnyProfileAllowsDangerous() {
-		writetools.RegisterCall(s, sessionMgr, chainResolver, auditLog)
-		writetools.RegisterRun(s, sessionMgr, chainResolver, auditLog)
-		writetools.RegisterAuthStatus(s, sessionMgr, chainResolver)
-		writetools.RegisterSessionPropose(s, sessionMgr)
-		writetools.RegisterSessionRevoke(s, sessionMgr)
-	}
+	writetools.RegisterCall(s, sessionMgr, chainResolver, auditLog)
+	writetools.RegisterRun(s, sessionMgr, chainResolver, auditLog)
+	writetools.RegisterAuthStatus(s, sessionMgr, chainResolver)
+	writetools.RegisterSessionPropose(s, sessionMgr)
+	writetools.RegisterSessionRevoke(s, sessionMgr)
 
 	// ---- build MCP SDK server
 	instructions := "gnomcp serves Gno realm reads via the official MCP Go SDK. " +
-		"Tools are registered conditionally based on profile capabilities (see profiles.toml)."
-	if s.AnyProfileAllowsDangerous() {
-		instructions += " Write tools (gno_call, gno_run) require an active " +
-			"chain-bounded session — call gno_session_propose first to authorize " +
-			"one via your own gnokey."
-	}
+		"Tools are registered conditionally based on profile capabilities (see profiles.toml). " +
+		"Write tools (gno_call, gno_run) require an active " +
+		"chain-bounded session — call gno_session_propose first to authorize " +
+		"one via your own gnokey."
 	mcpServer := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "gnomcp",
 		Version: version,
@@ -353,14 +342,21 @@ func discoverLocal(ctx context.Context, cfg *profiles.Config) string {
 
 // ---- path defaults
 
-func defaultConfigPath() string {
-	if v := os.Getenv("GNOMCP_CONFIG"); v != "" {
-		return v
+// resolveSources builds the config precedence chain. explicit comes from the
+// -config flag or GNOMCP_CONFIG env (flag wins).
+func resolveSources(explicit string) profiles.Sources {
+	if explicit == "" {
+		explicit = os.Getenv("GNOMCP_CONFIG")
 	}
+	var global string
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".config", "gnomcp", "profiles.toml")
+		global = filepath.Join(home, ".config", "gnomcp", "profiles.toml")
 	}
-	return "profiles.toml"
+	return profiles.Sources{
+		GlobalPath:   global,
+		ProjectPath:  "profiles.toml",
+		ExplicitPath: explicit,
+	}
 }
 
 func defaultAuditPath() string {

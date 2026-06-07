@@ -32,14 +32,14 @@ func TestSessionPropose_emitsGnokeyCommand(t *testing.T) {
 }
 
 func TestSessionPropose_emitsClampWarning_whenClamped(t *testing.T) {
-	s := newBaseTestServer(t) // testnet profile; cap = 10000000ugnot (10 gnot)
+	s := newBaseTestServer(t) // testnet profile; cap = 100000000ugnot (100 gnot)
 	mgr := noSessionMgr(t)
 	RegisterSessionPropose(s, mgr)
 
 	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
 		"allow_paths": []any{"gno.land/r/test/counter"},
-		"spend_limit": "100000000ugnot", // exceeds testnet cap of 10000000ugnot
+		"spend_limit": "500000000ugnot", // exceeds testnet cap of 100000000ugnot
 	})
 	if err != nil {
 		t.Fatalf("Call: %v", err)
@@ -47,29 +47,13 @@ func TestSessionPropose_emitsClampWarning_whenClamped(t *testing.T) {
 	if !strings.Contains(res.Text, "WARNING") {
 		t.Errorf("expected clamp warning in text:\n%s", res.Text)
 	}
-	if !strings.Contains(res.Text, "10000000ugnot") {
-		t.Errorf("expected clamped value 10000000ugnot in text:\n%s", res.Text)
+	if !strings.Contains(res.Text, "100000000ugnot") {
+		t.Errorf("expected clamped value 100000000ugnot in text:\n%s", res.Text)
 	}
-	// auth_command must show clamped value, not requested 100000000ugnot
-	if strings.Contains(res.Text, "100000000ugnot") && !strings.Contains(res.Text, "WARNING") {
+	// The requested value may appear in the clamp WARNING, but must not leak
+	// into the gnokey command itself (which should carry the clamped value).
+	if strings.Contains(res.Text, "500000000ugnot") && !strings.Contains(res.Text, "WARNING") {
 		t.Errorf("unclamped value leaked into command:\n%s", res.Text)
-	}
-}
-
-func TestSessionPropose_dangerousDisabled(t *testing.T) {
-	s := newReadOnlyTestServer(t)
-	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
-
-	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
-		"profile":     "testnet5",
-		"allow_paths": []any{"gno.land/r/test/counter"},
-	})
-	if err == nil {
-		t.Fatal("expected dangerous_disabled error")
-	}
-	if !strings.Contains(err.Error(), "dangerous_disabled") {
-		t.Errorf("error missing dangerous_disabled code: %v", err)
 	}
 }
 
@@ -169,6 +153,19 @@ func TestSessionPropose_emptyAllowPathsAndNoRunErrors(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error when both allow_paths and allow_run are absent")
+	}
+}
+
+func TestSessionPropose_NoMaster(t *testing.T) {
+	s := newReadOnlyTestServer(t) // profile has no master-address
+	mgr := noSessionMgr(t)
+	RegisterSessionPropose(s, mgr)
+	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
+		"profile":     "testnet5",
+		"allow_paths": []any{"gno.land/r/demo/foo"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "master-address") {
+		t.Fatalf("expected master-address error, got %v", err)
 	}
 }
 
