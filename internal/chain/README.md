@@ -1,6 +1,6 @@
 # chain package — verified gnoclient API references
 
-Captured during Milestone B Task 2.3 against `github.com/gnolang/gno v1.1.0`.
+Captured against `github.com/gnolang/gno v1.1.0`.
 Update this file if gno dependencies change.
 
 The chain Client exposes two write paths: **session** (`CallAsUser`/`RunAsUser` — act as the user,

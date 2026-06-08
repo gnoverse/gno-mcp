@@ -59,12 +59,12 @@ These three tools are only registered when at least one profile has a `tx-indexe
 
 gnomcp signs writes with one of two identities, chosen per call via the `identity` arg (`"agent"` | `"session"`):
 
-- **Agent identity (default on local).** On `local`/dev profiles the agent signs with its own built-in **test1** account directly — no session, no `master-address` needed.
-- **Session (default off-local).** On testnet profiles the agent acts *as the user* through a chain-bound session; authorize one with `gno_session_propose` first.
+- **Agent identity (default on local and testnet).** Local profiles sign with the built-in **test1** key directly — no session needed. Testnet profiles sign with a key generated and persisted by `gno_key_generate`; run that once and fund the address before making writes.
+- **Session (opt-in or default on non-local/testnet profiles).** The agent acts *as the user* through a chain-bound session; authorize one with `gno_session_propose` first. Pass `identity=session` to force this path on any profile.
 
 Every write result names the signer (`Signed by: agent test1 (g1…)` or `Signed by: session g1… on behalf of master g1…`) and the structured output carries `identity` + `signer_address`.
 
-Registration: `gno_call`/`gno_run` appear when a profile is writable — local (agent key) **or** has a `master-address` (session). `gno_addpkg` and `gno_key_address` appear only when a local profile exists.
+Registration: `gno_call`/`gno_run` appear when a profile is writable — local/testnet (agent key) **or** has a `master-address` (session). `gno_addpkg`, `gno_key_address`, and `gno_key_generate` appear when any local or testnet profile exists.
 
 ### `gno_session_propose`
 
@@ -86,21 +86,26 @@ Registration: `gno_call`/`gno_run` appear when a profile is writable — local (
 
 - **Args:** `profile` (required), `realm` (required), `func` (required), `args?[]`, `simulate?`, `identity?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
-- On local the agent key signs directly; on testnet an active session covering `realm` is required (its `allow_paths` is the gate).
+- Default identity: **agent** on local (test1) and testnet (generated key); **session** otherwise. Pass `identity=session` to use a session on any profile.
 
 ### `gno_run`
 
 - **Args:** `profile` (required), `code` (required), `simulate?`, `identity?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
-- On local the agent key signs directly; on testnet an active session with `allow_run=true` is required.
+- Default identity: **agent** on local and testnet; **session** otherwise.
 
 ### `gno_addpkg`
 
 - **Args:** `profile` (required), `deploy_path` (required), `files[]` (required — each `{name, body}`), `simulate?`
 - **Returns:** deploy (or `simulate`) result, prefixed with the signing identity.
-- Deploys a package/realm via `vm/MsgAddPackage`, signed by the agent key (local/dev only). A `gnomod.toml` is generated automatically if omitted.
+- Deploys a package/realm via `vm/MsgAddPackage`, signed by the agent key (local: test1, testnet: generated key). A `gnomod.toml` is generated automatically if omitted.
 
 ### `gno_key_address`
 
 - **Args:** `profile?`
-- **Returns:** the agent's own account address for a local profile — read-only, no transaction. Use it to fund or inspect the agent account.
+- **Returns:** the agent's own account address for a local or testnet profile — read-only, no transaction. Use it to fund or inspect the agent account. Local returns test1; testnet returns the address of the generated key.
+
+### `gno_key_generate`
+
+- **Args:** `profile` (required — testnet profiles only)
+- **Returns:** the generated bech32 g1… address for the agent's testnet account. Persists the key. Refuses to overwrite an existing key.

@@ -8,16 +8,19 @@ import (
 	"sort"
 )
 
-// Capability classifies tools for conditional registration.
+// Capability tags a tool by class. It does NOT gate registration — the profile
+// guards in main.go (AnyProfileHasIndexer, AnyProfileAgentCapable) decide which
+// tools register. Its one functional use is audit logging: CapWrite and
+// CapWritePrep tools are recorded to the audit log.
 type Capability int
 
 const (
-	CapBaseRead    Capability = iota // always registered
-	CapIndexerRead                   // only when any profile has tx-indexer-url
-	CapWrite                         // Milestone B
-	CapSessionRead                   // Milestone B
-	CapWritePrep                     // Milestone B
-	CapA2A                           // Milestone C
+	CapBaseRead    Capability = iota // read-only realm queries (render/read/eval/inspect/connect) + gno_key_address
+	CapIndexerRead                   // tx-indexer reads; registered only when a profile sets tx-indexer-url
+	CapWrite                         // chain writes: gno_call, gno_run, gno_addpkg, gno_key_generate (audited)
+	CapWritePrep                     // session lifecycle: gno_auth_status, gno_session_propose, gno_session_revoke (audited)
+	CapSessionRead                   // reserved; no tools use this capability
+	CapA2A                           // reserved for a2a serve mode; no tools use this capability
 )
 
 // OutputKind says how the pipeline formats the handler's Result.

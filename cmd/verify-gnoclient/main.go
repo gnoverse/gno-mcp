@@ -1,6 +1,6 @@
 // cmd/verify-gnoclient/main.go
 //
-// Verification stub for gnoclient API used by Milestone B Real impls.
+// Verification stub for the gnoclient API used by the chain.Real implementation.
 // Run: go run ./cmd/verify-gnoclient
 package main
 

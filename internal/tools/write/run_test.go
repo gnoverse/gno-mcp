@@ -33,11 +33,12 @@ func TestRun_happyPath(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
-		"profile": "testnet5",
-		"code":    testCode,
+		"profile":  "testnet5",
+		"code":     testCode,
+		"identity": "session",
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -71,7 +72,7 @@ func TestRun_missingProfile(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"code": testCode,
@@ -90,10 +91,11 @@ func TestRun_missingCode(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
-		"profile": "testnet5",
+		"profile":  "testnet5",
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected error for missing code")
@@ -109,11 +111,12 @@ func TestRun_authenticationRequired(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t) // no sessions
 	fake := chain.NewFake()
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
-		"profile": "testnet5",
-		"code":    testCode,
+		"profile":  "testnet5",
+		"code":     testCode,
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected authentication_required error")
@@ -146,11 +149,12 @@ func TestRun_picksAnySessionWhenNoRealm(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
-		"profile": "testnet5",
-		"code":    testCode,
+		"profile":  "testnet5",
+		"code":     testCode,
+		"identity": "session",
 	})
 	if err != nil {
 		t.Fatalf("expected success with any active session: %v", err)
@@ -167,12 +171,13 @@ func TestRun_simulateRequiresSession(t *testing.T) {
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t) // no session — simulate must still error
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
 		"code":     testCode,
 		"simulate": true,
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected authentication_required for simulate without session")
@@ -200,12 +205,13 @@ func TestRun_simulateWithSession(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
 		"code":     testCode,
 		"simulate": true,
+		"identity": "session",
 	})
 	if err != nil {
 		t.Fatalf("simulate Run: %v", err)
@@ -234,12 +240,13 @@ func TestRun_simulateUnsupported(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
 		"code":     testCode,
 		"simulate": true,
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected simulate_unsupported error")
@@ -270,11 +277,12 @@ func TestRun_updatesSessionSpend(t *testing.T) {
 		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "100000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
-		"profile": "testnet5",
-		"code":    testCode,
+		"profile":  "testnet5",
+		"code":     testCode,
+		"identity": "session",
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -307,11 +315,12 @@ func TestRun_writesAuditEntry(t *testing.T) {
 		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
-		"profile": "testnet5",
-		"code":    testCode,
+		"profile":  "testnet5",
+		"code":     testCode,
+		"identity": "session",
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -347,12 +356,13 @@ func TestRun_simulateError_auditsSimErr(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 	var auditBuf bytes.Buffer
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(f), audit.NewLog(&auditBuf))
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(f), audit.NewLog(&auditBuf))
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
 		"code":     testCode,
 		"simulate": true,
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected simulate error to propagate")
@@ -378,11 +388,12 @@ func TestRun_broadcastError_auditsResult(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
-		"profile": "testnet5",
-		"code":    testCode,
+		"profile":  "testnet5",
+		"code":     testCode,
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected broadcast error to propagate")
@@ -405,7 +416,7 @@ func TestRun_agentIdentity_local(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 
 	fake := chain.NewFake()
 	fake.SetRun(testCode, chain.RunResult{
@@ -449,7 +460,7 @@ func TestRun_sessionIdentity_explicit(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 
 	fake := chain.NewFake()
 	fake.SetRunAsUser(testCode, chain.RunResult{
@@ -484,14 +495,15 @@ func TestRun_sessionIdentity_explicit(t *testing.T) {
 	}
 }
 
-// TestRun_defaultSession_testnet verifies that on a testnet profile with no
-// identity arg, gno_run defaults to "session" and returns authentication_required
-// when there is no active session.
-func TestRun_defaultSession_testnet(t *testing.T) {
+// TestRun_defaultAgent_testnet verifies that on a testnet profile with no
+// identity arg and no agent key, gno_run defaults to "agent" and returns
+// agent_identity_unavailable (not authentication_required).
+// Use identity=session to opt into the session path on testnet.
+func TestRun_defaultAgent_testnet(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "") // no agent key
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t)
@@ -500,16 +512,89 @@ func TestRun_defaultSession_testnet(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile": "testnet5",
 		"code":    testCode,
+		// no identity — defaults to agent on testnet
 	})
 	if err == nil {
-		t.Fatal("expected authentication_required error (default=session on testnet)")
+		t.Fatal("expected agent_identity_unavailable error (default=agent on testnet, no key generated)")
 	}
 	te, ok := errors.AsType[*server.ToolError](err)
 	if !ok {
 		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
 	}
-	if te.Code != "authentication_required" {
-		t.Errorf("expected code=authentication_required, got %q", te.Code)
+	if te.Code != "agent_identity_unavailable" {
+		t.Errorf("expected code=agent_identity_unavailable, got %q", te.Code)
+	}
+}
+
+// TestRun_agentTestnet_insufficientFunds verifies that gno_run returns
+// insufficient_funds when the agent's testnet account has zero balance.
+func TestRun_agentTestnet_insufficientFunds(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	if err != nil {
+		t.Fatalf("GenerateForProfile: %v", err)
+	}
+
+	fake := chain.NewFake() // balance 0 by default
+	mgr := noSessionMgr(t)
+	RegisterRun(s, ks, mgr, constChainResolver(fake), alog)
+
+	_, runErr := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile": "testnet9999",
+		"code":    testCode,
+	})
+	if runErr == nil {
+		t.Fatal("expected insufficient_funds error")
+	}
+	te, ok := errors.AsType[*server.ToolError](runErr)
+	if !ok {
+		t.Fatalf("expected *server.ToolError, got %T: %v", runErr, runErr)
+	}
+	if te.Code != "insufficient_funds" {
+		t.Errorf("expected code=insufficient_funds, got %q", te.Code)
+	}
+	if te.Extra["address"] != agentAddr {
+		t.Errorf("Extra[address]=%v, want %q", te.Extra["address"], agentAddr)
+	}
+}
+
+// TestRun_agentTestnet_funded verifies that a funded testnet agent account
+// proceeds past the balance check and reaches the chain run.
+func TestRun_agentTestnet_funded(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	if err != nil {
+		t.Fatalf("GenerateForProfile: %v", err)
+	}
+
+	fake := chain.NewFake()
+	fake.SetBalance(agentAddr, 10_000_000)
+	fake.SetRun(testCode, chain.RunResult{
+		TxHash:  "0xfundedrun",
+		Height:  2,
+		GasUsed: 2000,
+	})
+
+	mgr := noSessionMgr(t)
+	RegisterRun(s, ks, mgr, constChainResolver(fake), alog)
+
+	res, runErr := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile": "testnet9999",
+		"code":    testCode,
+	})
+	if runErr != nil {
+		t.Fatalf("expected success for funded account, got: %v", runErr)
+	}
+	if !strings.Contains(res.Text, "0xfundedrun") {
+		t.Errorf("expected tx hash in result text:\n%s", res.Text)
 	}
 }
 
@@ -518,7 +603,7 @@ func TestRun_bogusIdentity(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t)

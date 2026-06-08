@@ -51,8 +51,15 @@ func Test_addAgentProfileArg_filtersToLocal(t *testing.T) {
 	addAgentProfileArg(s, props, &required)
 
 	enum := enumFromProps(t, props)
-	if len(enum) != 1 || enum[0] != "local" {
-		t.Errorf("addAgentProfileArg enum = %v, want [local]", enum)
+	if len(enum) != 2 || enum[0] != "local" || enum[1] != "testnet5" {
+		t.Errorf("addAgentProfileArg enum = %v, want [local testnet5]", enum)
+	}
+}
+
+func Test_profileWritableByAgent_testnet(t *testing.T) {
+	p := profiles.Profile{ChainType: profiles.ChainTypeTestnet, RPCURL: "x", ChainID: "test5"}
+	if !profileWritableByAgent(p) {
+		t.Error("profileWritableByAgent should be true for testnet profiles")
 	}
 }
 

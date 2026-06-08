@@ -121,4 +121,10 @@ type Client interface {
 
 	// AddPackage broadcasts (or simulates) a vm/MsgAddPackage signed by the agent key.
 	AddPackage(ctx context.Context, signer gnoclient.Signer, deployPath string, files []*std.MemFile, simulate bool) (AddPackageResult, error)
+
+	// Balance returns the ugnot balance of a bech32 address. A never-funded address
+	// (unknown to the chain) reports 0 with no error. Intended as a "can this account
+	// pay gas" pre-check for agent testnet writes; it conflates funded-to-zero and
+	// unknown (both 0) and is not a general balance API.
+	Balance(ctx context.Context, addr string) (int64, error)
 }

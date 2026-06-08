@@ -14,6 +14,7 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/audit"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/keystore"
+	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
@@ -24,10 +25,11 @@ func RegisterAddPkg(s *server.Server, ks *keystore.Keystore, resolver chain.Reso
 	s.Registry().Add(&server.Tool{
 		Name: "gno_addpkg",
 		Description: "Deploys a new Gno package or realm to the chain via vm/MsgAddPackage. " +
-			"The agent identity (test1 on local/dev chains) signs the transaction directly " +
-			"without requiring an active session. If the supplied file list omits gnomod.toml " +
-			"it is generated automatically. The result reports which identity signed; always " +
-			"tell the user which account performed the write.",
+			"The agent identity signs the transaction directly without requiring an active session: " +
+			"local profiles use the built-in test1 key; testnet profiles use a key generated via " +
+			"gno_key_generate (run that first if no key exists). " +
+			"If the supplied file list omits gnomod.toml it is generated automatically. " +
+			"The result reports which identity signed; always tell the user which account performed the write.",
 		InputSchema: addpkgInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -90,13 +92,13 @@ func addpkgHandler(
 
 	// ---- Acquire agent signer
 
-	signer, err := ks.SignerForProfile(p)
+	signer, err := ks.SignerForProfile(profileName, p)
 	if err != nil {
 		if errors.Is(err, keystore.ErrNoAgentKey) {
 			return server.Result{}, &server.ToolError{
 				Code: "agent_identity_unavailable",
 				Message: fmt.Sprintf(
-					"profile %q has no agent key (local/dev only in this phase)",
+					"no agent key for profile %q — run gno_key_generate to create one",
 					profileName,
 				),
 				Extra: map[string]any{"profile": profileName},
@@ -133,6 +135,22 @@ func addpkgHandler(
 	// ---- Build args summary for audit
 
 	argsSummary := fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
+
+	// ---- Testnet balance pre-check: block unfunded agent accounts before broadcast
+
+	if p.ChainType == profiles.ChainTypeTestnet && !simulate {
+		bal, balErr := c.Balance(ctx, addr)
+		if balErr != nil {
+			return server.Result{}, fmt.Errorf("gno_addpkg: balance check: %w", balErr)
+		}
+		if bal == 0 {
+			return server.Result{}, &server.ToolError{
+				Code:    "insufficient_funds",
+				Message: fmt.Sprintf("agent testnet account %s is unfunded — send it ugnot, then retry", addr),
+				Extra:   map[string]any{"profile": profileName, "address": addr},
+			}
+		}
+	}
 
 	// ---- Deploy
 
@@ -171,7 +189,7 @@ func addpkgHandler(
 	// ---- Build result text
 
 	var b strings.Builder
-	fmt.Fprintln(&b, signedByLine("agent", addr, ""))
+	fmt.Fprintln(&b, signedByLine("agent", addr, "", p.ChainType))
 	fmt.Fprintln(&b)
 	if res.Simulated {
 		fmt.Fprintln(&b, "AddPackage simulated (no broadcast)")

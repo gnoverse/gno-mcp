@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/gnoverse/gno-mcp/internal/secret"
 )
 
 // SessionMeta is the on-disk + in-memory representation of a session.
@@ -58,7 +60,7 @@ func (s *Store) Write(profile string, meta *SessionMeta) error {
 
 	m := *meta
 	if s.passphrase != "" {
-		encrypted, err := Encrypt(m.Privkey, s.passphrase)
+		encrypted, err := secret.Encrypt(m.Privkey, s.passphrase)
 		if err != nil {
 			return fmt.Errorf("session/store: encrypt privkey: %w", err)
 		}
@@ -159,7 +161,7 @@ func (s *Store) decode(data []byte, path string) (*SessionMeta, error) {
 		return nil, fmt.Errorf("unmarshal %s: %w", path, err)
 	}
 	if m.Encrypted {
-		plain, err := Decrypt(m.Privkey, s.passphrase)
+		plain, err := secret.Decrypt(m.Privkey, s.passphrase)
 		if err != nil {
 			return nil, fmt.Errorf("could not decrypt session file at %s: %w", path, err)
 		}

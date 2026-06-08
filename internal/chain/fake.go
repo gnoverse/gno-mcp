@@ -22,6 +22,7 @@ type Fake struct {
 	runs       map[string]RunResult
 	runErrors  map[string]error
 	sessions   map[string]SessionStatus // key: master+"|"+sessionAddr
+	balances   map[string]int64         // key: bech32 addr; absent = 0 (never-funded)
 	// agent-identity (standard tx, no session) maps
 	agentCalls      map[string]CallResult
 	agentRuns       map[string]RunResult
@@ -41,6 +42,7 @@ func NewFake() *Fake {
 		runs:            map[string]RunResult{},
 		runErrors:       map[string]error{},
 		sessions:        map[string]SessionStatus{},
+		balances:        map[string]int64{},
 		agentCalls:      map[string]CallResult{},
 		agentRuns:       map[string]RunResult{},
 		addPkgs:         map[string]AddPackageResult{},
@@ -212,6 +214,14 @@ func (f *Fake) SetAddPackage(deployPath string, result AddPackageResult) {
 // call for deployPath (test introspection).
 func (f *Fake) LastAddPackageFiles(deployPath string) []*std.MemFile {
 	return f.lastAddPkgFiles[deployPath]
+}
+
+// SetBalance seeds the ugnot balance for addr (used in tests to simulate a funded account).
+func (f *Fake) SetBalance(addr string, ugnot int64) { f.balances[addr] = ugnot }
+
+// Balance returns the seeded balance for addr; absent entries return 0 (never-funded).
+func (f *Fake) Balance(_ context.Context, addr string) (int64, error) {
+	return f.balances[addr], nil
 }
 
 func callKey(realm, fn string, args []string) string {

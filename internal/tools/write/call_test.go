@@ -88,13 +88,14 @@ func TestCall_happyPath(t *testing.T) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/counter",
-		"func":    "Increment",
-		"args":    []any{"1"},
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"args":     []any{"1"},
+		"identity": "session",
 	})
 	if err != nil {
 		t.Fatalf("Call: %v", err)
@@ -129,11 +130,12 @@ func TestCall_missingRealm(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"func":    "Increment",
+		"profile":  "testnet5",
+		"func":     "Increment",
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected error for missing realm")
@@ -149,11 +151,12 @@ func TestCall_missingFunc(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/counter",
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected error for missing func")
@@ -169,13 +172,14 @@ func TestCall_wrongTypeArgs(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/counter",
-		"func":    "Increment",
-		"args":    []any{42}, // non-string element
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"args":     []any{42}, // non-string element
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected type error for non-string args element")
@@ -188,12 +192,13 @@ func TestCall_authenticationRequired(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t) // no sessions
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/counter",
-		"func":    "Increment",
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected authentication_required error")
@@ -218,12 +223,13 @@ func TestCall_scopeMismatch(t *testing.T) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/other/realm"}, "1000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/counter",
-		"func":    "Increment",
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected scope_mismatch error")
@@ -248,13 +254,14 @@ func TestCall_simulateRequiresSession(t *testing.T) {
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t) // no session — simulate must still error
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
 		"realm":    "gno.land/r/test/counter",
 		"func":     "Increment",
 		"simulate": true,
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected authentication_required for simulate without session")
@@ -283,13 +290,14 @@ func TestCall_simulateWithSession(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
 		"realm":    "gno.land/r/test/counter",
 		"func":     "Increment",
 		"simulate": true,
+		"identity": "session",
 	})
 	if err != nil {
 		t.Fatalf("simulate Call: %v", err)
@@ -318,13 +326,14 @@ func TestCall_simulateUnsupported(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
 		"realm":    "gno.land/r/test/counter",
 		"func":     "Increment",
 		"simulate": true,
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected simulate_unsupported error")
@@ -355,12 +364,13 @@ func TestCall_updatesSessionSpend(t *testing.T) {
 		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "100000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/counter",
-		"func":    "Increment",
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"identity": "session",
 	})
 	if err != nil {
 		t.Fatalf("Call: %v", err)
@@ -394,13 +404,14 @@ func TestCall_writesAuditEntry(t *testing.T) {
 		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/counter",
-		"func":    "Increment",
-		"args":    []any{"5"},
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"args":     []any{"5"},
+		"identity": "session",
 	})
 	if err != nil {
 		t.Fatalf("Call: %v", err)
@@ -440,13 +451,14 @@ func TestCall_simulateError_auditsSimErr(t *testing.T) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
 	var auditBuf bytes.Buffer
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(f), audit.NewLog(&auditBuf))
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(f), audit.NewLog(&auditBuf))
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
 		"realm":    "gno.land/r/test/counter",
 		"func":     "Increment",
 		"simulate": true,
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected simulate error to propagate")
@@ -469,13 +481,14 @@ func TestCall_NoSession_ReadOnlyProfile(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t) // empty session manager
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/echo",
-		"func":    "Echo",
-		"args":    []any{"hi"},
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/echo",
+		"func":     "Echo",
+		"args":     []any{"hi"},
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected an error, got nil")
@@ -498,12 +511,13 @@ func TestCall_broadcastError_auditsResult(t *testing.T) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
-		"profile": "testnet5",
-		"realm":   "gno.land/r/test/counter",
-		"func":    "Increment",
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"identity": "session",
 	})
 	if err == nil {
 		t.Fatal("expected broadcast error to propagate")
@@ -526,7 +540,7 @@ func TestCall_agentIdentity_local(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 
 	fake := chain.NewFake()
 	fake.SetCall("gno.land/r/test/counter", "Increment", []string{"1"}, chain.CallResult{
@@ -572,7 +586,7 @@ func TestCall_sessionIdentity_explicit(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 
 	fake := chain.NewFake()
 	fake.SetCallAsUser("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{
@@ -608,14 +622,15 @@ func TestCall_sessionIdentity_explicit(t *testing.T) {
 	}
 }
 
-// TestCall_defaultSession_testnet verifies that on a testnet profile with no
-// identity arg, gno_call defaults to "session" and returns authentication_required
-// when there is no active session (behavior preserved).
-func TestCall_defaultSession_testnet(t *testing.T) {
+// TestCall_defaultAgent_testnet verifies that on a testnet profile with no
+// identity arg and no agent key, gno_call defaults to "agent" and returns
+// agent_identity_unavailable (not authentication_required).
+// The new default is tested here; use identity=session to opt into the session path.
+func TestCall_defaultAgent_testnet(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "") // no agent key
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t)
@@ -625,9 +640,74 @@ func TestCall_defaultSession_testnet(t *testing.T) {
 		"profile": "testnet5",
 		"realm":   "gno.land/r/test/counter",
 		"func":    "Increment",
+		// no identity — defaults to agent on testnet
 	})
 	if err == nil {
-		t.Fatal("expected authentication_required error (default=session on testnet)")
+		t.Fatal("expected agent_identity_unavailable error (default=agent on testnet, no key generated)")
+	}
+	te, ok := errors.AsType[*server.ToolError](err)
+	if !ok {
+		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
+	}
+	if te.Code != "agent_identity_unavailable" {
+		t.Errorf("expected code=agent_identity_unavailable, got %q", te.Code)
+	}
+}
+
+// TestCall_defaultAgent_testnet_noKey verifies that on a testnet profile with no
+// identity arg and no agent key, gno_call defaults to "agent" and returns
+// agent_identity_unavailable whose message mentions gno_key_generate.
+func TestCall_defaultAgent_testnet_noKey(t *testing.T) {
+	s := newBaseTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "") // no key generated
+
+	fake := chain.NewFake()
+	mgr := noSessionMgr(t)
+	RegisterCall(s, ks, mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet5",
+		"realm":   "gno.land/r/test/counter",
+		"func":    "Increment",
+		// no identity — must default to agent on testnet
+	})
+	if err == nil {
+		t.Fatal("expected agent_identity_unavailable error")
+	}
+	te, ok := errors.AsType[*server.ToolError](err)
+	if !ok {
+		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
+	}
+	if te.Code != "agent_identity_unavailable" {
+		t.Errorf("expected code=agent_identity_unavailable, got %q", te.Code)
+	}
+	if !strings.Contains(te.Message, "gno_key_generate") {
+		t.Errorf("expected message to mention gno_key_generate, got: %q", te.Message)
+	}
+}
+
+// TestCall_sessionIdentity_testnet_explicit verifies that explicitly passing
+// identity="session" on a testnet profile still routes to the session path.
+func TestCall_sessionIdentity_testnet_explicit(t *testing.T) {
+	s := newBaseTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "") // no agent key
+
+	fake := chain.NewFake()
+	mgr := noSessionMgr(t) // no session either — confirms we go session path (not agent)
+	RegisterCall(s, ks, mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"identity": "session", // explicit override
+	})
+	if err == nil {
+		t.Fatal("expected authentication_required (session path, no active session)")
 	}
 	te, ok := errors.AsType[*server.ToolError](err)
 	if !ok {
@@ -638,12 +718,125 @@ func TestCall_defaultSession_testnet(t *testing.T) {
 	}
 }
 
+// TestCall_agentTestnet_insufficientFunds verifies that gno_call returns
+// insufficient_funds when the agent's testnet account has zero balance.
+func TestCall_agentTestnet_insufficientFunds(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+
+	// Generate an agent key for the testnet profile.
+	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	if err != nil {
+		t.Fatalf("GenerateForProfile: %v", err)
+	}
+
+	// Fake balance is 0 (never-funded) by default.
+	fake := chain.NewFake()
+	mgr := noSessionMgr(t)
+	RegisterCall(s, ks, mgr, constChainResolver(fake), alog)
+
+	_, callErr := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet9999",
+		"realm":   "gno.land/r/test/counter",
+		"func":    "Increment",
+	})
+	if callErr == nil {
+		t.Fatal("expected insufficient_funds error")
+	}
+	te, ok := errors.AsType[*server.ToolError](callErr)
+	if !ok {
+		t.Fatalf("expected *server.ToolError, got %T: %v", callErr, callErr)
+	}
+	if te.Code != "insufficient_funds" {
+		t.Errorf("expected code=insufficient_funds, got %q", te.Code)
+	}
+	if te.Extra["address"] != agentAddr {
+		t.Errorf("Extra[address]=%v, want %q", te.Extra["address"], agentAddr)
+	}
+}
+
+// TestCall_agentTestnet_funded verifies that a funded testnet agent account
+// proceeds past the balance check and reaches the chain call.
+func TestCall_agentTestnet_funded(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+
+	// Generate an agent key and capture its address.
+	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	if err != nil {
+		t.Fatalf("GenerateForProfile: %v", err)
+	}
+
+	fake := chain.NewFake()
+	fake.SetBalance(agentAddr, 10_000_000) // funded
+	fake.SetCall("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{
+		TxHash:  "0xfunded",
+		Height:  1,
+		GasUsed: 3000,
+	})
+
+	mgr := noSessionMgr(t)
+	RegisterCall(s, ks, mgr, constChainResolver(fake), alog)
+
+	res, callErr := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet9999",
+		"realm":   "gno.land/r/test/counter",
+		"func":    "Increment",
+	})
+	if callErr != nil {
+		t.Fatalf("expected success for funded account, got: %v", callErr)
+	}
+	if !strings.Contains(res.Text, "0xfunded") {
+		t.Errorf("expected tx hash in result text:\n%s", res.Text)
+	}
+}
+
+// TestCall_agentTestnet_simulate_skipsBalanceCheck verifies that simulate=true
+// bypasses the balance pre-check (dry-runs should not require funds).
+func TestCall_agentTestnet_simulate_skipsBalanceCheck(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+
+	if _, err := ks.GenerateForProfile("testnet9999", testnet9999Profile()); err != nil {
+		t.Fatalf("GenerateForProfile: %v", err)
+	}
+
+	fake := chain.NewFake()
+	// balance stays 0 — simulate must not be blocked
+	fake.SetCall("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{
+		GasUsed:   1000,
+		Simulated: false,
+	})
+
+	mgr := noSessionMgr(t)
+	RegisterCall(s, ks, mgr, constChainResolver(fake), alog)
+
+	res, callErr := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile":  "testnet9999",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"simulate": true,
+	})
+	if callErr != nil {
+		t.Fatalf("simulate with zero balance should succeed, got: %v", callErr)
+	}
+	if res.StructuredContent["simulated"] != true {
+		t.Errorf("expected simulated=true")
+	}
+}
+
 // TestCall_bogusIdentity verifies that an unknown identity value returns an error.
 func TestCall_bogusIdentity(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t)

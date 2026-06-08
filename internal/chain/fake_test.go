@@ -240,3 +240,28 @@ func TestFake_QuerySession_unknownReturnsInactive(t *testing.T) {
 		t.Error("expected Active=false for unknown session")
 	}
 }
+
+// ---- Balance tests
+
+func TestFake_Balance_seededAddress(t *testing.T) {
+	f := NewFake()
+	f.SetBalance("g1abc", 500)
+	got, err := f.Balance(context.Background(), "g1abc")
+	if err != nil {
+		t.Fatalf("Balance: %v", err)
+	}
+	if got != 500 {
+		t.Fatalf("got %d, want 500", got)
+	}
+}
+
+func TestFake_Balance_unknownAddressIsZero(t *testing.T) {
+	f := NewFake()
+	got, err := f.Balance(context.Background(), "g1unknown")
+	if err != nil {
+		t.Fatalf("Balance: %v", err)
+	}
+	if got != 0 {
+		t.Fatalf("unset must be 0, got %d", got)
+	}
+}

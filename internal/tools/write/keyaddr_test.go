@@ -11,7 +11,7 @@ import (
 
 func TestKeyAddress_localProfile_returnsAddress(t *testing.T) {
 	s := newLocalTestServer(t)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 	RegisterKeyAddress(s, ks)
 
 	res, err := s.Registry().Call(context.Background(), "gno_key_address", map[string]any{
@@ -36,7 +36,7 @@ func TestKeyAddress_localProfile_returnsAddress(t *testing.T) {
 
 func TestKeyAddress_testnetProfile_agentIdentityUnavailable(t *testing.T) {
 	s := newBaseTestServer(t)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 	RegisterKeyAddress(s, ks)
 
 	_, err := s.Registry().Call(context.Background(), "gno_key_address", map[string]any{

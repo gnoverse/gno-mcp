@@ -510,6 +510,23 @@ func (r *Real) AddPackage(_ context.Context, signer gnoclient.Signer, deployPath
 	return AddPackageResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, GasUsed: res.DeliverTx.GasUsed}, nil
 }
 
+// Balance returns the ugnot balance of a bech32 address.
+// A never-funded address (unknown to the chain) returns (0, nil).
+func (r *Real) Balance(_ context.Context, bech32 string) (int64, error) {
+	addr, err := crypto.AddressFromBech32(bech32)
+	if err != nil {
+		return 0, fmt.Errorf("balance: addr %q: %w", bech32, err)
+	}
+	acct, _, err := r.cli.QueryAccount(addr)
+	if err != nil {
+		if _, ok := errors.AsType[std.UnknownAddressError](err); ok {
+			return 0, nil // never-funded address is treated as zero balance
+		}
+		return 0, fmt.Errorf("balance: query %q: %w", bech32, err)
+	}
+	return acct.GetCoins().AmountOf(ugnot.Denom), nil
+}
+
 // defaultBaseTxCfg returns the gas/fee defaults for write txs.
 // Chain requires 1ugnot per 1000 gas; padded to 10000000ugnot @ 10M gas.
 func defaultBaseTxCfg() gnoclient.BaseTxCfg {

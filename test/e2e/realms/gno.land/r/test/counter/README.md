@@ -1,6 +1,6 @@
 # r/test/counter
 
-Stateful counter realm used by the gnomcp Milestone B e2e protocol.
+Stateful counter realm used by the gnomcp e2e protocol.
 
 Exports:
 - `Increment() int` — adds 1 to the running total; returns new value.

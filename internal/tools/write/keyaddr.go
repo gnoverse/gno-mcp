@@ -10,15 +10,16 @@ import (
 )
 
 // RegisterKeyAddress registers the gno_key_address tool.
-// ks provides agent addresses per profile; only local (dev) profiles have an
-// agent key in this phase.
+// ks provides agent addresses per profile: local profiles use test1, testnet
+// profiles return the address of a previously generated key (gno_key_generate).
 func RegisterKeyAddress(s *server.Server, ks *keystore.Keystore) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_key_address",
-		Description: "Returns the agent's own account address for a local/dev profile — " +
+		Description: "Returns the agent's own account address for a local or testnet profile — " +
 			"the account it signs with (e.g. so you can fund it). " +
-			"Read-only; performs no transaction. " +
-			"Returns agent_identity_unavailable for non-local profiles (testnet and mainnet are not supported in this phase).",
+			"Read-only; performs no transaction. Local profiles use the built-in test1 key; " +
+			"testnet profiles require a key previously generated via gno_key_generate. " +
+			"Returns agent_identity_unavailable when no agent key exists for the profile.",
 		InputSchema: keyAddrInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapBaseRead,
@@ -53,13 +54,13 @@ func keyAddrHandler(
 		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
 	}
 
-	addr, err := ks.AgentAddress(p)
+	addr, err := ks.AgentAddress(profileName, p)
 	if err != nil {
 		if errors.Is(err, keystore.ErrNoAgentKey) {
 			return server.Result{}, &server.ToolError{
 				Code: "agent_identity_unavailable",
 				Message: fmt.Sprintf(
-					"profile %q has no agent key (local/dev only in this phase)",
+					"no agent key for profile %q — run gno_key_generate to create one",
 					profileName,
 				),
 				Extra: map[string]any{"profile": profileName},

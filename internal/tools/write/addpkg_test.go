@@ -19,7 +19,7 @@ func TestAddPkg_happyPath(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 
 	fake := chain.NewFake()
 	fake.SetAddPackage("gno.land/r/test/foo", chain.AddPackageResult{
@@ -61,7 +61,7 @@ func TestAddPkg_agentIdentityUnavailable(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New()
+	ks := keystore.New(t.TempDir(), "")
 
 	fake := chain.NewFake()
 	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
@@ -85,6 +85,81 @@ func TestAddPkg_agentIdentityUnavailable(t *testing.T) {
 	}
 	if te.Code != "agent_identity_unavailable" {
 		t.Errorf("expected code=agent_identity_unavailable, got %q", te.Code)
+	}
+}
+
+// TestAddPkg_agentTestnet_insufficientFunds verifies that gno_addpkg returns
+// insufficient_funds when the agent's testnet account has zero balance.
+func TestAddPkg_agentTestnet_insufficientFunds(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	if err != nil {
+		t.Fatalf("GenerateForProfile: %v", err)
+	}
+
+	fake := chain.NewFake() // balance 0 by default
+	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
+
+	_, pkgErr := s.Registry().Call(context.Background(), "gno_addpkg", map[string]any{
+		"profile":     "testnet9999",
+		"deploy_path": "gno.land/r/test/foo",
+		"files": []any{
+			map[string]any{"name": "foo.gno", "body": "package foo\n"},
+		},
+	})
+	if pkgErr == nil {
+		t.Fatal("expected insufficient_funds error")
+	}
+	te, ok := errors.AsType[*server.ToolError](pkgErr)
+	if !ok {
+		t.Fatalf("expected *server.ToolError, got %T: %v", pkgErr, pkgErr)
+	}
+	if te.Code != "insufficient_funds" {
+		t.Errorf("expected code=insufficient_funds, got %q", te.Code)
+	}
+	if te.Extra["address"] != agentAddr {
+		t.Errorf("Extra[address]=%v, want %q", te.Extra["address"], agentAddr)
+	}
+}
+
+// TestAddPkg_agentTestnet_funded verifies that a funded testnet agent account
+// proceeds past the balance check and broadcasts the AddPackage.
+func TestAddPkg_agentTestnet_funded(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	if err != nil {
+		t.Fatalf("GenerateForProfile: %v", err)
+	}
+
+	fake := chain.NewFake()
+	fake.SetBalance(agentAddr, 10_000_000)
+	fake.SetAddPackage("gno.land/r/test/foo", chain.AddPackageResult{
+		TxHash:  "0xaddpkg",
+		Height:  4,
+		GasUsed: 8000,
+	})
+	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
+
+	res, pkgErr := s.Registry().Call(context.Background(), "gno_addpkg", map[string]any{
+		"profile":     "testnet9999",
+		"deploy_path": "gno.land/r/test/foo",
+		"files": []any{
+			map[string]any{"name": "foo.gno", "body": "package foo\n"},
+		},
+	})
+	if pkgErr != nil {
+		t.Fatalf("expected success for funded account, got: %v", pkgErr)
+	}
+	if !strings.Contains(res.Text, "0xaddpkg") {
+		t.Errorf("expected tx hash in result text:\n%s", res.Text)
 	}
 }
 

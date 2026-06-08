@@ -2,7 +2,7 @@
 
 MCP server for [gno.land](https://gno.land). Greenfield rewrite on the `v2` branch.
 
-> **Status:** Milestone B — read + write tools; session-gated writes; multi-chain via profiles. The
+> **Status:** read + write tools; session-gated writes; multi-chain via profiles. The
 > `main` branch has the older v1 server with a different architecture; this branch is the
 > ground-up rebuild per the ADRs in `adr/`.
 
@@ -143,10 +143,10 @@ ADRs in `adr/`:
 | ADR | What |
 | --- | ---- |
 | `prxxxx_multichain_via_profiles.md` | Profile-arg model with schema-conditional defaulting |
-| `prxxxx_tool_surface.md` | 13-tool inventory across the milestones |
-| `prxxxx_docker_default_deployment.md` | Docker as canonical deployment (Milestone D+) |
-| `prxxxx_session_authorization.md` | OAuth-style session signing for writes (Milestone B+) |
-| `prxxxx_a2a_serve_mode.md` | a2a-realm protocol bridge (Milestone C+) |
+| `prxxxx_tool_surface.md` | 13-tool inventory (read, write, session) |
+| `prxxxx_docker_default_deployment.md` | Docker as canonical deployment (future) |
+| `prxxxx_session_authorization.md` | OAuth-style session signing for writes |
+| `prxxxx_a2a_serve_mode.md` | a2a-realm protocol bridge (not yet built) |
 
 Built against the official MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`) and
 `github.com/gnolang/gno/gno.land/pkg/gnoclient` for chain RPC. tx-indexer GraphQL is

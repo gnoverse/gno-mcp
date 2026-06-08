@@ -92,11 +92,11 @@ func runHandler(
 		return server.Result{}, fmt.Errorf("profile %q: no chain client available", profileName)
 	}
 
-	// ---- Resolve identity (default by tier: local→agent, otherwise→session)
+	// ---- Resolve identity (default by tier: local/testnet→agent, otherwise→session)
 
 	identity, _ := stringArg(args, "identity")
 	if identity == "" {
-		if profile.ChainType == profiles.ChainTypeLocal {
+		if profile.ChainType == profiles.ChainTypeLocal || profile.ChainType == profiles.ChainTypeTestnet {
 			identity = "agent"
 		} else {
 			identity = "session"
@@ -115,15 +115,15 @@ func runHandler(
 
 	switch identity {
 	case "agent":
-		// ---- Agent branch: sign with the agent's own key (local/dev only)
+		// ---- Agent branch: sign with the agent's own key (local test1 or testnet generated key)
 
-		agentSigner, ksErr := ks.SignerForProfile(profile)
+		agentSigner, ksErr := ks.SignerForProfile(profileName, profile)
 		if ksErr != nil {
 			if errors.Is(ksErr, keystore.ErrNoAgentKey) {
 				return server.Result{}, &server.ToolError{
 					Code: "agent_identity_unavailable",
 					Message: fmt.Sprintf(
-						"profile %q has no agent key (local/dev only in this phase)",
+						"no agent key for profile %q — run gno_key_generate (or pass identity=session to act as the user)",
 						profileName,
 					),
 					Extra: map[string]any{"profile": profileName},
@@ -137,6 +137,20 @@ func runHandler(
 			return server.Result{}, fmt.Errorf("gno_run: signer info: %w", infoErr)
 		}
 		signerAddr = info.GetAddress().String()
+
+		if profile.ChainType == profiles.ChainTypeTestnet && !simulate {
+			bal, balErr := c.Balance(ctx, signerAddr)
+			if balErr != nil {
+				return server.Result{}, fmt.Errorf("gno_run: balance check: %w", balErr)
+			}
+			if bal == 0 {
+				return server.Result{}, &server.ToolError{
+					Code:    "insufficient_funds",
+					Message: fmt.Sprintf("agent testnet account %s is unfunded — send it ugnot, then retry", signerAddr),
+					Extra:   map[string]any{"profile": profileName, "address": signerAddr},
+				}
+			}
+		}
 
 		rr, err = c.Run(ctx, agentSigner, code, simulate)
 		if err != nil {
@@ -254,7 +268,7 @@ func runHandler(
 	// ---- Build result with identity metadata
 
 	out := buildRunResult(rr)
-	out.Text = signedByLine(identity, signerAddr, master) + "\n\n" + out.Text
+	out.Text = signedByLine(identity, signerAddr, master, profile.ChainType) + "\n\n" + out.Text
 	if out.StructuredContent == nil {
 		out.StructuredContent = map[string]any{}
 	}
@@ -307,7 +321,7 @@ func runInputSchema(s *server.Server) map[string]any {
 		"identity": map[string]any{
 			"type":        "string",
 			"enum":        []string{"agent", "session"},
-			"description": "Who signs: agent (the agent's own key — local/dev) or session (act as the user via a master-bound session). Default: agent on local, session otherwise.",
+			"description": "Who signs: agent (the agent's own key — local test1 or testnet generated key) or session (act as the user via a master-bound session). Default: agent on local and testnet, session otherwise.",
 		},
 	}
 	required := []string{"code"}

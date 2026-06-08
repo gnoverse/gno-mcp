@@ -35,11 +35,13 @@ func (s *Server) AnyProfileHasIndexer() bool {
 	return false
 }
 
-// AnyProfileLocal reports whether any profile is a local (dev) chain — i.e. the
-// agent has a usable test1 key. Gates the agent-only tools (gno_addpkg, gno_key_address).
-func (s *Server) AnyProfileLocal() bool {
+// AnyProfileAgentCapable reports whether any profile is local or testnet — i.e.
+// the agent has or can generate its own signing key. Given the chain-id allowlist
+// (dev|test*), this is effectively any configured profile.
+// Gates agent-only tools: gno_addpkg, gno_key_address, gno_key_generate.
+func (s *Server) AnyProfileAgentCapable() bool {
 	for _, p := range s.cfg.Profiles {
-		if p.ChainType == profiles.ChainTypeLocal {
+		if p.ChainType == profiles.ChainTypeLocal || p.ChainType == profiles.ChainTypeTestnet {
 			return true
 		}
 	}

@@ -17,7 +17,7 @@ type Entry struct {
 	ArgsSummary    string    `json:"args_summary,omitempty"`
 	Result         string    `json:"result"`                    // ok / sim / sim_err / broadcast_err / tool_err
 	Duration       int64     `json:"duration_ms"`               // milliseconds since the call started, populated via time.Duration.Milliseconds()
-	SessionAddress string    `json:"session_address,omitempty"` // Milestone B
+	SessionAddress string    `json:"session_address,omitempty"` // non-empty only for session-signed (act-as-user) writes
 }
 
 // Log writes audit entries as JSON lines to the underlying writer.

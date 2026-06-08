@@ -1,8 +1,8 @@
-# gnomcp Milestone B — E2E Protocol
+# gnomcp — E2E Protocol
 
 Manual checklist. Run sequentially. Record every result in the runlog
-at `.mynote/v2-issues/YYYY-MM-DD-milestone-b-section-a-runlog.md` (Section A)
-and `.mynote/v2-issues/YYYY-MM-DD-milestone-b-section-b-runlog.md` (Section B).
+at `.mynote/v2-issues/YYYY-MM-DD-section-a-runlog.md` (Section A)
+and `.mynote/v2-issues/YYYY-MM-DD-section-b-runlog.md` (Section B).
 
 ---
 
@@ -13,13 +13,13 @@ and `.mynote/v2-issues/YYYY-MM-DD-milestone-b-section-b-runlog.md` (Section B).
 - [ ] `make build` produces `bin/gnomcp` without error.
 - [ ] `bin/gnomcp --config test/e2e/profiles.toml` starts and stays running (second terminal).
 
-Note on indexer: `setup.sh --with-indexer` is not wired in Milestone B. The
+Note on indexer: `setup.sh --with-indexer` is not wired yet. The
 `--with-indexer` flag currently prints "indexer not wired yet" and continues.
 Check A7 documents the expected absent behavior for that configuration.
 
 ---
 
-## Section A — Milestone A regression (read tools)
+## Section A — read-tool regression
 
 Run these before Section B. If any fails, fix the read-tool break before
 proceeding — the write-tool flow depends on gnodev being healthy.
@@ -80,7 +80,7 @@ are absent from gnomcp at runtime.
 Pass: `initialize` response (or `tools/list`) does NOT include `gno_list`,
 `gno_history`, or `gno_activity`.
 
-If the operator ran `setup.sh --with-indexer` (out-of-scope for default Milestone B run):
+If the operator ran `setup.sh --with-indexer` (out-of-scope for the default run):
 - `gno_history(realm=gno.land/r/test/counter)` returns at least the AddPackage event.
 - `gno_activity(realm=gno.land/r/test/counter)` returns only MsgCall events.
 - `gno_activity` with `since != nil` returns `error_unavailable`.
@@ -88,7 +88,7 @@ If the operator ran `setup.sh --with-indexer` (out-of-scope for default Mileston
 
 ---
 
-## Section B — Milestone B feature checks (writes + sessions)
+## Section B — writes + sessions
 
 Pre-flight: A1–A6 all pass. `gno_eval Total()` returns the expected baseline.
 

@@ -93,8 +93,8 @@ func main() {
 		log.Printf("session hydration warning: %v", err)
 	}
 
-	// ---- keystore (agent identity for local/dev profiles)
-	ks := keystore.New()
+	// ---- keystore (agent identity for local and testnet profiles)
+	ks := keystore.New(defaultAgentKeysPath(), passphrase)
 
 	// ---- register tools
 	readtools.RegisterRender(s, chainResolver)
@@ -115,18 +115,18 @@ func main() {
 	writetools.RegisterSessionPropose(s, sessionMgr)
 	writetools.RegisterSessionRevoke(s, sessionMgr)
 
-	if s.AnyProfileLocal() { // agent-only tools — only when a local profile exists
+	if s.AnyProfileAgentCapable() { // agent-only tools — local (test1) or testnet (generated key)
 		writetools.RegisterAddPkg(s, ks, chainResolver, auditLog)
 		writetools.RegisterKeyAddress(s, ks)
+		writetools.RegisterKeyGenerate(s, ks)
 	}
 
 	// ---- build MCP SDK server
 	instructions := "gnomcp serves Gno realm reads via the official MCP Go SDK. " +
 		"Tools are registered conditionally based on profile capabilities (see profiles.toml). " +
-		"Write tools (gno_call, gno_run) require an active " +
-		"chain-bounded session — call gno_session_propose first to authorize " +
-		"one via your own gnokey. " +
-		"On local (dev) chains the agent writes with its own test1 account; on other chains writes go through a user-authorized session. " +
+		"Write tools (gno_call, gno_run) default to the agent identity on local and testnet profiles: " +
+		"local profiles sign with the built-in test1 key; testnet profiles sign with a key generated via gno_key_generate. " +
+		"Pass identity=session (or call gno_session_propose first) to act as the user via a chain-bound session instead. " +
 		"For ANY write (gno_call/gno_run/gno_addpkg) always tell the user which account signed — the agent's own key or a session — so the acting identity is never ambiguous."
 	mcpServer := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "gnomcp",
@@ -388,6 +388,16 @@ func defaultSessionsPath() string {
 		return filepath.Join(home, ".local", "share", "gnomcp", "sessions")
 	}
 	return "./sessions"
+}
+
+func defaultAgentKeysPath() string {
+	if v := os.Getenv("GNOMCP_AGENT_KEYS_PATH"); v != "" {
+		return v
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".local", "share", "gnomcp", "agent-keys")
+	}
+	return "./agent-keys"
 }
 
 // ---- helpers

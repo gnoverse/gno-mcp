@@ -64,7 +64,13 @@ func stringSliceArg(args map[string]any, name string) ([]string, error) {
 }
 
 func profileWritableBySession(p profiles.Profile) bool { return p.MasterAddress != "" }
-func profileWritableByAgent(p profiles.Profile) bool   { return p.ChainType == profiles.ChainTypeLocal }
+
+// profileWritableByAgent reports whether the agent has or can have its own signing
+// key for p. Local profiles use the built-in test1 key; testnet profiles get a
+// generated key via gno_key_generate.
+func profileWritableByAgent(p profiles.Profile) bool {
+	return p.ChainType == profiles.ChainTypeLocal || p.ChainType == profiles.ChainTypeTestnet
+}
 
 // addProfileArgFiltered populates props["profile"] with an enum filtered by keep.
 // desc is the human-readable description for the arg.
@@ -95,17 +101,26 @@ func addProfileArg(s *server.Server, props map[string]any, required *[]string) {
 		"Profile to use. Only profiles with a master-address (session-writable) are listed.")
 }
 
-// addAgentProfileArg adds the `profile` arg filtered to local (dev) profiles
-// where the agent has a test1 key available.
+// addAgentProfileArg adds the `profile` arg filtered to profiles where the
+// agent can sign — local (test1) and testnet (generated key via gno_key_generate).
 func addAgentProfileArg(s *server.Server, props map[string]any, required *[]string) {
 	addProfileArgFiltered(s, props, required, profileWritableByAgent,
-		"Profile to use. Only local (dev) profiles with an agent key are listed.")
+		"Profile to use. Local profiles use the built-in test1 key; testnet profiles require a generated agent key (gno_key_generate).")
+}
+
+func profileIsTestnet(p profiles.Profile) bool { return p.ChainType == profiles.ChainTypeTestnet }
+
+// addTestnetProfileArg adds the `profile` arg filtered to testnet profiles,
+// where the agent can generate and persist its own key.
+func addTestnetProfileArg(s *server.Server, props map[string]any, required *[]string) {
+	addProfileArgFiltered(s, props, required, profileIsTestnet,
+		"Profile to use. Only testnet profiles support agent key generation.")
 }
 
 // addWritableProfileArg adds the `profile` arg listing all profiles writable
-// via an agent key (local) or a session (master-address).
+// via an agent key (local or testnet) or a session (master-address).
 func addWritableProfileArg(s *server.Server, props map[string]any, required *[]string) {
 	addProfileArgFiltered(s, props, required, func(p profiles.Profile) bool {
 		return profileWritableByAgent(p) || profileWritableBySession(p)
-	}, "Profile to use. Lists profiles writable via an agent key (local) or a session (master-address).")
+	}, "Profile to use. Lists profiles writable via an agent key (local/testnet) or a session (master-address).")
 }
