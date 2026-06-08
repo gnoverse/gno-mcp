@@ -63,3 +63,35 @@ bypass-hard-limits = true
 	assert.Equal(t, "4h", p.DefaultExpiresIn)
 	assert.True(t, p.BypassHardLimits, "expected bypass-hard-limits=true")
 }
+
+func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
+	cfg := &Config{Profiles: BuiltinProfiles()}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "built-in defaults must validate")
+
+	local, ok := cfg.Profiles["local"]
+	if !ok || local.ChainID != "dev" {
+		assert.Fail(t, "local default missing or wrong chain-id", "%+v", local)
+	}
+	tn, ok := cfg.Profiles["testnet"]
+	if !ok || tn.ChainID != "test11" {
+		assert.Fail(t, "testnet default missing or wrong chain-id", "%+v", tn)
+	}
+	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
+	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
+}
+
+func TestMerge_LaterOverridesByName(t *testing.T) {
+	base := BuiltinProfiles()
+	overlay, err := Load(strings.NewReader(`
+[testnet]
+rpc-url = "https://rpc.test11.testnets.gno.land:443"
+chain-id = "test11"
+master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
+`))
+	require.NoError(t, err, "load overlay")
+
+	merged := Merge(base, overlay.Profiles)
+	assert.NotEmpty(t, merged["testnet"].MasterAddress, "overlay should have added master-address to testnet")
+	assert.Contains(t, merged, "local", "base 'local' should survive the merge")
+}

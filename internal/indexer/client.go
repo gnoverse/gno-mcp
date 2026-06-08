@@ -46,3 +46,9 @@ type Client interface {
 	// [since, until]. A nil pointer means that bound is unconstrained.
 	Activity(ctx context.Context, realm string, since, until *time.Time) ([]TxEvent, error)
 }
+
+// Resolver returns the Client to use for a given profile name.
+// nil = profile has no tx-indexer-url configured; the caller should
+// surface a clear error. Tools take Resolver as the DI seam for the
+// indexer client.
+type Resolver func(profile string) Client
