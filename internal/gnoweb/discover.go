@@ -7,8 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
-	"strings"
+
+	"golang.org/x/net/html"
+)
+
+// gnoconnect meta-tag names a gnoweb page advertises its connection info under.
+const (
+	metaNameRPC     = "gnoconnect:rpc"
+	metaNameChainID = "gnoconnect:chainid"
 )
 
 // Conn is the connection info advertised by a gnoweb deployment.
@@ -17,16 +23,11 @@ type Conn struct {
 	ChainID string
 }
 
-var (
-	// metaRE matches a single <meta ...> element; attrRE extracts its quoted
-	// attributes (single or double quote). Parsing per-tag makes discovery
-	// independent of attribute order (HTML does not guarantee name-before-content).
-	metaRE = regexp.MustCompile(`(?i)<meta\b[^>]*>`)
-	attrRE = regexp.MustCompile(`(?i)([a-z][a-z0-9:_-]*)\s*=\s*["']([^"']*)["']`)
-)
-
 // Discover fetches url and extracts the gnoconnect:rpc and gnoconnect:chainid
-// meta-tags (attribute-order independent). Returns an error if either is absent.
+// meta-tags, reading the document head: tokenizing stops at the first </head>
+// or <body>, so tags in the body are ignored. A bare fragment with no head/body
+// wrapper is read to EOF (bounded by the 1 MiB cap). Returns an error if either
+// tag is absent.
 func Discover(client *http.Client, url string) (Conn, error) {
 	resp, err := client.Get(url)
 	if err != nil {
@@ -36,26 +37,53 @@ func Discover(client *http.Client, url string) (Conn, error) {
 	if resp.StatusCode != http.StatusOK {
 		return Conn{}, fmt.Errorf("fetch gnoweb %q: status %d", url, resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MiB cap
-	if err != nil {
-		return Conn{}, fmt.Errorf("read gnoweb %q: %w", url, err)
-	}
 
 	var conn Conn
-	for _, tag := range metaRE.FindAll(body, -1) {
-		attrs := map[string]string{}
-		for _, m := range attrRE.FindAllSubmatch(tag, -1) {
-			attrs[strings.ToLower(string(m[1]))] = string(m[2])
-		}
-		switch attrs["name"] {
-		case "gnoconnect:rpc":
-			conn.RPC = attrs["content"]
-		case "gnoconnect:chainid":
-			conn.ChainID = attrs["content"]
+	z := html.NewTokenizer(io.LimitReader(resp.Body, 1<<20)) // 1 MiB cap
+head:
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			break head // EOF or malformed tail; whatever we parsed stands
+		case html.EndTagToken:
+			if name, _ := z.TagName(); string(name) == "head" {
+				break head
+			}
+		case html.StartTagToken, html.SelfClosingTagToken:
+			name, _ := z.TagName()
+			switch string(name) {
+			case "body":
+				break head // past the head; gnoconnect tags live in <head>
+			case "meta":
+				// A repeated tag: the last occurrence read wins.
+				switch metaName, content := metaAttrs(z); metaName {
+				case metaNameRPC:
+					conn.RPC = content
+				case metaNameChainID:
+					conn.ChainID = content
+				}
+			}
 		}
 	}
 	if conn.RPC == "" || conn.ChainID == "" {
-		return Conn{}, fmt.Errorf("gnoweb %q: no gnoconnect:rpc/chainid meta-tags (is this a gnoweb host?)", url)
+		return Conn{}, fmt.Errorf("gnoweb %q: no %s/%s meta-tags (is this a gnoweb host?)", url, metaNameRPC, metaNameChainID)
 	}
 	return conn, nil
+}
+
+// metaAttrs reads the name and content attributes of the current <meta> token.
+// The tokenizer lower-cases attribute keys, so matching is order-independent.
+func metaAttrs(z *html.Tokenizer) (name, content string) {
+	for {
+		k, v, more := z.TagAttr()
+		switch string(k) {
+		case "name":
+			name = string(v)
+		case "content":
+			content = string(v)
+		}
+		if !more {
+			return name, content
+		}
+	}
 }

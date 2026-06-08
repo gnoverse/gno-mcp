@@ -37,6 +37,31 @@ func TestDiscover_MissingTags(t *testing.T) {
 	}
 }
 
+func TestDiscover_HeadOnly_IgnoresBodyMeta(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Decoy gnoconnect tags in <body> must be ignored: discovery parses the
+		// <head> only, so the real head values win.
+		w.Write([]byte(`<html><head>
+<meta name="gnoconnect:rpc" content="https://rpc.test11.testnets.gno.land" />
+<meta name="gnoconnect:chainid" content="test11" />
+</head><body>
+<meta name="gnoconnect:rpc" content="https://decoy.example.com" />
+<meta name="gnoconnect:chainid" content="decoy" />
+</body></html>`))
+	}))
+	defer srv.Close()
+	got, err := Discover(srv.Client(), srv.URL)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if got.RPC != "https://rpc.test11.testnets.gno.land" {
+		t.Errorf("rpc = %q; body decoy should be ignored (head-only parse)", got.RPC)
+	}
+	if got.ChainID != "test11" {
+		t.Errorf("chainid = %q; body decoy should be ignored (head-only parse)", got.ChainID)
+	}
+}
+
 func TestDiscover_AttributeOrderIndependent(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// content before name, and a single-quoted value — must still parse.
