@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // txResponse builds a minimal valid GraphQL envelope for a transactions list.
@@ -23,9 +26,7 @@ func txResponse(txs []any) map[string]any {
 func TestGraphQL_History(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		if !strings.Contains(string(body), "transactions") {
-			t.Errorf("expected transactions query in body, got %s", body)
-		}
+		assert.True(t, strings.Contains(string(body), "transactions"), "expected transactions query in body, got %s", body)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(txResponse([]any{
 			map[string]any{
@@ -49,21 +50,11 @@ func TestGraphQL_History(t *testing.T) {
 
 	c := NewGraphQL(srv.URL)
 	events, err := c.History(context.Background(), "gno.land/r/foo")
-	if err != nil {
-		t.Fatalf("History: %v", err)
-	}
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d: %+v", len(events), events)
-	}
-	if events[0].Hash != "0xabc" {
-		t.Errorf("Hash = %q, want %q", events[0].Hash, "0xabc")
-	}
-	if events[0].Height != 100 {
-		t.Errorf("Height = %d, want 100", events[0].Height)
-	}
-	if events[0].Kind != "MsgAddPackage" {
-		t.Errorf("Kind = %q, want MsgAddPackage", events[0].Kind)
-	}
+	require.NoError(t, err, "History")
+	require.Len(t, events, 1, "expected 1 event, got %d: %+v", len(events), events)
+	assert.Equal(t, "0xabc", events[0].Hash)
+	assert.Equal(t, int64(100), events[0].Height)
+	assert.Equal(t, "MsgAddPackage", events[0].Kind)
 }
 
 func TestGraphQL_History_MsgCall(t *testing.T) {
@@ -93,25 +84,14 @@ func TestGraphQL_History_MsgCall(t *testing.T) {
 
 	c := NewGraphQL(srv.URL)
 	events, err := c.History(context.Background(), "gno.land/r/foo")
-	if err != nil {
-		t.Fatalf("History: %v", err)
-	}
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
+	require.NoError(t, err, "History")
+	require.Len(t, events, 1)
 	ev := events[0]
-	if ev.Kind != "MsgCall" {
-		t.Errorf("Kind = %q, want MsgCall", ev.Kind)
-	}
-	if ev.Caller != "g1caller" {
-		t.Errorf("Caller = %q, want g1caller", ev.Caller)
-	}
-	if ev.Func != "Transfer" {
-		t.Errorf("Func = %q, want Transfer", ev.Func)
-	}
-	if len(ev.Args) != 2 || ev.Args[0] != "g1dest" {
-		t.Errorf("Args = %v, want [g1dest 100]", ev.Args)
-	}
+	assert.Equal(t, "MsgCall", ev.Kind)
+	assert.Equal(t, "g1caller", ev.Caller)
+	assert.Equal(t, "Transfer", ev.Func)
+	require.Len(t, ev.Args, 2)
+	assert.Equal(t, "g1dest", ev.Args[0])
 }
 
 func TestGraphQL_Activity_filtersByKind(t *testing.T) {
@@ -170,74 +150,46 @@ func TestGraphQL_Activity_filtersByKind(t *testing.T) {
 
 	c := NewGraphQL(srv.URL)
 	events, err := c.Activity(context.Background(), "gno.land/r/foo", nil, nil)
-	if err != nil {
-		t.Fatalf("Activity: %v", err)
-	}
-	if len(events) != 2 {
-		t.Fatalf("expected 2 events (MsgCall + MsgRun), got %d: %+v", len(events), events)
-	}
+	require.NoError(t, err, "Activity")
+	require.Len(t, events, 2, "expected 2 events (MsgCall + MsgRun), got %d: %+v", len(events), events)
 	kinds := map[string]bool{}
 	for _, e := range events {
 		kinds[e.Kind] = true
 	}
-	if !kinds["MsgCall"] || !kinds["MsgRun"] {
-		t.Errorf("expected MsgCall and MsgRun, got kinds %v", kinds)
-	}
-	if kinds["MsgAddPackage"] {
-		t.Error("MsgAddPackage should have been filtered out")
-	}
+	assert.True(t, kinds["MsgCall"] && kinds["MsgRun"], "expected MsgCall and MsgRun, got kinds %v", kinds)
+	assert.False(t, kinds["MsgAddPackage"], "MsgAddPackage should have been filtered out")
 }
 
 func TestGraphQL_Activity_rejectsSince(t *testing.T) {
 	c := NewGraphQL("http://127.0.0.1:1") // URL won't be called
 	since := time.Now().Add(-time.Hour)
 	_, err := c.Activity(context.Background(), "gno.land/r/foo", &since, nil)
-	if err == nil {
-		t.Fatal("expected error when since is non-nil")
-	}
-	if !strings.Contains(err.Error(), "error_unavailable") {
-		t.Errorf("error should contain 'error_unavailable', got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "time filtering") {
-		t.Errorf("error should contain 'time filtering', got: %v", err)
-	}
+	require.Error(t, err, "expected error when since is non-nil")
+	assert.True(t, strings.Contains(err.Error(), "error_unavailable"), "error should contain 'error_unavailable', got: %v", err)
+	assert.True(t, strings.Contains(err.Error(), "time filtering"), "error should contain 'time filtering', got: %v", err)
 }
 
 func TestGraphQL_Activity_rejectsUntil(t *testing.T) {
 	c := NewGraphQL("http://127.0.0.1:1") // URL won't be called
 	until := time.Now()
 	_, err := c.Activity(context.Background(), "gno.land/r/foo", nil, &until)
-	if err == nil {
-		t.Fatal("expected error when until is non-nil")
-	}
-	if !strings.Contains(err.Error(), "error_unavailable") {
-		t.Errorf("error should contain 'error_unavailable', got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "time filtering") {
-		t.Errorf("error should contain 'time filtering', got: %v", err)
-	}
+	require.Error(t, err, "expected error when until is non-nil")
+	assert.True(t, strings.Contains(err.Error(), "error_unavailable"), "error should contain 'error_unavailable', got: %v", err)
+	assert.True(t, strings.Contains(err.Error(), "time filtering"), "error should contain 'time filtering', got: %v", err)
 }
 
 func TestGraphQL_List_notSupported(t *testing.T) {
 	c := NewGraphQL("http://127.0.0.1:1") // URL won't be called
 	_, err := c.List(context.Background(), ListFilter{})
-	if err == nil {
-		t.Fatal("expected error for unsupported List")
-	}
-	if !strings.Contains(err.Error(), "not supported") {
-		t.Errorf("error should mention 'not supported', got: %v", err)
-	}
+	require.Error(t, err, "expected error for unsupported List")
+	assert.True(t, strings.Contains(err.Error(), "not supported"), "error should mention 'not supported', got: %v", err)
 }
 
 func TestGraphQL_unreachable(t *testing.T) {
 	c := NewGraphQL("http://127.0.0.1:1")
 	_, err := c.History(context.Background(), "gno.land/r/x")
-	if err == nil {
-		t.Fatal("expected error for unreachable indexer")
-	}
-	if !strings.Contains(err.Error(), "error_unavailable") {
-		t.Errorf("error should mention 'error_unavailable', got: %v", err)
-	}
+	require.Error(t, err, "expected error for unreachable indexer")
+	assert.True(t, strings.Contains(err.Error(), "error_unavailable"), "error should mention 'error_unavailable', got: %v", err)
 }
 
 func TestGraphQL_nonOKStatus(t *testing.T) {
@@ -248,12 +200,8 @@ func TestGraphQL_nonOKStatus(t *testing.T) {
 
 	c := NewGraphQL(srv.URL)
 	_, err := c.History(context.Background(), "gno.land/r/x")
-	if err == nil {
-		t.Fatal("expected error for non-200 status")
-	}
-	if !strings.Contains(err.Error(), "503") {
-		t.Errorf("error should mention status code, got: %v", err)
-	}
+	require.Error(t, err, "expected error for non-200 status")
+	assert.True(t, strings.Contains(err.Error(), "503"), "error should mention status code, got: %v", err)
 }
 
 func TestGraphQL_graphqlError(t *testing.T) {
@@ -269,10 +217,6 @@ func TestGraphQL_graphqlError(t *testing.T) {
 
 	c := NewGraphQL(srv.URL)
 	_, err := c.History(context.Background(), "gno.land/r/x")
-	if err == nil {
-		t.Fatal("expected error from GraphQL errors envelope")
-	}
-	if !strings.Contains(err.Error(), "some graphql error") {
-		t.Errorf("error should mention graphql error message, got: %v", err)
-	}
+	require.Error(t, err, "expected error from GraphQL errors envelope")
+	assert.True(t, strings.Contains(err.Error(), "some graphql error"), "error should mention graphql error message, got: %v", err)
 }

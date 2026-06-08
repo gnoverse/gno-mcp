@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	indexerpkg "github.com/gnoverse/gno-mcp/internal/indexer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestList_returnsRealms(t *testing.T) {
@@ -24,15 +26,9 @@ func TestList_returnsRealms(t *testing.T) {
 	res, err := s.Registry().Call(context.Background(), "gno_list", map[string]any{
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if !strings.Contains(res.Text, "gno.land/r/demo/boards") {
-		t.Errorf("Text does not contain realm path: %q", res.Text)
-	}
-	if !strings.Contains(res.Text, "social") {
-		t.Errorf("Text does not contain tag info: %q", res.Text)
-	}
+	require.NoError(t, err, "Call")
+	assert.True(t, strings.Contains(res.Text, "gno.land/r/demo/boards"), "Text does not contain realm path: %q", res.Text)
+	assert.True(t, strings.Contains(res.Text, "social"), "Text does not contain tag info: %q", res.Text)
 }
 
 func TestList_noMatches(t *testing.T) {
@@ -44,12 +40,8 @@ func TestList_noMatches(t *testing.T) {
 	res, err := s.Registry().Call(context.Background(), "gno_list", map[string]any{
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if !strings.Contains(res.Text, "No realms matched the filter.") {
-		t.Errorf("Text = %q, want 'No realms matched the filter.'", res.Text)
-	}
+	require.NoError(t, err, "Call")
+	assert.True(t, strings.Contains(res.Text, "No realms matched the filter."), "Text = %q, want 'No realms matched the filter.'", res.Text)
 }
 
 func TestList_profileWithoutIndexer(t *testing.T) {
@@ -59,9 +51,7 @@ func TestList_profileWithoutIndexer(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_list", map[string]any{
 		"profile": "ghost",
 	})
-	if err == nil {
-		t.Fatal("expected error when resolver returns nil for profile without indexer")
-	}
+	require.Error(t, err, "expected error when resolver returns nil for profile without indexer")
 }
 
 func TestList_rejectsNonStringTag(t *testing.T) {
@@ -71,7 +61,5 @@ func TestList_rejectsNonStringTag(t *testing.T) {
 		"profile": "testnet5",
 		"tag":     42,
 	})
-	if err == nil {
-		t.Fatal("expected type error when tag is not a string")
-	}
+	require.Error(t, err, "expected type error when tag is not a string")
 }

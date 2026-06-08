@@ -1,9 +1,11 @@
 package profiles
 
 import (
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHardLimits(t *testing.T) {
@@ -46,25 +48,16 @@ func TestHardLimits(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			hl := tc.profile.HardLimits()
-			if hl.MaxSpendLimit != tc.wantSpend {
-				t.Errorf("MaxSpendLimit: got %q, want %q", hl.MaxSpendLimit, tc.wantSpend)
-			}
-			if hl.MaxExpiresIn != tc.wantExpires {
-				t.Errorf("MaxExpiresIn: got %v, want %v", hl.MaxExpiresIn, tc.wantExpires)
-			}
-			if hl.MaxAllowPathsCount != tc.wantPaths {
-				t.Errorf("MaxAllowPathsCount: got %d, want %d", hl.MaxAllowPathsCount, tc.wantPaths)
-			}
+			assert.Equal(t, tc.wantSpend, hl.MaxSpendLimit, "MaxSpendLimit")
+			assert.Equal(t, tc.wantExpires, hl.MaxExpiresIn, "MaxExpiresIn")
+			assert.Equal(t, tc.wantPaths, hl.MaxAllowPathsCount, "MaxAllowPathsCount")
 		})
 	}
 }
 
 func TestHardLimits_NoMainnetType(t *testing.T) {
-	// A testnet profile gets the moderate (default) limits.
 	p := Profile{ChainType: ChainTypeTestnet}
-	if got := p.HardLimits().MaxSpendLimit; got != "100000000ugnot" {
-		t.Errorf("testnet MaxSpendLimit = %q, want 100000000ugnot", got)
-	}
+	assert.Equal(t, "100000000ugnot", p.HardLimits().MaxSpendLimit)
 }
 
 func TestEffectiveDefaults_profileSetWins(t *testing.T) {
@@ -73,52 +66,30 @@ func TestEffectiveDefaults_profileSetWins(t *testing.T) {
 		DefaultExpiresIn:  "2h",
 	}
 	spend, expires, err := p.EffectiveDefaults()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if spend != "500000ugnot" {
-		t.Errorf("spend: got %q, want 500000ugnot", spend)
-	}
-	if expires != 2*time.Hour {
-		t.Errorf("expires: got %v, want 2h", expires)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "500000ugnot", spend)
+	assert.Equal(t, 2*time.Hour, expires)
 }
 
 func TestEffectiveDefaults_fallbackToHardcoded(t *testing.T) {
 	p := Profile{}
 	spend, expires, err := p.EffectiveDefaults()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if spend != "100000000ugnot" {
-		t.Errorf("spend: got %q, want hardcoded 100000000ugnot", spend)
-	}
-	if expires != time.Hour {
-		t.Errorf("expires: got %v, want hardcoded 1h", expires)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "100000000ugnot", spend)
+	assert.Equal(t, time.Hour, expires)
 }
 
 func TestEffectiveDefaults_mixedFallback(t *testing.T) {
 	p := Profile{DefaultSpendLimit: "200000ugnot"}
 	spend, expires, err := p.EffectiveDefaults()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if spend != "200000ugnot" {
-		t.Errorf("spend: got %q, want 200000ugnot", spend)
-	}
-	if expires != time.Hour {
-		t.Errorf("expires: got %v, want hardcoded 1h", expires)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "200000ugnot", spend)
+	assert.Equal(t, time.Hour, expires)
 }
 
 func TestEffectiveDefaults_invalidExpiresInReturnsError(t *testing.T) {
 	p := Profile{DefaultExpiresIn: "garbage"}
 	_, _, err := p.EffectiveDefaults()
-	if err == nil {
-		t.Fatal("expected error for unparseable default-expires-in")
-	}
-	if !strings.Contains(err.Error(), "default-expires-in") {
-		t.Errorf("error should mention field name: %v", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "default-expires-in")
 }

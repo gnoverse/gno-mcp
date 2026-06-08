@@ -4,6 +4,9 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
@@ -21,9 +24,8 @@ func newMixedTestServer(t *testing.T) *server.Server {
 			MasterAddress: "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 		},
 	}}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("validate: %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "validate")
 	return server.NewServer(cfg, "")
 }
 
@@ -31,13 +33,9 @@ func newMixedTestServer(t *testing.T) *server.Server {
 func enumFromProps(t *testing.T, props map[string]any) []string {
 	t.Helper()
 	profileProp, ok := props["profile"].(map[string]any)
-	if !ok {
-		t.Fatal("profile prop missing or wrong type")
-	}
+	require.True(t, ok, "profile prop missing or wrong type")
 	enum, ok := profileProp["enum"].([]string)
-	if !ok {
-		t.Fatal("enum field missing or wrong type")
-	}
+	require.True(t, ok, "enum field missing or wrong type")
 	sorted := make([]string, len(enum))
 	copy(sorted, enum)
 	sort.Strings(sorted)
@@ -51,16 +49,12 @@ func Test_addAgentProfileArg_filtersToLocal(t *testing.T) {
 	addAgentProfileArg(s, props, &required)
 
 	enum := enumFromProps(t, props)
-	if len(enum) != 2 || enum[0] != "local" || enum[1] != "testnet5" {
-		t.Errorf("addAgentProfileArg enum = %v, want [local testnet5]", enum)
-	}
+	assert.Equal(t, []string{"local", "testnet5"}, enum, "addAgentProfileArg enum")
 }
 
 func Test_profileWritableByAgent_testnet(t *testing.T) {
 	p := profiles.Profile{ChainType: profiles.ChainTypeTestnet, RPCURL: "x", ChainID: "test5"}
-	if !profileWritableByAgent(p) {
-		t.Error("profileWritableByAgent should be true for testnet profiles")
-	}
+	assert.True(t, profileWritableByAgent(p), "profileWritableByAgent should be true for testnet profiles")
 }
 
 func Test_addProfileArg_filtersToSession(t *testing.T) {
@@ -70,9 +64,7 @@ func Test_addProfileArg_filtersToSession(t *testing.T) {
 	addProfileArg(s, props, &required)
 
 	enum := enumFromProps(t, props)
-	if len(enum) != 1 || enum[0] != "testnet5" {
-		t.Errorf("addProfileArg enum = %v, want [testnet5]", enum)
-	}
+	assert.Equal(t, []string{"testnet5"}, enum, "addProfileArg enum")
 }
 
 func Test_addWritableProfileArg_listsBoth(t *testing.T) {
@@ -82,7 +74,5 @@ func Test_addWritableProfileArg_listsBoth(t *testing.T) {
 	addWritableProfileArg(s, props, &required)
 
 	enum := enumFromProps(t, props)
-	if len(enum) != 2 || enum[0] != "local" || enum[1] != "testnet5" {
-		t.Errorf("addWritableProfileArg enum = %v, want [local testnet5]", enum)
-	}
+	assert.Equal(t, []string{"local", "testnet5"}, enum, "addWritableProfileArg enum")
 }

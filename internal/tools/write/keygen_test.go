@@ -2,9 +2,11 @@ package write
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/gnoverse/gno-mcp/internal/keystore"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
@@ -19,20 +21,11 @@ func TestKeyGenerate_testnetProfile_returnsAddress(t *testing.T) {
 	res, err := s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{
 		"profile": "testnet9999",
 	})
-	if err != nil {
-		t.Fatalf("gno_key_generate: %v", err)
-	}
-	if !strings.HasPrefix(res.Text, "g1") {
-		t.Errorf("Text = %q, want g1... address", res.Text)
-	}
-	sc := res.StructuredContent
-	if sc == nil {
-		t.Fatal("StructuredContent is nil")
-	}
-	addr, _ := sc["address"].(string)
-	if addr != res.Text {
-		t.Errorf("StructuredContent[address] = %q, want %q", addr, res.Text)
-	}
+	require.NoError(t, err, "gno_key_generate")
+	assert.True(t, strings.HasPrefix(res.Text, "g1"), "expected g1... address, got %q", res.Text)
+	require.NotNil(t, res.StructuredContent)
+	addr, _ := res.StructuredContent["address"].(string)
+	assert.Equal(t, res.Text, addr)
 }
 
 func TestKeyGenerate_secondCall_keyAlreadyExists(t *testing.T) {
@@ -40,25 +33,18 @@ func TestKeyGenerate_secondCall_keyAlreadyExists(t *testing.T) {
 	ks := keystore.New(t.TempDir(), "")
 	RegisterKeyGenerate(s, ks)
 
-	if _, err := s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{
-		"profile": "testnet9999",
-	}); err != nil {
-		t.Fatalf("first call: %v", err)
-	}
-
 	_, err := s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{
 		"profile": "testnet9999",
 	})
-	if err == nil {
-		t.Fatal("expected key_already_exists error, got nil")
-	}
+	require.NoError(t, err, "first call")
+
+	_, err = s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{
+		"profile": "testnet9999",
+	})
+	require.Error(t, err, "expected key_already_exists error, got nil")
 	var te *server.ToolError
-	if !errors.As(err, &te) {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "key_already_exists" {
-		t.Errorf("Code = %q, want %q", te.Code, "key_already_exists")
-	}
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "key_already_exists", te.Code)
 }
 
 func TestKeyGenerate_noKeyDir_keyStorageUnconfigured(t *testing.T) {
@@ -69,16 +55,10 @@ func TestKeyGenerate_noKeyDir_keyStorageUnconfigured(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{
 		"profile": "testnet9999",
 	})
-	if err == nil {
-		t.Fatal("expected key_storage_unconfigured error, got nil")
-	}
+	require.Error(t, err, "expected key_storage_unconfigured error, got nil")
 	var te *server.ToolError
-	if !errors.As(err, &te) {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "key_storage_unconfigured" {
-		t.Errorf("Code = %q, want %q", te.Code, "key_storage_unconfigured")
-	}
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "key_storage_unconfigured", te.Code)
 }
 
 func TestKeyGenerate_localProfile_keyGenerationUnsupported(t *testing.T) {
@@ -89,16 +69,10 @@ func TestKeyGenerate_localProfile_keyGenerationUnsupported(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{
 		"profile": "local",
 	})
-	if err == nil {
-		t.Fatal("expected key_generation_unsupported error, got nil")
-	}
+	require.Error(t, err, "expected key_generation_unsupported error, got nil")
 	var te *server.ToolError
-	if !errors.As(err, &te) {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "key_generation_unsupported" {
-		t.Errorf("Code = %q, want %q", te.Code, "key_generation_unsupported")
-	}
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "key_generation_unsupported", te.Code)
 }
 
 // testnet9999Profile is the testnet profile fixture shared by the key-generate
@@ -111,9 +85,8 @@ func testnet9999Profile() profiles.Profile {
 func newTestnetServerFromProfiles(t *testing.T, ps map[string]profiles.Profile) *server.Server {
 	t.Helper()
 	cfg := &profiles.Config{Profiles: ps}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("validate: %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "validate")
 	return server.NewServer(cfg, "")
 }
 

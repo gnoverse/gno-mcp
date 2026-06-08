@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/profiles"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestProfileArgSchema_singleProfile_optionalDefault(t *testing.T) {
@@ -12,12 +14,8 @@ func TestProfileArgSchema_singleProfile_optionalDefault(t *testing.T) {
 		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
 	}}
 	s := ProfileArgSchema(cfg, "" /* discovered */)
-	if s.Required {
-		t.Error("single profile: profile arg should be optional")
-	}
-	if s.Default != "testnet5" {
-		t.Errorf("single profile: default should be the only profile, got %q", s.Default)
-	}
+	assert.False(t, s.Required, "single profile: profile arg should be optional")
+	assert.Equal(t, "testnet5", s.Default, "single profile: default should be the only profile")
 }
 
 func TestProfileArgSchema_multipleWithLocalDiscovered_optionalDefault(t *testing.T) {
@@ -26,12 +24,8 @@ func TestProfileArgSchema_multipleWithLocalDiscovered_optionalDefault(t *testing
 		"testnet5": {ChainType: "testnet", RPCURL: "y", ChainID: "test5"},
 	}}
 	s := ProfileArgSchema(cfg, "local")
-	if s.Required {
-		t.Error("local discovered: profile arg should be optional")
-	}
-	if s.Default != "local" {
-		t.Errorf("local discovered: default should be 'local', got %q", s.Default)
-	}
+	assert.False(t, s.Required, "local discovered: profile arg should be optional")
+	assert.Equal(t, "local", s.Default, "local discovered: default should be 'local'")
 }
 
 func TestProfileArgSchema_staleDiscoveredLocalIgnored(t *testing.T) {
@@ -42,15 +36,9 @@ func TestProfileArgSchema_staleDiscoveredLocalIgnored(t *testing.T) {
 	// Discovery returned a name that is not in the loaded config.
 	// Stale name must not become the Default; falls back to smart default instead.
 	s := ProfileArgSchema(cfg, "ghost")
-	if s.Required {
-		t.Error("stale discoveredLocal: profile arg should still be optional (smart default)")
-	}
-	if s.Default == "ghost" {
-		t.Error("stale discoveredLocal must not become Default")
-	}
-	if s.Default == "" {
-		t.Error("stale discoveredLocal: expected a smart default, got empty")
-	}
+	assert.False(t, s.Required, "stale discoveredLocal: profile arg should still be optional (smart default)")
+	assert.NotEqual(t, "ghost", s.Default, "stale discoveredLocal must not become Default")
+	require.NotEmpty(t, s.Default, "stale discoveredLocal: expected a smart default")
 }
 
 func TestProfileArgSchema_multipleNoLocal_smartDefault(t *testing.T) {
@@ -60,12 +48,8 @@ func TestProfileArgSchema_multipleNoLocal_smartDefault(t *testing.T) {
 	}}
 	// No local discovered and no "testnet" key — falls back to first alphabetical profile.
 	s := ProfileArgSchema(cfg, "")
-	if s.Required {
-		t.Error("multi + no local: profile arg should be optional (smart default)")
-	}
-	if s.Default == "" {
-		t.Error("multi + no local: expected a smart default, got empty")
-	}
+	assert.False(t, s.Required, "multi + no local: profile arg should be optional (smart default)")
+	assert.NotEmpty(t, s.Default, "multi + no local: expected a smart default")
 }
 
 func TestProfileArgSchema_SmartDefault(t *testing.T) {
@@ -74,12 +58,12 @@ func TestProfileArgSchema_SmartDefault(t *testing.T) {
 		"testnet": {ChainID: "test11", ChainType: profiles.ChainTypeTestnet, RPCURL: "y"},
 	}}
 	// local discovered → default local
-	if got := ProfileArgSchema(cfg, "local"); got.Default != "local" || got.Required {
-		t.Errorf("with local discovered: default=%q required=%v", got.Default, got.Required)
-	}
+	got := ProfileArgSchema(cfg, "local")
+	assert.Equal(t, "local", got.Default, "with local discovered: default")
+	assert.False(t, got.Required, "with local discovered: required")
+
 	// local NOT discovered → default testnet, still optional
-	got := ProfileArgSchema(cfg, "")
-	if got.Default != "testnet" || got.Required {
-		t.Errorf("without local: default=%q required=%v, want testnet/false", got.Default, got.Required)
-	}
+	got = ProfileArgSchema(cfg, "")
+	assert.Equal(t, "testnet", got.Default, "without local: default should be testnet")
+	assert.False(t, got.Required, "without local: required")
 }

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	indexerpkg "github.com/gnoverse/gno-mcp/internal/indexer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestActivity_filtersByTimeRange(t *testing.T) {
@@ -33,19 +35,10 @@ func TestActivity_filtersByTimeRange(t *testing.T) {
 		"since":   since,
 		"until":   until,
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-
-	if !strings.Contains(res.Text, "0xmid") {
-		t.Errorf("expected mid event in result, got: %q", res.Text)
-	}
-	if strings.Contains(res.Text, "0xold") {
-		t.Errorf("old event should be filtered out, got: %q", res.Text)
-	}
-	if strings.Contains(res.Text, "0xnew") {
-		t.Errorf("new event should be filtered out, got: %q", res.Text)
-	}
+	require.NoError(t, err, "Call")
+	assert.True(t, strings.Contains(res.Text, "0xmid"), "expected mid event in result, got: %q", res.Text)
+	assert.False(t, strings.Contains(res.Text, "0xold"), "old event should be filtered out, got: %q", res.Text)
+	assert.False(t, strings.Contains(res.Text, "0xnew"), "new event should be filtered out, got: %q", res.Text)
 }
 
 func TestActivity_invalidSince(t *testing.T) {
@@ -56,12 +49,8 @@ func TestActivity_invalidSince(t *testing.T) {
 		"realm":   testRealm,
 		"since":   "not-a-date",
 	})
-	if err == nil {
-		t.Fatal("expected error for invalid since")
-	}
-	if !strings.Contains(err.Error(), "invalid 'since'") {
-		t.Errorf("error = %q, want 'invalid 'since''", err.Error())
-	}
+	require.Error(t, err, "expected error for invalid since")
+	assert.True(t, strings.Contains(err.Error(), "invalid 'since'"), "error = %q, want 'invalid 'since''", err.Error())
 }
 
 func TestActivity_invalidUntil(t *testing.T) {
@@ -72,12 +61,8 @@ func TestActivity_invalidUntil(t *testing.T) {
 		"realm":   testRealm,
 		"until":   "not-a-date",
 	})
-	if err == nil {
-		t.Fatal("expected error for invalid until")
-	}
-	if !strings.Contains(err.Error(), "invalid 'until'") {
-		t.Errorf("error = %q, want 'invalid 'until''", err.Error())
-	}
+	require.Error(t, err, "expected error for invalid until")
+	assert.True(t, strings.Contains(err.Error(), "invalid 'until'"), "error = %q, want 'invalid 'until''", err.Error())
 }
 
 func TestActivity_requiresRealm(t *testing.T) {
@@ -86,9 +71,7 @@ func TestActivity_requiresRealm(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_activity", map[string]any{
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected error when realm is missing")
-	}
+	require.Error(t, err, "expected error when realm is missing")
 }
 
 func TestActivity_profileWithoutIndexer(t *testing.T) {
@@ -99,10 +82,6 @@ func TestActivity_profileWithoutIndexer(t *testing.T) {
 		"profile": "ghost",
 		"realm":   testRealm,
 	})
-	if err == nil {
-		t.Fatal("expected error when resolver returns nil for profile without indexer")
-	}
-	if !strings.Contains(err.Error(), "no tx-indexer-url") {
-		t.Errorf("error = %q, want 'no tx-indexer-url'", err.Error())
-	}
+	require.Error(t, err, "expected error when resolver returns nil for profile without indexer")
+	assert.True(t, strings.Contains(err.Error(), "no tx-indexer-url"), "error = %q, want 'no tx-indexer-url'", err.Error())
 }

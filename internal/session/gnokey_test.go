@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/gnoverse/gno-mcp/internal/profiles"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testGnokeyProfile() *profiles.Profile {
@@ -39,9 +41,7 @@ func TestFormatCreate_includesAllExpectedFlags(t *testing.T) {
 		"<your-master-key-name>",
 	}
 	for _, want := range checks {
-		if !strings.Contains(cmd, want) {
-			t.Errorf("FormatGnokeyCreateCommand output missing %q\nfull output:\n%s", want, cmd)
-		}
+		assert.Contains(t, cmd, want, "FormatGnokeyCreateCommand output missing %q", want)
 	}
 }
 
@@ -56,14 +56,10 @@ func TestFormatCreate_multipleAllowPaths(t *testing.T) {
 	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
 
 	for _, p := range paths {
-		if !strings.Contains(cmd, p) {
-			t.Errorf("command missing path %q\nfull output:\n%s", p, cmd)
-		}
+		assert.Contains(t, cmd, p, "command missing path %q", p)
 	}
 	count := strings.Count(cmd, "--allow-paths")
-	if count != len(paths) {
-		t.Errorf("--allow-paths appears %d times, want %d (one per path)", count, len(paths))
-	}
+	assert.Equal(t, len(paths), count, "--allow-paths should appear once per path")
 }
 
 func TestFormatCreate_allowRunAppendsVMRun(t *testing.T) {
@@ -72,15 +68,12 @@ func TestFormatCreate_allowRunAppendsVMRun(t *testing.T) {
 	scope.AllowRun = true
 	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
 
-	if !strings.Contains(cmd, "--allow-paths vm/run") {
-		t.Errorf("expected --allow-paths vm/run line when AllowRun=true:\n%s", cmd)
-	}
+	assert.Contains(t, cmd, "--allow-paths vm/run", "expected --allow-paths vm/run line when AllowRun=true")
 	// vm/exec entries should come before vm/run.
 	execIdx := strings.Index(cmd, "--allow-paths vm/exec:")
 	runIdx := strings.Index(cmd, "--allow-paths vm/run")
-	if execIdx < 0 || runIdx < 0 || execIdx > runIdx {
-		t.Errorf("vm/exec must come before vm/run; execIdx=%d runIdx=%d", execIdx, runIdx)
-	}
+	require.True(t, execIdx >= 0 && runIdx >= 0 && execIdx < runIdx,
+		"vm/exec must come before vm/run; execIdx=%d runIdx=%d", execIdx, runIdx)
 }
 
 func TestFormatCreate_allowRunOnly(t *testing.T) {
@@ -92,12 +85,8 @@ func TestFormatCreate_allowRunOnly(t *testing.T) {
 	}
 	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
 
-	if !strings.Contains(cmd, "--allow-paths vm/run") {
-		t.Errorf("expected --allow-paths vm/run:\n%s", cmd)
-	}
-	if strings.Contains(cmd, "vm/exec:") {
-		t.Errorf("unexpected vm/exec entry when AllowPaths empty:\n%s", cmd)
-	}
+	assert.Contains(t, cmd, "--allow-paths vm/run", "expected --allow-paths vm/run")
+	assert.NotContains(t, cmd, "vm/exec:", "unexpected vm/exec entry when AllowPaths empty")
 }
 
 func TestFormatCreate_noAllowRunOmitsVMRun(t *testing.T) {
@@ -105,18 +94,14 @@ func TestFormatCreate_noAllowRunOmitsVMRun(t *testing.T) {
 	scope := testGnokeyScope([]string{"gno.land/r/test/blog"})
 	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
 
-	if strings.Contains(cmd, "vm/run") {
-		t.Errorf("unexpected vm/run entry when AllowRun=false:\n%s", cmd)
-	}
+	assert.NotContains(t, cmd, "vm/run", "unexpected vm/run entry when AllowRun=false")
 }
 
 func TestFormatGnokeyCreate_HasGasAndBroadcast(t *testing.T) {
 	p := &profiles.Profile{RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"}
 	cmd := FormatGnokeyCreateCommand(p, "gpub...", Scope{SpendLimit: "1000ugnot", ExpiresIn: time.Hour})
 	for _, want := range []string{"--gas-fee", "--gas-wanted", "--broadcast"} {
-		if !strings.Contains(cmd, want) {
-			t.Errorf("create command missing %q:\n%s", want, cmd)
-		}
+		assert.Contains(t, cmd, want, "create command missing %q", want)
 	}
 }
 
@@ -129,8 +114,6 @@ func TestFormatRevoke_includesPubkey(t *testing.T) {
 		"--pubkey gpub1abc",
 	}
 	for _, want := range checks {
-		if !strings.Contains(cmd, want) {
-			t.Errorf("FormatGnokeyRevokeCommand output missing %q\nfull output:\n%s", want, cmd)
-		}
+		assert.Contains(t, cmd, want, "FormatGnokeyRevokeCommand output missing %q", want)
 	}
 }

@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadResolved_MissingFilesUsesDefaults(t *testing.T) {
@@ -11,30 +14,22 @@ func TestLoadResolved_MissingFilesUsesDefaults(t *testing.T) {
 		GlobalPath:  filepath.Join(t.TempDir(), "nope.toml"),
 		ProjectPath: filepath.Join(t.TempDir(), "also-nope.toml"),
 	})
-	if err != nil {
-		t.Fatalf("missing files must not be fatal: %v", err)
-	}
-	if _, ok := cfg.Profiles["testnet"]; !ok {
-		t.Error("expected built-in testnet default when no files present")
-	}
+	require.NoError(t, err, "missing files must not be fatal")
+	assert.Contains(t, cfg.Profiles, "testnet", "expected built-in testnet default when no files present")
 }
 
 func TestLoadResolved_ExplicitFileLayers(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "profiles.toml")
-	if err := os.WriteFile(p, []byte(`
+	err := os.WriteFile(p, []byte(`
 [testnet]
 rpc-url = "https://rpc.test11.testnets.gno.land:443"
 chain-id = "test11"
 master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
-`), 0o600); err != nil {
-		t.Fatal(err)
-	}
+`), 0o600)
+	require.NoError(t, err)
+
 	cfg, err := LoadResolved(Sources{ExplicitPath: p})
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	if cfg.Profiles["testnet"].MasterAddress == "" {
-		t.Error("explicit file should override the testnet default")
-	}
+	require.NoError(t, err)
+	assert.NotEmpty(t, cfg.Profiles["testnet"].MasterAddress, "explicit file should override the testnet default")
 }

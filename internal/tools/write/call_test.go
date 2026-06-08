@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/gnoverse/gno-mcp/internal/audit"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/keystore"
@@ -29,18 +32,14 @@ func seedActiveSession(t *testing.T, mgr *session.Manager, profile string, allow
 func seedActiveSessionWithRun(t *testing.T, mgr *session.Manager, profile string, allowPaths []string, spendLimit string, allowRun bool) string {
 	t.Helper()
 	kp, err := session.NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair: %v", err)
-	}
+	require.NoError(t, err, "NewKeypair")
 	scope := session.Scope{
 		AllowPaths: allowPaths,
 		AllowRun:   allowRun,
 		SpendLimit: spendLimit,
 	}
 	meta, err := mgr.AddPending(profile, kp, scope, "g1master")
-	if err != nil {
-		t.Fatalf("AddPending: %v", err)
-	}
+	require.NoError(t, err, "AddPending")
 	status := chain.SessionStatus{
 		Active:         true,
 		AllowPaths:     scope.AllowPaths,
@@ -48,9 +47,7 @@ func seedActiveSessionWithRun(t *testing.T, mgr *session.Manager, profile string
 		SpendLimit:     scope.SpendLimit,
 		SpendRemaining: scope.SpendLimit,
 	}
-	if err := mgr.MarkActive(profile, meta.SessionAddress, status); err != nil {
-		t.Fatalf("MarkActive: %v", err)
-	}
+	require.NoError(t, mgr.MarkActive(profile, meta.SessionAddress, status), "MarkActive")
 	return meta.SessionAddress
 }
 
@@ -61,9 +58,7 @@ func parseAuditEntries(t *testing.T, buf *bytes.Buffer) []audit.Entry {
 	dec := json.NewDecoder(buf)
 	for dec.More() {
 		var e audit.Entry
-		if err := dec.Decode(&e); err != nil {
-			t.Fatalf("decode audit entry: %v", err)
-		}
+		require.NoError(t, dec.Decode(&e), "decode audit entry")
 		entries = append(entries, e)
 	}
 	return entries
@@ -97,31 +92,16 @@ func TestCall_happyPath(t *testing.T) {
 		"args":     []any{"1"},
 		"identity": "session",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if !strings.Contains(res.Text, "0xabc") {
-		t.Errorf("expected tx hash in text:\n%s", res.Text)
-	}
-	sc := res.StructuredContent
-	if sc["tx_hash"] != "0xabc" {
-		t.Errorf("expected tx_hash=0xabc, got %v", sc["tx_hash"])
-	}
-	if sc["simulated"] != false {
-		t.Errorf("expected simulated=false, got %v", sc["simulated"])
-	}
+	require.NoError(t, err, "Call")
+	assert.Contains(t, res.Text, "0xabc")
+	assert.Equal(t, "0xabc", res.StructuredContent["tx_hash"])
+	assert.Equal(t, false, res.StructuredContent["simulated"])
 
 	// Audit entry written.
 	entries := parseAuditEntries(t, &auditBuf)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(entries))
-	}
-	if entries[0].Tool != "gno_call" {
-		t.Errorf("audit tool=%q", entries[0].Tool)
-	}
-	if entries[0].Result != "ok" {
-		t.Errorf("audit result=%q", entries[0].Result)
-	}
+	require.Len(t, entries, 1)
+	assert.Equal(t, "gno_call", entries[0].Tool)
+	assert.Equal(t, "ok", entries[0].Result)
 }
 
 func TestCall_missingRealm(t *testing.T) {
@@ -137,12 +117,8 @@ func TestCall_missingRealm(t *testing.T) {
 		"func":     "Increment",
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected error for missing realm")
-	}
-	if !strings.Contains(err.Error(), "realm") {
-		t.Errorf("expected 'realm' in error: %v", err)
-	}
+	require.Error(t, err, "expected error for missing realm")
+	assert.Contains(t, err.Error(), "realm")
 }
 
 func TestCall_missingFunc(t *testing.T) {
@@ -158,12 +134,8 @@ func TestCall_missingFunc(t *testing.T) {
 		"realm":    "gno.land/r/test/counter",
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected error for missing func")
-	}
-	if !strings.Contains(err.Error(), "func") {
-		t.Errorf("expected 'func' in error: %v", err)
-	}
+	require.Error(t, err, "expected error for missing func")
+	assert.Contains(t, err.Error(), "func")
 }
 
 func TestCall_wrongTypeArgs(t *testing.T) {
@@ -181,9 +153,7 @@ func TestCall_wrongTypeArgs(t *testing.T) {
 		"args":     []any{42}, // non-string element
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected type error for non-string args element")
-	}
+	require.Error(t, err, "expected type error for non-string args element")
 }
 
 func TestCall_authenticationRequired(t *testing.T) {
@@ -200,16 +170,10 @@ func TestCall_authenticationRequired(t *testing.T) {
 		"func":     "Increment",
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected authentication_required error")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "authentication_required" {
-		t.Errorf("expected code=authentication_required, got %q", te.Code)
-	}
+	require.Error(t, err, "expected authentication_required error")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "authentication_required", te.Code)
 }
 
 func TestCall_scopeMismatch(t *testing.T) {
@@ -231,20 +195,12 @@ func TestCall_scopeMismatch(t *testing.T) {
 		"func":     "Increment",
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected scope_mismatch error")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "scope_mismatch" {
-		t.Errorf("expected code=scope_mismatch, got %q", te.Code)
-	}
+	require.Error(t, err, "expected scope_mismatch error")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "scope_mismatch", te.Code)
 	// available_paths must be present in Extra.
-	if _, ok := te.Extra["available_paths"]; !ok {
-		t.Errorf("expected available_paths in ToolError.Extra: %v", te.Extra)
-	}
+	assert.Contains(t, te.Extra, "available_paths")
 }
 
 func TestCall_simulateRequiresSession(t *testing.T) {
@@ -263,16 +219,10 @@ func TestCall_simulateRequiresSession(t *testing.T) {
 		"simulate": true,
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected authentication_required for simulate without session")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "authentication_required" {
-		t.Errorf("expected code=authentication_required, got %q", te.Code)
-	}
+	require.Error(t, err, "expected authentication_required for simulate without session")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "authentication_required", te.Code)
 }
 
 func TestCall_simulateWithSession(t *testing.T) {
@@ -299,20 +249,12 @@ func TestCall_simulateWithSession(t *testing.T) {
 		"simulate": true,
 		"identity": "session",
 	})
-	if err != nil {
-		t.Fatalf("simulate Call: %v", err)
-	}
-	if res.StructuredContent["simulated"] != true {
-		t.Errorf("expected simulated=true, got %v", res.StructuredContent["simulated"])
-	}
+	require.NoError(t, err, "simulate Call")
+	assert.Equal(t, true, res.StructuredContent["simulated"])
 
 	entries := parseAuditEntries(t, &auditBuf)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(entries))
-	}
-	if entries[0].Result != "sim" {
-		t.Errorf("expected audit result=sim, got %q", entries[0].Result)
-	}
+	require.Len(t, entries, 1)
+	assert.Equal(t, "sim", entries[0].Result)
 }
 
 func TestCall_simulateUnsupported(t *testing.T) {
@@ -335,16 +277,10 @@ func TestCall_simulateUnsupported(t *testing.T) {
 		"simulate": true,
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected simulate_unsupported error")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "simulate_unsupported" {
-		t.Errorf("expected code=simulate_unsupported, got %q", te.Code)
-	}
+	require.Error(t, err, "expected simulate_unsupported error")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "simulate_unsupported", te.Code)
 }
 
 func TestCall_updatesSessionSpend(t *testing.T) {
@@ -372,19 +308,13 @@ func TestCall_updatesSessionSpend(t *testing.T) {
 		"func":     "Increment",
 		"identity": "session",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
+	require.NoError(t, err, "Call")
 
 	meta := mgr.Get("testnet5", sessionAddr)
-	if meta == nil {
-		t.Fatal("session not found after call")
-	}
+	require.NotNil(t, meta, "session not found after call")
 	// The chain bills the full GasFee (10M), not GasUsed (3000): 100M - 10M = 90M.
 	// Guards #5: local spend tracking must match the chain's GasFee accounting.
-	if meta.SpendRemaining != "90000000ugnot" {
-		t.Errorf("SpendRemaining: got %s, want 90000000ugnot (deduct GasFee, not GasUsed)", meta.SpendRemaining)
-	}
+	assert.Equal(t, "90000000ugnot", meta.SpendRemaining, "deduct GasFee, not GasUsed")
 }
 
 func TestCall_writesAuditEntry(t *testing.T) {
@@ -413,34 +343,18 @@ func TestCall_writesAuditEntry(t *testing.T) {
 		"args":     []any{"5"},
 		"identity": "session",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
+	require.NoError(t, err, "Call")
 
 	entries := parseAuditEntries(t, &auditBuf)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(entries))
-	}
+	require.Len(t, entries, 1)
 	e := entries[0]
-	if e.Tool != "gno_call" {
-		t.Errorf("audit Tool=%q", e.Tool)
-	}
-	if e.Profile != "testnet5" {
-		t.Errorf("audit Profile=%q", e.Profile)
-	}
-	if e.SessionAddress != sessionAddr {
-		t.Errorf("audit SessionAddress=%q, want %q", e.SessionAddress, sessionAddr)
-	}
-	if e.Result != "ok" {
-		t.Errorf("audit Result=%q", e.Result)
-	}
-	if e.Duration < 0 {
-		t.Errorf("audit Duration=%d (negative)", e.Duration)
-	}
+	assert.Equal(t, "gno_call", e.Tool)
+	assert.Equal(t, "testnet5", e.Profile)
+	assert.Equal(t, sessionAddr, e.SessionAddress)
+	assert.Equal(t, "ok", e.Result)
+	assert.GreaterOrEqual(t, e.Duration, int64(0))
 	// ArgsSummary should contain the realm.
-	if !strings.Contains(e.ArgsSummary, "gno.land/r/test/counter") {
-		t.Errorf("audit ArgsSummary missing realm: %q", e.ArgsSummary)
-	}
+	assert.Contains(t, e.ArgsSummary, "gno.land/r/test/counter")
 }
 
 func TestCall_simulateError_auditsSimErr(t *testing.T) {
@@ -460,16 +374,10 @@ func TestCall_simulateError_auditsSimErr(t *testing.T) {
 		"simulate": true,
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected simulate error to propagate")
-	}
+	require.Error(t, err, "expected simulate error to propagate")
 	entries := parseAuditEntries(t, &auditBuf)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(entries))
-	}
-	if entries[0].Result != "sim_err" {
-		t.Errorf("expected result=sim_err, got %q", entries[0].Result)
-	}
+	require.Len(t, entries, 1)
+	assert.Equal(t, "sim_err", entries[0].Result)
 }
 
 // TestCall_NoSession_ReadOnlyProfile verifies that a read-only profile (no
@@ -490,13 +398,10 @@ func TestCall_NoSession_ReadOnlyProfile(t *testing.T) {
 		"args":     []any{"hi"},
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
+	require.Error(t, err)
 	var te *server.ToolError
-	if !errors.As(err, &te) || te.Code != "authentication_required" {
-		t.Fatalf("want authentication_required, got %v", err)
-	}
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "authentication_required", te.Code)
 }
 
 func TestCall_broadcastError_auditsResult(t *testing.T) {
@@ -519,17 +424,11 @@ func TestCall_broadcastError_auditsResult(t *testing.T) {
 		"func":     "Increment",
 		"identity": "session",
 	})
-	if err == nil {
-		t.Fatal("expected broadcast error to propagate")
-	}
+	require.Error(t, err, "expected broadcast error to propagate")
 
 	entries := parseAuditEntries(t, &auditBuf)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry even on broadcast error, got %d", len(entries))
-	}
-	if entries[0].Result != "broadcast_err" {
-		t.Errorf("expected audit result=broadcast_err, got %q", entries[0].Result)
-	}
+	require.Len(t, entries, 1, "expected 1 audit entry even on broadcast error")
+	assert.Equal(t, "broadcast_err", entries[0].Result)
 }
 
 // ---- identity selector tests
@@ -559,25 +458,13 @@ func TestCall_agentIdentity_local(t *testing.T) {
 		"func":    "Increment",
 		"args":    []any{"1"},
 	})
-	if err != nil {
-		t.Fatalf("Call (agent): %v", err)
-	}
-	if !strings.Contains(res.Text, "0xagent1") {
-		t.Errorf("expected tx hash in text:\n%s", res.Text)
-	}
-	if !strings.Contains(res.Text, "Signed by: agent test1 ("+keystore.Test1Address+")") {
-		t.Errorf("expected signed-by agent line in text:\n%s", res.Text)
-	}
-	sc := res.StructuredContent
-	if sc["identity"] != "agent" {
-		t.Errorf("expected identity=agent, got %v", sc["identity"])
-	}
-	if sc["signer_address"] != keystore.Test1Address {
-		t.Errorf("expected signer_address=%s, got %v", keystore.Test1Address, sc["signer_address"])
-	}
-	if _, ok := sc["master_address"]; ok {
-		t.Errorf("expected no master_address for agent identity, got %v", sc["master_address"])
-	}
+	require.NoError(t, err, "Call (agent)")
+	assert.Contains(t, res.Text, "0xagent1")
+	assert.Contains(t, res.Text, "Signed by: agent test1 ("+keystore.Test1Address+")")
+	assert.Equal(t, "agent", res.StructuredContent["identity"])
+	assert.Equal(t, keystore.Test1Address, res.StructuredContent["signer_address"])
+	_, hasMaster := res.StructuredContent["master_address"]
+	assert.False(t, hasMaster, "expected no master_address for agent identity")
 }
 
 // TestCall_sessionIdentity_explicit verifies that explicitly passing identity="session"
@@ -607,19 +494,10 @@ func TestCall_sessionIdentity_explicit(t *testing.T) {
 		"func":     "Increment",
 		"identity": "session",
 	})
-	if err != nil {
-		t.Fatalf("Call (session): %v", err)
-	}
-	if !strings.Contains(res.Text, "Signed by: session") {
-		t.Errorf("expected signed-by session line in text:\n%s", res.Text)
-	}
-	sc := res.StructuredContent
-	if sc["identity"] != "session" {
-		t.Errorf("expected identity=session, got %v", sc["identity"])
-	}
-	if sc["master_address"] == nil {
-		t.Errorf("expected master_address for session identity, got nil")
-	}
+	require.NoError(t, err, "Call (session)")
+	assert.Contains(t, res.Text, "Signed by: session")
+	assert.Equal(t, "session", res.StructuredContent["identity"])
+	assert.NotNil(t, res.StructuredContent["master_address"])
 }
 
 // TestCall_defaultAgent_testnet verifies that on a testnet profile with no
@@ -642,16 +520,10 @@ func TestCall_defaultAgent_testnet(t *testing.T) {
 		"func":    "Increment",
 		// no identity — defaults to agent on testnet
 	})
-	if err == nil {
-		t.Fatal("expected agent_identity_unavailable error (default=agent on testnet, no key generated)")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "agent_identity_unavailable" {
-		t.Errorf("expected code=agent_identity_unavailable, got %q", te.Code)
-	}
+	require.Error(t, err, "expected agent_identity_unavailable error (default=agent on testnet, no key generated)")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "agent_identity_unavailable", te.Code)
 }
 
 // TestCall_defaultAgent_testnet_noKey verifies that on a testnet profile with no
@@ -673,19 +545,11 @@ func TestCall_defaultAgent_testnet_noKey(t *testing.T) {
 		"func":    "Increment",
 		// no identity — must default to agent on testnet
 	})
-	if err == nil {
-		t.Fatal("expected agent_identity_unavailable error")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "agent_identity_unavailable" {
-		t.Errorf("expected code=agent_identity_unavailable, got %q", te.Code)
-	}
-	if !strings.Contains(te.Message, "gno_key_generate") {
-		t.Errorf("expected message to mention gno_key_generate, got: %q", te.Message)
-	}
+	require.Error(t, err, "expected agent_identity_unavailable error")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "agent_identity_unavailable", te.Code)
+	assert.Contains(t, te.Message, "gno_key_generate")
 }
 
 // TestCall_sessionIdentity_testnet_explicit verifies that explicitly passing
@@ -706,16 +570,10 @@ func TestCall_sessionIdentity_testnet_explicit(t *testing.T) {
 		"func":     "Increment",
 		"identity": "session", // explicit override
 	})
-	if err == nil {
-		t.Fatal("expected authentication_required (session path, no active session)")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "authentication_required" {
-		t.Errorf("expected code=authentication_required, got %q", te.Code)
-	}
+	require.Error(t, err, "expected authentication_required (session path, no active session)")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "authentication_required", te.Code)
 }
 
 // TestCall_agentTestnet_insufficientFunds verifies that gno_call returns
@@ -728,9 +586,7 @@ func TestCall_agentTestnet_insufficientFunds(t *testing.T) {
 
 	// Generate an agent key for the testnet profile.
 	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
-	if err != nil {
-		t.Fatalf("GenerateForProfile: %v", err)
-	}
+	require.NoError(t, err, "GenerateForProfile")
 
 	// Fake balance is 0 (never-funded) by default.
 	fake := chain.NewFake()
@@ -742,19 +598,11 @@ func TestCall_agentTestnet_insufficientFunds(t *testing.T) {
 		"realm":   "gno.land/r/test/counter",
 		"func":    "Increment",
 	})
-	if callErr == nil {
-		t.Fatal("expected insufficient_funds error")
-	}
-	te, ok := errors.AsType[*server.ToolError](callErr)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", callErr, callErr)
-	}
-	if te.Code != "insufficient_funds" {
-		t.Errorf("expected code=insufficient_funds, got %q", te.Code)
-	}
-	if te.Extra["address"] != agentAddr {
-		t.Errorf("Extra[address]=%v, want %q", te.Extra["address"], agentAddr)
-	}
+	require.Error(t, callErr, "expected insufficient_funds error")
+	var te *server.ToolError
+	require.ErrorAs(t, callErr, &te)
+	assert.Equal(t, "insufficient_funds", te.Code)
+	assert.Equal(t, agentAddr, te.Extra["address"])
 }
 
 // TestCall_agentTestnet_funded verifies that a funded testnet agent account
@@ -767,9 +615,7 @@ func TestCall_agentTestnet_funded(t *testing.T) {
 
 	// Generate an agent key and capture its address.
 	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
-	if err != nil {
-		t.Fatalf("GenerateForProfile: %v", err)
-	}
+	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake()
 	fake.SetBalance(agentAddr, 10_000_000) // funded
@@ -787,12 +633,8 @@ func TestCall_agentTestnet_funded(t *testing.T) {
 		"realm":   "gno.land/r/test/counter",
 		"func":    "Increment",
 	})
-	if callErr != nil {
-		t.Fatalf("expected success for funded account, got: %v", callErr)
-	}
-	if !strings.Contains(res.Text, "0xfunded") {
-		t.Errorf("expected tx hash in result text:\n%s", res.Text)
-	}
+	require.NoError(t, callErr, "expected success for funded account")
+	assert.Contains(t, res.Text, "0xfunded")
 }
 
 // TestCall_agentTestnet_simulate_skipsBalanceCheck verifies that simulate=true
@@ -803,9 +645,8 @@ func TestCall_agentTestnet_simulate_skipsBalanceCheck(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	ks := keystore.New(t.TempDir(), "")
 
-	if _, err := ks.GenerateForProfile("testnet9999", testnet9999Profile()); err != nil {
-		t.Fatalf("GenerateForProfile: %v", err)
-	}
+	_, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake()
 	// balance stays 0 — simulate must not be blocked
@@ -823,12 +664,8 @@ func TestCall_agentTestnet_simulate_skipsBalanceCheck(t *testing.T) {
 		"func":     "Increment",
 		"simulate": true,
 	})
-	if callErr != nil {
-		t.Fatalf("simulate with zero balance should succeed, got: %v", callErr)
-	}
-	if res.StructuredContent["simulated"] != true {
-		t.Errorf("expected simulated=true")
-	}
+	require.NoError(t, callErr, "simulate with zero balance should succeed")
+	assert.Equal(t, true, res.StructuredContent["simulated"])
 }
 
 // TestCall_bogusIdentity verifies that an unknown identity value returns an error.
@@ -848,10 +685,7 @@ func TestCall_bogusIdentity(t *testing.T) {
 		"func":     "Increment",
 		"identity": "bogus",
 	})
-	if err == nil {
-		t.Fatal("expected error for bogus identity")
-	}
-	if !strings.Contains(err.Error(), "agent") || !strings.Contains(err.Error(), "session") {
-		t.Errorf("expected error mentioning agent and session, got: %v", err)
-	}
+	require.Error(t, err, "expected error for bogus identity")
+	assert.True(t, strings.Contains(err.Error(), "agent") && strings.Contains(err.Error(), "session"),
+		"expected error mentioning agent and session, got: %v", err)
 }

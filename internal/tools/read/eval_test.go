@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEval_returnsText(t *testing.T) {
@@ -18,12 +20,8 @@ func TestEval_returnsText(t *testing.T) {
 		"expr":    "Bar()",
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if res.Text != "(42 int)" {
-		t.Errorf("Text = %q, want %q", res.Text, "(42 int)")
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "(42 int)", res.Text)
 }
 
 func TestEval_requiresExpr(t *testing.T) {
@@ -33,9 +31,7 @@ func TestEval_requiresExpr(t *testing.T) {
 		"realm":   "gno.land/r/foo",
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected error when expr is missing")
-	}
+	require.Error(t, err, "expected error when expr is missing")
 }
 
 func TestEval_requiresRealm(t *testing.T) {
@@ -45,9 +41,7 @@ func TestEval_requiresRealm(t *testing.T) {
 		"expr":    "Bar()",
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected error when realm is missing")
-	}
+	require.Error(t, err, "expected error when realm is missing")
 }
 
 func TestEval_rejectsNonStringRealm(t *testing.T) {
@@ -58,9 +52,7 @@ func TestEval_rejectsNonStringRealm(t *testing.T) {
 		"expr":    "Bar()",
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected type error when realm is not a string")
-	}
+	require.Error(t, err, "expected type error when realm is not a string")
 }
 
 func TestEval_rejectsNonStringExpr(t *testing.T) {
@@ -71,9 +63,7 @@ func TestEval_rejectsNonStringExpr(t *testing.T) {
 		"expr":    42,
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected type error when expr is not a string")
-	}
+	require.Error(t, err, "expected type error when expr is not a string")
 }
 
 func TestEval_unknownProfileReturnsError(t *testing.T) {
@@ -84,7 +74,5 @@ func TestEval_unknownProfileReturnsError(t *testing.T) {
 		"expr":    "Bar()",
 		"profile": "ghost",
 	})
-	if err == nil {
-		t.Fatal("expected error when resolver returns nil for unknown profile")
-	}
+	require.Error(t, err, "expected error when resolver returns nil for unknown profile")
 }

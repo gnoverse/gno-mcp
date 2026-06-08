@@ -9,6 +9,8 @@ import (
 	"github.com/gnolang/gno/tm2/pkg/amino"
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 	"github.com/gnolang/gno/tm2/pkg/std"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ---- Real.CallAsUser tests
@@ -16,47 +18,29 @@ import (
 // TestReal_Call_nilSignerSimulate ensures simulate=true still needs a signer.
 func TestReal_Call_nilSignerSimulate(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
-	if err != nil {
-		t.Fatalf("NewReal: %v", err)
-	}
+	require.NoError(t, err, "NewReal")
 	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, true)
-	if err == nil {
-		t.Fatal("expected error for nil signer (even with simulate=true)")
-	}
-	if !strings.Contains(err.Error(), "signer") {
-		t.Errorf("error should mention signer, got: %v", err)
-	}
+	require.Error(t, err, "expected error for nil signer (even with simulate=true)")
+	assert.True(t, strings.Contains(err.Error(), "signer"), "error should mention signer, got: %v", err)
 }
 
 // TestReal_Call_nilSignerBroadcast ensures non-simulate broadcasts require a signer.
 func TestReal_Call_nilSignerBroadcast(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
-	if err != nil {
-		t.Fatalf("NewReal: %v", err)
-	}
+	require.NoError(t, err, "NewReal")
 	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, false)
-	if err == nil {
-		t.Fatal("expected error for nil signer in broadcast mode")
-	}
-	if !strings.Contains(err.Error(), "signer") {
-		t.Errorf("error should mention signer, got: %v", err)
-	}
+	require.Error(t, err, "expected error for nil signer in broadcast mode")
+	assert.True(t, strings.Contains(err.Error(), "signer"), "error should mention signer, got: %v", err)
 }
 
 // TestReal_Call_emptyMaster ensures master is required.
 func TestReal_Call_emptyMaster(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
-	if err != nil {
-		t.Fatalf("NewReal: %v", err)
-	}
+	require.NoError(t, err, "NewReal")
 	stub := &minimalSigner{addr: "g1notreal"}
 	_, err = r.CallAsUser(context.Background(), stub, "", "gno.land/r/x", "Foo", nil, false)
-	if err == nil {
-		t.Fatal("expected error for empty master")
-	}
-	if !strings.Contains(err.Error(), "master") {
-		t.Errorf("error should mention master, got: %v", err)
-	}
+	require.Error(t, err, "expected error for empty master")
+	assert.True(t, strings.Contains(err.Error(), "master"), "error should mention master, got: %v", err)
 }
 
 // minimalSigner is a chain.Signer stub.
@@ -68,85 +52,53 @@ func (m *minimalSigner) Sign(_ []byte) ([]byte, error) { return nil, nil }
 
 func TestNewReal_validRPCURL(t *testing.T) {
 	r, err := NewReal("https://rpc.test5.gno.land:443", "test5")
-	if err != nil {
-		t.Fatalf("NewReal: %v", err)
-	}
-	if r == nil {
-		t.Fatal("NewReal returned nil")
-	}
+	require.NoError(t, err, "NewReal")
+	require.NotNil(t, r)
 }
 
 func TestNewReal_emptyRPCURL(t *testing.T) {
 	_, err := NewReal("", "test5")
-	if err == nil {
-		t.Fatal("expected error for empty rpc-url")
-	}
+	require.Error(t, err, "expected error for empty rpc-url")
 }
 
 func TestNewReal_emptyChainID(t *testing.T) {
 	_, err := NewReal("https://rpc.test5.gno.land:443", "")
-	if err == nil {
-		t.Fatal("expected error for empty chain-id")
-	}
+	require.Error(t, err, "expected error for empty chain-id")
 }
 
 // ---- Real.RunAsUser tests
 
 func TestReal_Run_simulateRequiresSigner(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
-	if err != nil {
-		t.Fatalf("NewReal: %v", err)
-	}
+	require.NoError(t, err, "NewReal")
 	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", true)
-	if err == nil {
-		t.Fatal("expected error for nil signer (even with simulate=true)")
-	}
-	if !strings.Contains(err.Error(), "signer") {
-		t.Errorf("error should mention signer, got: %v", err)
-	}
+	require.Error(t, err, "expected error for nil signer (even with simulate=true)")
+	assert.True(t, strings.Contains(err.Error(), "signer"), "error should mention signer, got: %v", err)
 }
 
 func TestReal_Run_broadcastRequiresSigner(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
-	if err != nil {
-		t.Fatalf("NewReal: %v", err)
-	}
+	require.NoError(t, err, "NewReal")
 	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", false)
-	if err == nil {
-		t.Fatal("expected error for nil signer in broadcast mode")
-	}
-	if !strings.Contains(err.Error(), "signer") {
-		t.Errorf("error should mention signer, got: %v", err)
-	}
+	require.Error(t, err, "expected error for nil signer in broadcast mode")
+	assert.True(t, strings.Contains(err.Error(), "signer"), "error should mention signer, got: %v", err)
 }
 
 func TestReal_Run_emptyMaster(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
-	if err != nil {
-		t.Fatalf("NewReal: %v", err)
-	}
+	require.NoError(t, err, "NewReal")
 	stub := &minimalSigner{addr: "g1notreal"}
 	_, err = r.RunAsUser(context.Background(), stub, "", "package main\nfunc main() {}", false)
-	if err == nil {
-		t.Fatal("expected error for empty master")
-	}
-	if !strings.Contains(err.Error(), "master") {
-		t.Errorf("error should mention master, got: %v", err)
-	}
+	require.Error(t, err, "expected error for empty master")
+	assert.True(t, strings.Contains(err.Error(), "master"), "error should mention master, got: %v", err)
 }
 
 func TestReal_File_rejectsEmptyFile(t *testing.T) {
 	r, err := NewReal("https://rpc.test5.gno.land:443", "test5")
-	if err != nil {
-		t.Fatalf("NewReal: %v", err)
-	}
+	require.NoError(t, err, "NewReal")
 	_, err = r.File(context.Background(), "gno.land/r/foo", "")
-	if err == nil {
-		t.Fatal("expected error for empty file name (use ListFiles instead)")
-	}
-	if !strings.Contains(err.Error(), "ListFiles") {
-		t.Errorf("error should steer caller to ListFiles, got %q", err)
-	}
+	require.Error(t, err, "expected error for empty file name (use ListFiles instead)")
+	assert.True(t, strings.Contains(err.Error(), "ListFiles"), "error should steer caller to ListFiles, got %q", err)
 }
 
 // ---- Real.QuerySession tests
@@ -156,9 +108,7 @@ func TestReal_File_rejectsEmptyFile(t *testing.T) {
 // Manager treats this as Unsupported (keep local state) rather than wiping.
 func TestReal_QuerySession_emptyArgsReturnsUnsupported(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
-	if err != nil {
-		t.Fatalf("NewReal: %v", err)
-	}
+	require.NoError(t, err, "NewReal")
 	for _, tc := range []struct {
 		name             string
 		master, sessAddr string
@@ -169,9 +119,7 @@ func TestReal_QuerySession_emptyArgsReturnsUnsupported(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := r.QuerySession(context.Background(), tc.master, tc.sessAddr)
-			if err == nil {
-				t.Fatalf("expected ErrSessionQueryUnsupported")
-			}
+			require.Error(t, err, "expected ErrSessionQueryUnsupported")
 		})
 	}
 }
@@ -208,42 +156,22 @@ func TestDecodeSessionAccount_aminoJSON_roundTrip(t *testing.T) {
 	}
 
 	data, err := amino.MarshalJSONIndent(original, "", "  ")
-	if err != nil {
-		t.Fatalf("amino.MarshalJSONIndent: %v", err)
-	}
+	require.NoError(t, err, "amino.MarshalJSONIndent")
 
 	got, err := decodeSessionAccount(data)
-	if err != nil {
-		t.Fatalf("decodeSessionAccount: %v\npayload:\n%s", err, data)
-	}
+	require.NoError(t, err, "decodeSessionAccount:\npayload:\n%s", data)
 
-	if got.AccountNumber != 42 {
-		t.Errorf("AccountNumber = %d, want 42", got.AccountNumber)
-	}
-	if got.Sequence != 7 {
-		t.Errorf("Sequence = %d, want 7", got.Sequence)
-	}
-	if got.ExpiresAt != 1735689600 {
-		t.Errorf("ExpiresAt = %d, want 1735689600", got.ExpiresAt)
-	}
-	if got.MasterAddress != master {
-		t.Errorf("MasterAddress = %s, want %s", got.MasterAddress, master)
-	}
-	if !got.SpendLimit.IsEqual(original.SpendLimit) {
-		t.Errorf("SpendLimit = %s, want %s", got.SpendLimit, original.SpendLimit)
-	}
-	if !got.SpendUsed.IsEqual(original.SpendUsed) {
-		t.Errorf("SpendUsed = %s, want %s", got.SpendUsed, original.SpendUsed)
-	}
-	if got.SpendPeriod != 3600 {
-		t.Errorf("SpendPeriod = %d, want 3600", got.SpendPeriod)
-	}
-	if len(got.AllowPaths) != 3 ||
-		got.AllowPaths[0] != "vm/exec:gno.land/r/test/blog" ||
-		got.AllowPaths[1] != "vm/exec:gno.land/r/test/forum" ||
-		got.AllowPaths[2] != "vm/run" {
-		t.Errorf("AllowPaths = %v, want [vm/exec:gno.land/r/test/blog vm/exec:gno.land/r/test/forum vm/run]", got.AllowPaths)
-	}
+	assert.Equal(t, uint64(42), got.AccountNumber)
+	assert.Equal(t, uint64(7), got.Sequence)
+	assert.Equal(t, int64(1735689600), got.ExpiresAt)
+	assert.Equal(t, master, got.MasterAddress)
+	assert.True(t, got.SpendLimit.IsEqual(original.SpendLimit), "SpendLimit = %s, want %s", got.SpendLimit, original.SpendLimit)
+	assert.True(t, got.SpendUsed.IsEqual(original.SpendUsed), "SpendUsed = %s, want %s", got.SpendUsed, original.SpendUsed)
+	assert.Equal(t, int64(3600), got.SpendPeriod)
+	require.Len(t, got.AllowPaths, 3)
+	assert.Equal(t, "vm/exec:gno.land/r/test/blog", got.AllowPaths[0])
+	assert.Equal(t, "vm/exec:gno.land/r/test/forum", got.AllowPaths[1])
+	assert.Equal(t, "vm/run", got.AllowPaths[2])
 }
 
 // TestSplitAllowPaths verifies the chain → internal translation:
@@ -289,16 +217,10 @@ func TestSplitAllowPaths(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			paths, allowRun := splitAllowPaths(tc.in)
-			if allowRun != tc.wantAllow {
-				t.Errorf("allowRun = %v, want %v", allowRun, tc.wantAllow)
-			}
-			if len(paths) != len(tc.wantPaths) {
-				t.Fatalf("paths len = %d, want %d (got %v)", len(paths), len(tc.wantPaths), paths)
-			}
+			assert.Equal(t, tc.wantAllow, allowRun)
+			require.Len(t, paths, len(tc.wantPaths))
 			for i, p := range paths {
-				if p != tc.wantPaths[i] {
-					t.Errorf("paths[%d] = %q, want %q", i, p, tc.wantPaths[i])
-				}
+				assert.Equal(t, tc.wantPaths[i], p, "paths[%d]", i)
 			}
 		})
 	}

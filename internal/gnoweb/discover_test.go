@@ -4,6 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDiscover_ParsesMetaTags(t *testing.T) {
@@ -16,15 +19,9 @@ func TestDiscover_ParsesMetaTags(t *testing.T) {
 	defer srv.Close()
 
 	got, err := Discover(srv.Client(), srv.URL)
-	if err != nil {
-		t.Fatalf("discover: %v", err)
-	}
-	if got.RPC != "https://rpc.test11.testnets.gno.land" {
-		t.Errorf("rpc = %q", got.RPC)
-	}
-	if got.ChainID != "test11" {
-		t.Errorf("chainid = %q", got.ChainID)
-	}
+	require.NoError(t, err, "discover")
+	assert.Equal(t, "https://rpc.test11.testnets.gno.land", got.RPC)
+	assert.Equal(t, "test11", got.ChainID)
 }
 
 func TestDiscover_MissingTags(t *testing.T) {
@@ -32,9 +29,8 @@ func TestDiscover_MissingTags(t *testing.T) {
 		w.Write([]byte(`<html><head></head></html>`))
 	}))
 	defer srv.Close()
-	if _, err := Discover(srv.Client(), srv.URL); err == nil {
-		t.Fatal("expected error when gnoconnect meta-tags are absent")
-	}
+	_, err := Discover(srv.Client(), srv.URL)
+	require.Error(t, err, "expected error when gnoconnect meta-tags are absent")
 }
 
 func TestDiscover_HeadOnly_IgnoresBodyMeta(t *testing.T) {
@@ -51,15 +47,9 @@ func TestDiscover_HeadOnly_IgnoresBodyMeta(t *testing.T) {
 	}))
 	defer srv.Close()
 	got, err := Discover(srv.Client(), srv.URL)
-	if err != nil {
-		t.Fatalf("discover: %v", err)
-	}
-	if got.RPC != "https://rpc.test11.testnets.gno.land" {
-		t.Errorf("rpc = %q; body decoy should be ignored (head-only parse)", got.RPC)
-	}
-	if got.ChainID != "test11" {
-		t.Errorf("chainid = %q; body decoy should be ignored (head-only parse)", got.ChainID)
-	}
+	require.NoError(t, err, "discover")
+	assert.Equal(t, "https://rpc.test11.testnets.gno.land", got.RPC, "body decoy should be ignored (head-only parse)")
+	assert.Equal(t, "test11", got.ChainID, "body decoy should be ignored (head-only parse)")
 }
 
 func TestDiscover_AttributeOrderIndependent(t *testing.T) {
@@ -70,10 +60,7 @@ func TestDiscover_AttributeOrderIndependent(t *testing.T) {
 	}))
 	defer srv.Close()
 	got, err := Discover(srv.Client(), srv.URL)
-	if err != nil {
-		t.Fatalf("discover: %v", err)
-	}
-	if got.RPC == "" || got.ChainID != "test11" {
-		t.Errorf("reversed-order parse failed: %+v", got)
-	}
+	require.NoError(t, err, "discover")
+	assert.NotEmpty(t, got.RPC, "reversed-order parse failed: %+v", got)
+	assert.Equal(t, "test11", got.ChainID, "reversed-order parse failed: %+v", got)
 }

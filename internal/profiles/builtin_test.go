@@ -1,21 +1,25 @@
 package profiles
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	cfg := &Config{Profiles: BuiltinProfiles()}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("built-in defaults must validate: %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "built-in defaults must validate")
+
 	local, ok := cfg.Profiles["local"]
 	if !ok || local.ChainID != "dev" {
-		t.Errorf("local default missing or wrong chain-id: %+v", local)
+		assert.Fail(t, "local default missing or wrong chain-id", "%+v", local)
 	}
 	tn, ok := cfg.Profiles["testnet"]
 	if !ok || tn.ChainID != "test11" {
-		t.Errorf("testnet default missing or wrong chain-id: %+v", tn)
+		assert.Fail(t, "testnet default missing or wrong chain-id", "%+v", tn)
 	}
-	if local.MasterAddress != "" || tn.MasterAddress != "" {
-		t.Error("built-in defaults must be read-only (no master-address)")
-	}
+	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
+	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
 }

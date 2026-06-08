@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/session"
 )
@@ -18,15 +21,9 @@ func TestAuthStatus_noSessions_suggestsPropose(t *testing.T) {
 	res, err := s.Registry().Call(context.Background(), "gno_auth_status", map[string]any{
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if !strings.Contains(res.Text, "no active session") {
-		t.Errorf("expected 'no active session' in narrative:\n%s", res.Text)
-	}
-	if !strings.Contains(res.Text, "gno_session_propose") {
-		t.Errorf("expected 'gno_session_propose' suggestion in narrative:\n%s", res.Text)
-	}
+	require.NoError(t, err, "Call")
+	assert.Contains(t, res.Text, "no active session")
+	assert.Contains(t, res.Text, "gno_session_propose")
 }
 
 func TestAuthStatus_activeSession_narrative(t *testing.T) {
@@ -34,17 +31,13 @@ func TestAuthStatus_activeSession_narrative(t *testing.T) {
 	var seededAddr string
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		kp, err := session.NewKeypair()
-		if err != nil {
-			t.Fatalf("NewKeypair: %v", err)
-		}
+		require.NoError(t, err, "NewKeypair")
 		scope := session.Scope{
 			AllowPaths: []string{"gno.land/r/test/counter"},
 			SpendLimit: "1000000ugnot",
 		}
 		meta, err := m.AddPending("testnet5", kp, scope, "g1master")
-		if err != nil {
-			t.Fatalf("AddPending: %v", err)
-		}
+		require.NoError(t, err, "AddPending")
 		seededAddr = meta.SessionAddress
 		// Transition to active in the manager.
 		status := chain.SessionStatus{
@@ -53,9 +46,7 @@ func TestAuthStatus_activeSession_narrative(t *testing.T) {
 			SpendLimit:     scope.SpendLimit,
 			SpendRemaining: scope.SpendLimit,
 		}
-		if err := m.MarkActive("testnet5", seededAddr, status); err != nil {
-			t.Fatalf("MarkActive: %v", err)
-		}
+		require.NoError(t, m.MarkActive("testnet5", seededAddr, status), "MarkActive")
 	})
 	fake := chain.NewFake()
 	// Chain confirms the session is still active (otherwise auth_status would
@@ -71,18 +62,10 @@ func TestAuthStatus_activeSession_narrative(t *testing.T) {
 	res, err := s.Registry().Call(context.Background(), "gno_auth_status", map[string]any{
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if !strings.Contains(res.Text, "[active]") {
-		t.Errorf("expected '[active]' label in narrative:\n%s", res.Text)
-	}
-	if !strings.Contains(res.Text, seededAddr) {
-		t.Errorf("expected session address %q in narrative:\n%s", seededAddr, res.Text)
-	}
-	if !strings.Contains(res.Text, "gno.land/r/test/counter") {
-		t.Errorf("expected realm path in narrative:\n%s", res.Text)
-	}
+	require.NoError(t, err, "Call")
+	assert.Contains(t, res.Text, "[active]")
+	assert.True(t, strings.Contains(res.Text, seededAddr), "expected session address in narrative")
+	assert.Contains(t, res.Text, "gno.land/r/test/counter")
 }
 
 // TestAuthStatus_chainQueryRefreshes verifies that gno_auth_status flips a
@@ -93,17 +76,13 @@ func TestAuthStatus_chainQueryRefreshes(t *testing.T) {
 	var seededAddr string
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		kp, err := session.NewKeypair()
-		if err != nil {
-			t.Fatalf("NewKeypair: %v", err)
-		}
+		require.NoError(t, err, "NewKeypair")
 		scope := session.Scope{
 			AllowPaths: []string{"gno.land/r/test/blog"},
 			SpendLimit: "500000ugnot",
 		}
 		meta, err := m.AddPending("testnet5", kp, scope, master)
-		if err != nil {
-			t.Fatalf("AddPending: %v", err)
-		}
+		require.NoError(t, err, "AddPending")
 		seededAddr = meta.SessionAddress
 	})
 
@@ -119,23 +98,13 @@ func TestAuthStatus_chainQueryRefreshes(t *testing.T) {
 	res, err := s.Registry().Call(context.Background(), "gno_auth_status", map[string]any{
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if !strings.Contains(res.Text, "[active]") {
-		t.Errorf("expected '[active]' after chain refresh:\n%s", res.Text)
-	}
-	if !strings.Contains(res.Text, seededAddr) {
-		t.Errorf("expected session address %q in narrative:\n%s", seededAddr, res.Text)
-	}
+	require.NoError(t, err, "Call")
+	assert.Contains(t, res.Text, "[active]", "expected '[active]' after chain refresh")
+	assert.True(t, strings.Contains(res.Text, seededAddr), "expected session address in narrative")
 	// Manager should now reflect active state.
 	updated := mgr.Get("testnet5", seededAddr)
-	if updated == nil {
-		t.Fatal("session not found after refresh")
-	}
-	if updated.State != session.StateActive {
-		t.Errorf("expected manager state active after chain refresh, got %s", updated.State)
-	}
+	require.NotNil(t, updated, "session not found after refresh")
+	assert.Equal(t, session.StateActive, updated.State, "expected manager state active after chain refresh")
 }
 
 // TestAuthStatus_detectsRevocation verifies that a session which is active
@@ -147,23 +116,17 @@ func TestAuthStatus_detectsRevocation(t *testing.T) {
 	var seededAddr string
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		kp, err := session.NewKeypair()
-		if err != nil {
-			t.Fatalf("NewKeypair: %v", err)
-		}
+		require.NoError(t, err, "NewKeypair")
 		scope := session.Scope{
 			AllowPaths: []string{"gno.land/r/test/counter"},
 			SpendLimit: "1000000ugnot",
 		}
 		meta, err := m.AddPending("testnet5", kp, scope, master)
-		if err != nil {
-			t.Fatalf("AddPending: %v", err)
-		}
+		require.NoError(t, err, "AddPending")
 		seededAddr = meta.SessionAddress
-		if err := m.MarkActive("testnet5", seededAddr, chain.SessionStatus{
+		require.NoError(t, m.MarkActive("testnet5", seededAddr, chain.SessionStatus{
 			Active: true, AllowPaths: scope.AllowPaths, SpendLimit: scope.SpendLimit, SpendRemaining: scope.SpendLimit,
-		}); err != nil {
-			t.Fatalf("MarkActive: %v", err)
-		}
+		}), "MarkActive")
 	})
 
 	// Fake chain has NO record of the session → QuerySession reports !Active,
@@ -174,19 +137,12 @@ func TestAuthStatus_detectsRevocation(t *testing.T) {
 	res, err := s.Registry().Call(context.Background(), "gno_auth_status", map[string]any{
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if !strings.Contains(res.Text, "[revoked]") {
-		t.Errorf("expected '[revoked]' after chain reports inactive:\n%s", res.Text)
-	}
-	if strings.Contains(res.Text, "[active]") {
-		t.Errorf("revoked session must not still show '[active]':\n%s", res.Text)
-	}
+	require.NoError(t, err, "Call")
+	assert.Contains(t, res.Text, "[revoked]", "expected '[revoked]' after chain reports inactive")
+	assert.NotContains(t, res.Text, "[active]", "revoked session must not still show '[active]'")
 	updated := mgr.Get("testnet5", seededAddr)
-	if updated == nil || updated.State != session.StateRevoked {
-		t.Errorf("expected manager state revoked, got %+v", updated)
-	}
+	require.NotNil(t, updated)
+	assert.Equal(t, session.StateRevoked, updated.State, "expected manager state revoked")
 }
 
 func TestAuthStatus_missingProfileErrors(t *testing.T) {
@@ -196,7 +152,5 @@ func TestAuthStatus_missingProfileErrors(t *testing.T) {
 	RegisterAuthStatus(s, mgr, constChainResolver(fake))
 
 	_, err := s.Registry().Call(context.Background(), "gno_auth_status", map[string]any{})
-	if err == nil {
-		t.Fatal("expected error for missing profile")
-	}
+	require.Error(t, err, "expected error for missing profile")
 }

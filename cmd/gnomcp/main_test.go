@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -11,6 +10,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // srcDir returns the directory containing this test file.
@@ -23,26 +25,18 @@ func TestVersionSubcommand(t *testing.T) {
 	cmd := exec.Command("go", "run", ".", "version")
 	cmd.Dir = srcDir()
 	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("run: %v", err)
-	}
+	require.NoError(t, err, "run")
 	got := strings.TrimSpace(string(out))
-	if got != version {
-		t.Errorf("output = %q, want %q", got, version)
-	}
+	assert.Equal(t, version, got)
 }
 
 func TestMissingProfileTOML_exitsCleanly(t *testing.T) {
 	cmd := exec.Command("go", "run", ".", "--config", filepath.Join(t.TempDir(), "nope.toml"))
 	cmd.Dir = srcDir()
 	err := cmd.Run()
-	if err == nil {
-		t.Fatal("expected non-zero exit when config missing")
-	}
+	require.Error(t, err, "expected non-zero exit when config missing")
 	exitErr, ok := err.(*exec.ExitError)
-	if !ok || exitErr.ExitCode() == 0 {
-		t.Errorf("expected exit code != 0, got: %v", err)
-	}
+	require.True(t, ok && exitErr.ExitCode() != 0, "expected exit code != 0, got: %v", err)
 }
 
 func TestAuditGrep(t *testing.T) {
@@ -56,14 +50,10 @@ func TestAuditGrep(t *testing.T) {
 		{"time": "2024-01-01T00:02:00Z", "tool": "gno_render", "result": "ok"},
 	}
 	f, err := os.Create(logPath)
-	if err != nil {
-		t.Fatalf("create audit log: %v", err)
-	}
+	require.NoError(t, err, "create audit log")
 	enc := json.NewEncoder(f)
 	for _, e := range entries {
-		if err := enc.Encode(e); err != nil {
-			t.Fatalf("encode entry: %v", err)
-		}
+		require.NoError(t, enc.Encode(e), "encode entry")
 	}
 	f.Close()
 
@@ -72,29 +62,19 @@ func TestAuditGrep(t *testing.T) {
 	cmd.Dir = srcDir()
 	cmd.Env = append(os.Environ(), "GNOMCP_AUDIT_PATH="+logPath)
 	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("audit grep: %v", err)
-	}
+	require.NoError(t, err, "audit grep")
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) != 1 {
-		t.Errorf("expected 1 matching line, got %d: %v", len(lines), lines)
-	}
-	if !strings.Contains(lines[0], "gno_eval") {
-		t.Errorf("line does not contain 'gno_eval': %s", lines[0])
-	}
+	assert.Len(t, lines, 1, "expected 1 matching line, got %d: %v", len(lines), lines)
+	assert.Contains(t, lines[0], "gno_eval")
 
 	// grep for "gno_render" — should return 2 lines
 	cmd2 := exec.Command("go", "run", ".", "audit", "grep", "gno_render")
 	cmd2.Dir = srcDir()
 	cmd2.Env = append(os.Environ(), "GNOMCP_AUDIT_PATH="+logPath)
 	out2, err := cmd2.Output()
-	if err != nil {
-		t.Fatalf("audit grep 2: %v", err)
-	}
+	require.NoError(t, err, "audit grep 2")
 	lines2 := strings.Split(strings.TrimSpace(string(out2)), "\n")
-	if len(lines2) != 2 {
-		t.Errorf("expected 2 matching lines, got %d: %v", len(lines2), lines2)
-	}
+	assert.Len(t, lines2, 2, "expected 2 matching lines, got %d: %v", len(lines2), lines2)
 }
 
 func TestMain_writeToolsAbsent_whenAllReadOnly(t *testing.T) {
@@ -106,9 +86,7 @@ chain-id = "test5"
 `
 	cfg := t.TempDir()
 	cfgFile := filepath.Join(cfg, "profiles.toml")
-	if err := os.WriteFile(cfgFile, []byte(toml), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(cfgFile, []byte(toml), 0o600))
 	sessDir := t.TempDir()
 
 	cmd := exec.Command("go", "run", ".", "-config", cfgFile, "-sessions-path", sessDir)
@@ -117,15 +95,12 @@ chain-id = "test5"
 	out, err := cmd.Output()
 	if err != nil {
 		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
-			t.Fatalf("run: %v", err)
-		}
+		require.ErrorAs(t, err, &ee)
 	}
 
 	for _, tool := range []string{"gno_call", "gno_run", "gno_auth_status", "gno_session_propose", "gno_session_revoke"} {
-		if strings.Contains(string(out), tool) {
-			t.Errorf("write tool %q should not be in initialize response for read-only profile (no master-address)", tool)
-		}
+		assert.NotContains(t, string(out), tool,
+			"write tool %q should not be in initialize response for read-only profile (no master-address)", tool)
 	}
 }
 
@@ -139,9 +114,7 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 `
 	cfg := t.TempDir()
 	cfgFile := filepath.Join(cfg, "profiles.toml")
-	if err := os.WriteFile(cfgFile, []byte(toml), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(cfgFile, []byte(toml), 0o600))
 	sessDir := t.TempDir()
 
 	cmd := exec.Command("go", "run", ".", "-config", cfgFile, "-sessions-path", sessDir)
@@ -153,24 +126,17 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 	// the tools/list response (signalled by reading from stdout), then
 	// close it to let the server exit cleanly.
 	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		t.Fatalf("stdin pipe: %v", err)
-	}
+	require.NoError(t, err, "stdin pipe")
 	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatalf("stdout pipe: %v", err)
-	}
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start: %v", err)
-	}
+	require.NoError(t, err, "stdout pipe")
+	require.NoError(t, cmd.Start(), "start")
 
 	const (
 		initMsg = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}` + "\n"
 		listMsg = `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}` + "\n"
 	)
-	if _, err := stdin.Write([]byte(initMsg + listMsg)); err != nil {
-		t.Fatalf("write init+list: %v", err)
-	}
+	_, err = stdin.Write([]byte(initMsg + listMsg))
+	require.NoError(t, err, "write init+list")
 
 	// Read all stdout in a goroutine; the server will not write after stdin
 	// closes, so draining stdout first is safe.
@@ -201,27 +167,20 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 
 	if err := cmd.Wait(); err != nil {
 		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
-			t.Fatalf("run: %v", err)
-		}
+		require.ErrorAs(t, err, &ee)
 	}
 
 	for _, tool := range []string{"gno_call", "gno_run", "gno_session_propose", "gno_session_revoke", "gno_auth_status"} {
-		if !strings.Contains(out, tool) {
-			t.Errorf("write tool %q missing from initialize response for writable profile (master-address set); response:\n%s", tool, out)
-		}
+		assert.Contains(t, out, tool,
+			"write tool %q missing from initialize response for writable profile (master-address set)", tool)
 	}
 }
 
 func TestResolveSources_Defaults(t *testing.T) {
 	t.Setenv("GNOMCP_CONFIG", "")
 	s := resolveSources("")
-	if s.GlobalPath == "" {
-		t.Error("expected a global path default")
-	}
-	if s.ProjectPath != "profiles.toml" {
-		t.Errorf("project path = %q, want profiles.toml", s.ProjectPath)
-	}
+	assert.NotEmpty(t, s.GlobalPath, "expected a global path default")
+	assert.Equal(t, "profiles.toml", s.ProjectPath)
 }
 
 func TestInitialize_instructions_mentionsSessions_whenWritable(t *testing.T) {
@@ -234,24 +193,16 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 `
 	cfgDir := t.TempDir()
 	cfgFile := filepath.Join(cfgDir, "profiles.toml")
-	if err := os.WriteFile(cfgFile, []byte(toml), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(cfgFile, []byte(toml), 0o600))
 	sessDir := t.TempDir()
 
 	cmd := exec.Command("go", "run", ".", "-config", cfgFile, "-sessions-path", sessDir)
 	cmd.Dir = srcDir()
 	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, cmd.Start())
 
 	var out []byte
 	done := make(chan struct{})
@@ -260,15 +211,13 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 		out, _ = io.ReadAll(stdout)
 	}()
 
-	if _, err := io.WriteString(stdin, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`+"\n"); err != nil {
-		t.Fatalf("write init: %v", err)
-	}
+	_, err = io.WriteString(stdin, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`+"\n")
+	require.NoError(t, err, "write init")
 	time.Sleep(500 * time.Millisecond)
 	stdin.Close()
 	cmd.Wait()
 	<-done
 
-	if !strings.Contains(string(out), "gno_session_propose") {
-		t.Errorf("expected instructions to mention gno_session_propose; response:\n%s", string(out))
-	}
+	assert.Contains(t, string(out), "gno_session_propose",
+		"expected instructions to mention gno_session_propose; response:\n%s", string(out))
 }

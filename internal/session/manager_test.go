@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestManager(t *testing.T) *Manager {
@@ -41,9 +43,8 @@ func nullResolver() chain.Resolver {
 func TestManager_addPendingPersists(t *testing.T) {
 	m := newTestManager(t)
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair: %v", err)
-	}
+	require.NoError(t, err, "NewKeypair")
+
 	scope := Scope{
 		SpendLimit:  "500000ugnot",
 		SpendPeriod: time.Hour,
@@ -51,19 +52,12 @@ func TestManager_addPendingPersists(t *testing.T) {
 		AllowPaths:  []string{"gno.land/r/test/blog"},
 	}
 	meta, err := m.AddPending("testnet", kp, scope, "g1master")
-	if err != nil {
-		t.Fatalf("AddPending: %v", err)
-	}
+	require.NoError(t, err, "AddPending")
+
 	got, err := m.store.Read("testnet", meta.SessionAddress)
-	if err != nil {
-		t.Fatalf("store.Read after AddPending: %v", err)
-	}
-	if got.SessionAddress != meta.SessionAddress {
-		t.Errorf("stored addr = %q, want %q", got.SessionAddress, meta.SessionAddress)
-	}
-	if got.MasterAddress != "g1master" {
-		t.Errorf("stored MasterAddress = %q, want %q", got.MasterAddress, "g1master")
-	}
+	require.NoError(t, err, "store.Read after AddPending")
+	assert.Equal(t, meta.SessionAddress, got.SessionAddress)
+	assert.Equal(t, "g1master", got.MasterAddress)
 }
 
 func TestManager_pickPicksMostRecentMatching(t *testing.T) {
@@ -80,12 +74,8 @@ func TestManager_pickPicksMostRecentMatching(t *testing.T) {
 	m.mu.Unlock()
 
 	signer, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
-	if err != nil {
-		t.Fatalf("PickSessionForProfile: %v", err)
-	}
-	if signer.Address() != "g1newer" {
-		t.Errorf("picked %q, want g1newer (most recent matching)", signer.Address())
-	}
+	require.NoError(t, err, "PickSessionForProfile")
+	assert.Equal(t, "g1newer", signer.Address(), "should pick most recent matching session")
 }
 
 func TestManager_pickSkipsExpired(t *testing.T) {
@@ -95,13 +85,10 @@ func TestManager_pickSkipsExpired(t *testing.T) {
 	m.mu.Lock()
 	m.insertStateLocked("p", expired, StateActive)
 	m.mu.Unlock()
+
 	_, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
-	if err == nil {
-		t.Fatal("expected error for expired session, got nil")
-	}
-	if !errors.Is(err, ErrNoActiveSession) {
-		t.Errorf("error = %v, want ErrNoActiveSession", err)
-	}
+	require.Error(t, err, "expected error for expired session")
+	require.ErrorIs(t, err, ErrNoActiveSession)
 }
 
 func TestManager_pickSkipsZeroSpend(t *testing.T) {
@@ -111,10 +98,9 @@ func TestManager_pickSkipsZeroSpend(t *testing.T) {
 	m.mu.Lock()
 	m.insertStateLocked("p", broke, StateActive)
 	m.mu.Unlock()
+
 	_, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
-	if err == nil {
-		t.Fatal("expected error for zero-spend session, got nil")
-	}
+	require.Error(t, err, "expected error for zero-spend session")
 }
 
 func TestManager_pickReturnsErrScopeMismatch(t *testing.T) {
@@ -123,45 +109,34 @@ func TestManager_pickReturnsErrScopeMismatch(t *testing.T) {
 	m.mu.Lock()
 	m.insertStateLocked("p", blog, StateActive)
 	m.mu.Unlock()
+
 	_, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/forum")
-	if err == nil {
-		t.Fatal("expected *ErrScopeMismatch, got nil")
-	}
+	require.Error(t, err, "expected *ErrScopeMismatch")
+
 	var mismatch *ErrScopeMismatch
-	if !errors.As(err, &mismatch) {
-		t.Fatalf("error type = %T, want *ErrScopeMismatch", err)
-	}
-	if len(mismatch.AvailablePaths) == 0 {
-		t.Error("ErrScopeMismatch.AvailablePaths is empty")
-	}
-	if mismatch.AvailablePaths[0] != "gno.land/r/test/blog" {
-		t.Errorf("AvailablePaths[0] = %q, want \"gno.land/r/test/blog\"", mismatch.AvailablePaths[0])
-	}
+	require.True(t, errors.As(err, &mismatch), "error type = %T, want *ErrScopeMismatch", err)
+	require.NotEmpty(t, mismatch.AvailablePaths, "ErrScopeMismatch.AvailablePaths is empty")
+	assert.Equal(t, "gno.land/r/test/blog", mismatch.AvailablePaths[0])
 }
 
 func TestManager_pickReturnsErrNoActiveSession(t *testing.T) {
 	m := newTestManager(t)
 	_, err := m.PickSessionForProfile(context.Background(), nullResolver(), "empty-profile", "gno.land/r/test/blog")
-	if !errors.Is(err, ErrNoActiveSession) {
-		t.Fatalf("error = %v, want ErrNoActiveSession", err)
-	}
+	require.ErrorIs(t, err, ErrNoActiveSession)
 }
 
 func TestManager_pickActivatesPendingFromChain(t *testing.T) {
 	m := newTestManager(t)
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair: %v", err)
-	}
+	require.NoError(t, err, "NewKeypair")
+
 	scope := Scope{
 		SpendLimit: "500000ugnot",
 		ExpiresIn:  time.Hour,
 		AllowPaths: []string{"gno.land/r/test/blog"},
 	}
 	meta, err := m.AddPending("testnet", kp, scope, "g1master")
-	if err != nil {
-		t.Fatalf("AddPending: %v", err)
-	}
+	require.NoError(t, err, "AddPending")
 
 	fake := chain.NewFake()
 	fake.SetSession("g1master", meta.SessionAddress, chain.SessionStatus{
@@ -172,42 +147,32 @@ func TestManager_pickActivatesPendingFromChain(t *testing.T) {
 		ExpiresAt:      time.Now().Add(time.Hour).Unix(),
 	})
 	signer, err := m.PickSessionForProfile(context.Background(), resolverFor(fake), "testnet", "gno.land/r/test/blog")
-	if err != nil {
-		t.Fatalf("PickSessionForProfile after chain activation: %v", err)
-	}
-	if signer.Address() != meta.SessionAddress {
-		t.Errorf("signer address = %q, want %q", signer.Address(), meta.SessionAddress)
-	}
+	require.NoError(t, err, "PickSessionForProfile after chain activation")
+	assert.Equal(t, meta.SessionAddress, signer.Address())
 }
 
 func TestManager_updateSpendPersists(t *testing.T) {
 	m := newTestManager(t)
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair: %v", err)
-	}
+	require.NoError(t, err, "NewKeypair")
+
 	scope := Scope{
 		SpendLimit: "1000000ugnot",
 		ExpiresIn:  time.Hour,
 		AllowPaths: []string{"gno.land/r/test/blog"},
 	}
 	meta, err := m.AddPending("p", kp, scope, "g1master")
-	if err != nil {
-		t.Fatalf("AddPending: %v", err)
-	}
+	require.NoError(t, err, "AddPending")
+
 	m.mu.Lock()
 	m.sessions["p"][meta.SessionAddress].state = StateActive
 	m.mu.Unlock()
-	if err := m.UpdateSpend("p", meta.SessionAddress, 42000); err != nil {
-		t.Fatalf("UpdateSpend: %v", err)
-	}
+
+	require.NoError(t, m.UpdateSpend("p", meta.SessionAddress, 42000), "UpdateSpend")
+
 	sessions := m.ListForProfile("p")
-	if len(sessions) != 1 {
-		t.Fatalf("ListForProfile returned %d sessions, want 1", len(sessions))
-	}
-	if sessions[0].SpendRemaining != "958000ugnot" {
-		t.Errorf("SpendRemaining = %q, want \"958000ugnot\"", sessions[0].SpendRemaining)
-	}
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "958000ugnot", sessions[0].SpendRemaining)
 }
 
 func TestManager_hydrateLoadsActiveSkipsInactive(t *testing.T) {
@@ -221,12 +186,10 @@ func TestManager_hydrateLoadsActiveSkipsInactive(t *testing.T) {
 	inactiveMeta := activeSession(inactiveKP.Address(), inactiveKP.PubkeyBech32(),
 		[]string{"gno.land/r/test/other"}, 2000)
 	inactiveMeta.Privkey = inactiveKP.Priv
-	if err := m.store.Write("prof", activeMeta); err != nil {
-		t.Fatalf("Write active: %v", err)
-	}
-	if err := m.store.Write("prof", inactiveMeta); err != nil {
-		t.Fatalf("Write inactive: %v", err)
-	}
+
+	require.NoError(t, m.store.Write("prof", activeMeta), "Write active")
+	require.NoError(t, m.store.Write("prof", inactiveMeta), "Write inactive")
+
 	fake := chain.NewFake()
 	fake.SetSession("g1master", activeKP.Address(), chain.SessionStatus{
 		Active:         true,
@@ -236,20 +199,15 @@ func TestManager_hydrateLoadsActiveSkipsInactive(t *testing.T) {
 		ExpiresAt:      time.Now().Add(time.Hour).Unix(),
 	})
 	fake.SetSession("g1master", inactiveKP.Address(), chain.SessionStatus{Active: false})
-	if err := m.Hydrate(context.Background(), resolverFor(fake)); err != nil {
-		t.Fatalf("Hydrate: %v", err)
-	}
+
+	require.NoError(t, m.Hydrate(context.Background(), resolverFor(fake)), "Hydrate")
+
 	sessions := m.ListForProfile("prof")
-	if len(sessions) != 1 {
-		t.Fatalf("after Hydrate: %d sessions loaded, want 1", len(sessions))
-	}
-	if sessions[0].SessionAddress != activeMeta.SessionAddress {
-		t.Errorf("loaded session addr = %q, want %q", sessions[0].SessionAddress, activeMeta.SessionAddress)
-	}
+	require.Len(t, sessions, 1, "after Hydrate: unexpected number of sessions loaded")
+	assert.Equal(t, activeMeta.SessionAddress, sessions[0].SessionAddress)
+
 	_, err := m.store.Read("prof", inactiveMeta.SessionAddress)
-	if err == nil {
-		t.Fatal("inactive session file still on disk after Hydrate; expected deletion")
-	}
+	require.Error(t, err, "inactive session file still on disk after Hydrate; expected deletion")
 }
 
 func TestManager_concurrentAddPickNoRace(t *testing.T) {
@@ -285,28 +243,22 @@ func TestManager_pickAnyActiveSessionWithEmptyRealm(t *testing.T) {
 	m.mu.Lock()
 	m.insertStateLocked("p", s1, StateActive)
 	m.mu.Unlock()
+
 	signer, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "")
-	if err != nil {
-		t.Fatalf("expected success with empty realm wildcard: %v", err)
-	}
-	if signer.Address() != "g1one" {
-		t.Errorf("picked %q, want g1one", signer.Address())
-	}
+	require.NoError(t, err, "expected success with empty realm wildcard")
+	assert.Equal(t, "g1one", signer.Address())
 }
 
 func TestCoversRealm_doesNotMatchSiblingName(t *testing.T) {
-	if coversRealm([]string{"gno.land/r/test"}, "gno.land/r/testing") {
-		t.Error("coversRealm must not match a realm that only shares a string prefix but is not a sub-path")
-	}
+	assert.False(t, coversRealm([]string{"gno.land/r/test"}, "gno.land/r/testing"),
+		"coversRealm must not match a realm that only shares a string prefix but is not a sub-path")
 }
 
 func TestCoversRealm_matchesExactAndSubpath(t *testing.T) {
-	if !coversRealm([]string{"gno.land/r/test"}, "gno.land/r/test") {
-		t.Error("coversRealm must match exact realm")
-	}
-	if !coversRealm([]string{"gno.land/r/test"}, "gno.land/r/test/blog") {
-		t.Error("coversRealm must match a sub-path")
-	}
+	assert.True(t, coversRealm([]string{"gno.land/r/test"}, "gno.land/r/test"),
+		"coversRealm must match exact realm")
+	assert.True(t, coversRealm([]string{"gno.land/r/test"}, "gno.land/r/test/blog"),
+		"coversRealm must match a sub-path")
 }
 
 func TestManager_pickForRun_skipsSessionWithoutAllowRun(t *testing.T) {
@@ -317,13 +269,11 @@ func TestManager_pickForRun_skipsSessionWithoutAllowRun(t *testing.T) {
 	m.mu.Unlock()
 
 	_, err := m.PickSessionForRun(context.Background(), nullResolver(), "p")
-	if err == nil {
-		t.Fatal("expected error when no session has AllowRun=true")
-	}
+	require.Error(t, err, "expected error when no session has AllowRun=true")
+
 	var mismatch *ErrScopeMismatch
-	if !errors.As(err, &mismatch) && !errors.Is(err, ErrNoActiveSession) {
-		t.Errorf("error = %v, want ErrScopeMismatch or ErrNoActiveSession", err)
-	}
+	assert.True(t, errors.As(err, &mismatch) || errors.Is(err, ErrNoActiveSession),
+		"error = %v, want ErrScopeMismatch or ErrNoActiveSession", err)
 }
 
 func TestManager_pickForRun_returnsSessionWithAllowRun(t *testing.T) {
@@ -335,20 +285,14 @@ func TestManager_pickForRun_returnsSessionWithAllowRun(t *testing.T) {
 	m.mu.Unlock()
 
 	signer, err := m.PickSessionForRun(context.Background(), nullResolver(), "p")
-	if err != nil {
-		t.Fatalf("PickSessionForRun: %v", err)
-	}
-	if signer.Address() != "g1run" {
-		t.Errorf("picked %q, want g1run", signer.Address())
-	}
+	require.NoError(t, err, "PickSessionForRun")
+	assert.Equal(t, "g1run", signer.Address())
 }
 
 func TestManager_pickForRun_emptyProfileReturnsNoActiveSession(t *testing.T) {
 	m := newTestManager(t)
 	_, err := m.PickSessionForRun(context.Background(), nullResolver(), "empty")
-	if !errors.Is(err, ErrNoActiveSession) {
-		t.Errorf("error = %v, want ErrNoActiveSession", err)
-	}
+	require.ErrorIs(t, err, ErrNoActiveSession)
 }
 
 func TestManager_sessionWithBothAllowPathsAndRun_pickedByEither(t *testing.T) {
@@ -361,38 +305,27 @@ func TestManager_sessionWithBothAllowPathsAndRun_pickedByEither(t *testing.T) {
 
 	// Realm-based pick works.
 	signer, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
-	if err != nil {
-		t.Fatalf("PickSessionForProfile: %v", err)
-	}
-	if signer.Address() != "g1both" {
-		t.Errorf("PickSessionForProfile picked %q, want g1both", signer.Address())
-	}
+	require.NoError(t, err, "PickSessionForProfile")
+	assert.Equal(t, "g1both", signer.Address(), "PickSessionForProfile")
 
 	// Run pick works.
 	signer, err = m.PickSessionForRun(context.Background(), nullResolver(), "p")
-	if err != nil {
-		t.Fatalf("PickSessionForRun: %v", err)
-	}
-	if signer.Address() != "g1both" {
-		t.Errorf("PickSessionForRun picked %q, want g1both", signer.Address())
-	}
+	require.NoError(t, err, "PickSessionForRun")
+	assert.Equal(t, "g1both", signer.Address(), "PickSessionForRun")
 }
 
 func TestManager_pickForRun_activatesPendingFromChainWithAllowRun(t *testing.T) {
 	m := newTestManager(t)
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair: %v", err)
-	}
+	require.NoError(t, err, "NewKeypair")
+
 	scope := Scope{
 		SpendLimit: "500000ugnot",
 		ExpiresIn:  time.Hour,
 		AllowRun:   true,
 	}
 	meta, err := m.AddPending("testnet", kp, scope, "g1master")
-	if err != nil {
-		t.Fatalf("AddPending: %v", err)
-	}
+	require.NoError(t, err, "AddPending")
 
 	fake := chain.NewFake()
 	fake.SetSession("g1master", meta.SessionAddress, chain.SessionStatus{
@@ -403,21 +336,16 @@ func TestManager_pickForRun_activatesPendingFromChainWithAllowRun(t *testing.T) 
 		ExpiresAt:      time.Now().Add(time.Hour).Unix(),
 	})
 	signer, err := m.PickSessionForRun(context.Background(), resolverFor(fake), "testnet")
-	if err != nil {
-		t.Fatalf("PickSessionForRun after chain activation: %v", err)
-	}
-	if signer.Address() != meta.SessionAddress {
-		t.Errorf("signer address = %q, want %q", signer.Address(), meta.SessionAddress)
-	}
+	require.NoError(t, err, "PickSessionForRun after chain activation")
+	assert.Equal(t, meta.SessionAddress, signer.Address())
 }
 
 func TestManager_markActive_persistsAndUpdates(t *testing.T) {
 	m := newTestManager(t)
 	kp, _ := NewKeypair()
 	_, err := m.AddPending("p", kp, Scope{AllowPaths: []string{"r/x"}, SpendLimit: "1000ugnot", ExpiresIn: time.Hour}, "g1master")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	err = m.MarkActive("p", kp.Address(), chain.SessionStatus{
 		Active:         true,
 		AllowPaths:     []string{"r/x"},
@@ -425,11 +353,9 @@ func TestManager_markActive_persistsAndUpdates(t *testing.T) {
 		SpendRemaining: "1000ugnot",
 		ExpiresAt:      time.Now().Add(time.Hour).Unix(),
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	metas := m.ListForProfile("p")
-	if len(metas) != 1 || metas[0].State != StateActive {
-		t.Errorf("expected one active session, got %+v", metas)
-	}
+	require.Len(t, metas, 1)
+	assert.Equal(t, StateActive, metas[0].State, "expected one active session")
 }

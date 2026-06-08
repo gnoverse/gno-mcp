@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRead_returnsFile(t *testing.T) {
@@ -18,18 +20,10 @@ func TestRead_returnsFile(t *testing.T) {
 		"file":    "x.gno",
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if res.ResourceBody != "package x\n\nfunc Foo() {}" {
-		t.Errorf("ResourceBody = %q", res.ResourceBody)
-	}
-	if res.ResourceURI != "gno://gno.land/r/x/x.gno" {
-		t.Errorf("ResourceURI = %q, want gno://gno.land/r/x/x.gno", res.ResourceURI)
-	}
-	if res.ResourceMIME != "text/x-gno" {
-		t.Errorf("ResourceMIME = %q, want text/x-gno", res.ResourceMIME)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "package x\n\nfunc Foo() {}", res.ResourceBody)
+	assert.Equal(t, "gno://gno.land/r/x/x.gno", res.ResourceURI)
+	assert.Equal(t, "text/x-gno", res.ResourceMIME)
 }
 
 func TestRead_returnsListing(t *testing.T) {
@@ -42,18 +36,10 @@ func TestRead_returnsListing(t *testing.T) {
 		"realm":   "gno.land/r/x",
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if res.ResourceBody != "x.gno\nhelper.gno\n" {
-		t.Errorf("ResourceBody = %q, want %q", res.ResourceBody, "x.gno\nhelper.gno\n")
-	}
-	if res.ResourceURI != "gno://gno.land/r/x" {
-		t.Errorf("ResourceURI = %q, want gno://gno.land/r/x", res.ResourceURI)
-	}
-	if res.ResourceMIME != "text/plain" {
-		t.Errorf("ResourceMIME = %q, want text/plain", res.ResourceMIME)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "x.gno\nhelper.gno\n", res.ResourceBody)
+	assert.Equal(t, "gno://gno.land/r/x", res.ResourceURI)
+	assert.Equal(t, "text/plain", res.ResourceMIME)
 }
 
 func TestRead_requiresRealm(t *testing.T) {
@@ -62,9 +48,7 @@ func TestRead_requiresRealm(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_read", map[string]any{
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected error when realm is missing")
-	}
+	require.Error(t, err, "expected error when realm is missing")
 }
 
 func TestRead_rejectsNonStringFile(t *testing.T) {
@@ -75,9 +59,7 @@ func TestRead_rejectsNonStringFile(t *testing.T) {
 		"file":    42,
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected type error when file is not a string")
-	}
+	require.Error(t, err, "expected type error when file is not a string")
 }
 
 func TestRead_unknownProfileReturnsError(t *testing.T) {
@@ -87,7 +69,5 @@ func TestRead_unknownProfileReturnsError(t *testing.T) {
 		"realm":   "gno.land/r/x",
 		"profile": "ghost",
 	})
-	if err == nil {
-		t.Fatal("expected error when resolver returns nil for unknown profile")
-	}
+	require.Error(t, err, "expected error when resolver returns nil for unknown profile")
 }

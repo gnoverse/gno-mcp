@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/profiles"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewServer_registersZeroToolsInitially(t *testing.T) {
@@ -13,9 +15,7 @@ func TestNewServer_registersZeroToolsInitially(t *testing.T) {
 		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
 	}}
 	s := NewServer(cfg, "")
-	if s.Registry().Count() != 0 {
-		t.Errorf("expected 0 tools registered, got %d", s.Registry().Count())
-	}
+	assert.Equal(t, 0, s.Registry().Count())
 }
 
 func TestServer_anyProfileHasIndexer(t *testing.T) {
@@ -24,9 +24,7 @@ func TestServer_anyProfileHasIndexer(t *testing.T) {
 		"local":    {},
 	}}
 	s := NewServer(cfg, "")
-	if !s.AnyProfileHasIndexer() {
-		t.Error("AnyProfileHasIndexer should be true")
-	}
+	assert.True(t, s.AnyProfileHasIndexer(), "AnyProfileHasIndexer should be true")
 }
 
 func TestServer_noProfileHasIndexer(t *testing.T) {
@@ -34,9 +32,7 @@ func TestServer_noProfileHasIndexer(t *testing.T) {
 		"local": {},
 	}}
 	s := NewServer(cfg, "")
-	if s.AnyProfileHasIndexer() {
-		t.Error("AnyProfileHasIndexer should be false")
-	}
+	assert.False(t, s.AnyProfileHasIndexer(), "AnyProfileHasIndexer should be false")
 }
 
 func TestServer_anyProfileAgentCapable_local(t *testing.T) {
@@ -44,9 +40,7 @@ func TestServer_anyProfileAgentCapable_local(t *testing.T) {
 		"dev": {ChainType: "local", RPCURL: "x", ChainID: "dev"},
 	}}
 	s := NewServer(cfg, "")
-	if !s.AnyProfileAgentCapable() {
-		t.Error("AnyProfileAgentCapable should be true for a local profile")
-	}
+	assert.True(t, s.AnyProfileAgentCapable(), "AnyProfileAgentCapable should be true for a local profile")
 }
 
 func TestServer_anyProfileAgentCapable_testnet(t *testing.T) {
@@ -54,9 +48,7 @@ func TestServer_anyProfileAgentCapable_testnet(t *testing.T) {
 		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
 	}}
 	s := NewServer(cfg, "")
-	if !s.AnyProfileAgentCapable() {
-		t.Error("AnyProfileAgentCapable should be true for a testnet profile")
-	}
+	assert.True(t, s.AnyProfileAgentCapable(), "AnyProfileAgentCapable should be true for a testnet profile")
 }
 
 func TestServer_anyProfileAgentCapable_both(t *testing.T) {
@@ -65,18 +57,14 @@ func TestServer_anyProfileAgentCapable_both(t *testing.T) {
 		"testnet5": {ChainType: "testnet", RPCURL: "y", ChainID: "test5"},
 	}}
 	s := NewServer(cfg, "")
-	if !s.AnyProfileAgentCapable() {
-		t.Error("AnyProfileAgentCapable should be true when any profile is local or testnet")
-	}
+	assert.True(t, s.AnyProfileAgentCapable(), "AnyProfileAgentCapable should be true when any profile is local or testnet")
 }
 
 func TestServer_noProfileAgentCapable(t *testing.T) {
 	// A config with no profiles has nothing agent-capable (edge case).
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{}}
 	s := NewServer(cfg, "")
-	if s.AnyProfileAgentCapable() {
-		t.Error("AnyProfileAgentCapable should be false with no profiles")
-	}
+	assert.False(t, s.AnyProfileAgentCapable(), "AnyProfileAgentCapable should be false with no profiles")
 }
 
 func TestServer_callsRegisteredTool(t *testing.T) {
@@ -91,7 +79,6 @@ func TestServer_callsRegisteredTool(t *testing.T) {
 		},
 	})
 	res, err := s.Registry().Call(context.Background(), "x", nil)
-	if err != nil || res.Text != "hi" {
-		t.Errorf("Call = %+v, %v", res, err)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "hi", res.Text)
 }

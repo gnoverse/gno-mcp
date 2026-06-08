@@ -1,35 +1,27 @@
 package write
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 )
 
 func TestSignedByLine_localAgent_namesTest1(t *testing.T) {
 	got := signedByLine("agent", "g1abc", "", profiles.ChainTypeLocal)
-	if !strings.Contains(got, "test1") {
-		t.Fatalf("local agent line should name test1, got %q", got)
-	}
-	if !strings.Contains(got, "g1abc") {
-		t.Fatalf("line should contain the signer address, got %q", got)
-	}
+	assert.Contains(t, got, "test1", "local agent line should name test1")
+	assert.Contains(t, got, "g1abc", "line should contain the signer address")
 }
 
 func TestSignedByLine_testnetAgent_doesNotNameTest1(t *testing.T) {
 	got := signedByLine("agent", "g1xyz", "", profiles.ChainTypeTestnet)
-	if strings.Contains(got, "test1") {
-		t.Fatalf("testnet agent uses a generated key, not test1, got %q", got)
-	}
-	if !strings.Contains(got, "g1xyz") {
-		t.Fatalf("line should contain the signer address, got %q", got)
-	}
+	assert.NotContains(t, got, "test1", "testnet agent uses a generated key, not test1")
+	assert.Contains(t, got, "g1xyz", "line should contain the signer address")
 }
 
 func TestSignedByLine_session(t *testing.T) {
 	got := signedByLine("session", "g1sess", "g1master", profiles.ChainTypeTestnet)
-	if !strings.Contains(got, "session") || !strings.Contains(got, "g1master") {
-		t.Fatalf("session line should name the session and master, got %q", got)
-	}
+	assert.Contains(t, got, "session")
+	assert.Contains(t, got, "g1master")
 }

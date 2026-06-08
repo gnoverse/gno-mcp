@@ -4,11 +4,12 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConnect_EmitsAddCommand(t *testing.T) {
@@ -23,12 +24,9 @@ func TestConnect_EmitsAddCommand(t *testing.T) {
 	res, err := s.Registry().Call(context.Background(), "gno_connect", map[string]any{
 		"gnoweb_url": srv.URL, "name": "mychain",
 	})
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	if !strings.Contains(res.Text, "gnomcp profile add") || !strings.Contains(res.Text, "test11") {
-		t.Errorf("expected add command with chain-id, got:\n%s", res.Text)
-	}
+	require.NoError(t, err)
+	assert.Contains(t, res.Text, "gnomcp profile add", "expected add command in output")
+	assert.Contains(t, res.Text, "test11", "expected chain-id in output")
 }
 
 func TestConnect_RejectsForbiddenChain(t *testing.T) {
@@ -37,10 +35,9 @@ func TestConnect_RejectsForbiddenChain(t *testing.T) {
 			`<meta name="gnoconnect:chainid" content="gnoland1" />`))
 	}))
 	defer srv.Close()
+
 	s := server.NewServer(&profiles.Config{Profiles: profiles.BuiltinProfiles()}, "")
 	RegisterConnect(s, srv.Client())
 	_, err := s.Registry().Call(context.Background(), "gno_connect", map[string]any{"gnoweb_url": srv.URL})
-	if err == nil {
-		t.Fatal("expected forbidden chain-id (gnoland1) to be rejected")
-	}
+	require.Error(t, err, "expected forbidden chain-id (gnoland1) to be rejected")
 }

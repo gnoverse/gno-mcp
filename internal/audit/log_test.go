@@ -6,72 +6,58 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLog_appendWritesJSONLine(t *testing.T) {
 	var buf bytes.Buffer
 	l := NewLog(&buf)
-	if err := l.Append(Entry{
+	err := l.Append(Entry{
 		Time:     time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC),
 		Tool:     "gno_call",
 		Profile:  "testnet5",
 		Result:   "ok",
 		Duration: 150,
-	}); err != nil {
-		t.Fatalf("Append: %v", err)
-	}
+	})
+	require.NoError(t, err, "Append")
 	line := strings.TrimSpace(buf.String())
 	var got Entry
-	if err := json.Unmarshal([]byte(line), &got); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if got.Tool != "gno_call" || got.Profile != "testnet5" {
-		t.Errorf("Entry mis-decoded: %+v", got)
-	}
+	require.NoError(t, json.Unmarshal([]byte(line), &got), "unmarshal")
+	assert.Equal(t, "gno_call", got.Tool, "Entry mis-decoded: %+v", got)
+	assert.Equal(t, "testnet5", got.Profile, "Entry mis-decoded: %+v", got)
 }
 
 func TestLog_appendMultipleEntries(t *testing.T) {
 	var buf bytes.Buffer
 	l := NewLog(&buf)
 	for i := 0; i < 3; i++ {
-		if err := l.Append(Entry{Tool: "x", Result: "ok"}); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, l.Append(Entry{Tool: "x", Result: "ok"}))
 	}
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) != 3 {
-		t.Errorf("expected 3 lines, got %d", len(lines))
-	}
+	assert.Len(t, lines, 3)
 }
 
 func TestLog_appendDefaultsTimeToNow(t *testing.T) {
 	var buf bytes.Buffer
 	l := NewLog(&buf)
 	before := time.Now().UTC()
-	if err := l.Append(Entry{Tool: "x", Result: "ok"}); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, l.Append(Entry{Tool: "x", Result: "ok"}))
 	after := time.Now().UTC()
 	var got Entry
-	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.Time.Before(before) || got.Time.After(after) {
-		t.Errorf("Time not auto-defaulted to now: got %v, want in [%v, %v]", got.Time, before, after)
-	}
+	require.NoError(t, json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got))
+	assert.False(t, got.Time.Before(before) || got.Time.After(after),
+		"Time not auto-defaulted to now: got %v, want in [%v, %v]", got.Time, before, after)
 }
 
 func TestLog_durationMarshalsAsMilliseconds(t *testing.T) {
 	var buf bytes.Buffer
 	l := NewLog(&buf)
-	if err := l.Append(Entry{Tool: "x", Result: "ok", Duration: 150}); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Contains(buf.Bytes(), []byte(`"duration_ms":150`)) {
-		t.Errorf("expected duration_ms=150 on wire, got: %s", buf.String())
-	}
+	require.NoError(t, l.Append(Entry{Tool: "x", Result: "ok", Duration: 150}))
+	assert.True(t, bytes.Contains(buf.Bytes(), []byte(`"duration_ms":150`)),
+		"expected duration_ms=150 on wire, got: %s", buf.String())
 	// Catch the regression: nanoseconds would surface as a 9-digit number.
-	if bytes.Contains(buf.Bytes(), []byte(`"duration_ms":150000000`)) {
-		t.Error("duration_ms is being written in nanoseconds, not milliseconds")
-	}
+	assert.False(t, bytes.Contains(buf.Bytes(), []byte(`"duration_ms":150000000`)),
+		"duration_ms is being written in nanoseconds, not milliseconds")
 }

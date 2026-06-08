@@ -2,8 +2,10 @@ package write
 
 import (
 	"context"
-	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/gnoverse/gno-mcp/internal/keystore"
 	"github.com/gnoverse/gno-mcp/internal/server"
@@ -17,21 +19,13 @@ func TestKeyAddress_localProfile_returnsAddress(t *testing.T) {
 	res, err := s.Registry().Call(context.Background(), "gno_key_address", map[string]any{
 		"profile": "local",
 	})
-	if err != nil {
-		t.Fatalf("gno_key_address: %v", err)
-	}
+	require.NoError(t, err, "gno_key_address")
 
 	const wantAddr = "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
-	if res.Text != wantAddr {
-		t.Errorf("Text = %q, want %q", res.Text, wantAddr)
-	}
-	sc := res.StructuredContent
-	if sc == nil {
-		t.Fatal("StructuredContent is nil")
-	}
-	if addr, _ := sc["address"].(string); addr != wantAddr {
-		t.Errorf("StructuredContent[address] = %q, want %q", addr, wantAddr)
-	}
+	assert.Equal(t, wantAddr, res.Text)
+	require.NotNil(t, res.StructuredContent)
+	addr, _ := res.StructuredContent["address"].(string)
+	assert.Equal(t, wantAddr, addr)
 }
 
 func TestKeyAddress_testnetProfile_agentIdentityUnavailable(t *testing.T) {
@@ -42,14 +36,8 @@ func TestKeyAddress_testnetProfile_agentIdentityUnavailable(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_key_address", map[string]any{
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected agent_identity_unavailable error, got nil")
-	}
-	te, ok := errors.AsType[*server.ToolError](err)
-	if !ok {
-		t.Fatalf("expected *server.ToolError, got %T: %v", err, err)
-	}
-	if te.Code != "agent_identity_unavailable" {
-		t.Errorf("Code = %q, want %q", te.Code, "agent_identity_unavailable")
-	}
+	require.Error(t, err, "expected agent_identity_unavailable error, got nil")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "agent_identity_unavailable", te.Code)
 }

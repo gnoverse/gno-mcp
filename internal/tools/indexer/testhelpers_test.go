@@ -3,6 +3,8 @@ package indexer
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	indexerpkg "github.com/gnoverse/gno-mcp/internal/indexer"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
@@ -21,9 +23,8 @@ func newBaseTestServer(t *testing.T) *server.Server {
 			TxIndexerURL: "https://indexer.test5/graphql",
 		},
 	}}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("validate: %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err)
 	return server.NewServer(cfg, "")
 }
 

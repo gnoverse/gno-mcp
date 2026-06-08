@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRender_returnsResource(t *testing.T) {
@@ -17,18 +19,10 @@ func TestRender_returnsResource(t *testing.T) {
 		"realm":   "gno.land/r/foo",
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if res.ResourceBody != "# Hello\nBody." {
-		t.Errorf("ResourceBody = %q", res.ResourceBody)
-	}
-	if res.ResourceURI != "gno://gno.land/r/foo" {
-		t.Errorf("ResourceURI = %q, want gno://gno.land/r/foo", res.ResourceURI)
-	}
-	if res.ResourceMIME != "text/markdown" {
-		t.Errorf("ResourceMIME = %q, want text/markdown", res.ResourceMIME)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "# Hello\nBody.", res.ResourceBody)
+	assert.Equal(t, "gno://gno.land/r/foo", res.ResourceURI)
+	assert.Equal(t, "text/markdown", res.ResourceMIME)
 }
 
 func TestRender_passesPath(t *testing.T) {
@@ -42,15 +36,9 @@ func TestRender_passesPath(t *testing.T) {
 		"path":    "subpath/x",
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if res.ResourceBody != "subbody" {
-		t.Errorf("ResourceBody = %q, want 'subbody'", res.ResourceBody)
-	}
-	if res.ResourceURI != "gno://gno.land/r/foo/subpath/x" {
-		t.Errorf("ResourceURI = %q, want gno://gno.land/r/foo/subpath/x", res.ResourceURI)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "subbody", res.ResourceBody)
+	assert.Equal(t, "gno://gno.land/r/foo/subpath/x", res.ResourceURI)
 }
 
 func TestRender_requiresRealm(t *testing.T) {
@@ -59,9 +47,7 @@ func TestRender_requiresRealm(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_render", map[string]any{
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected error when realm is missing")
-	}
+	require.Error(t, err, "expected error when realm is missing")
 }
 
 func TestRender_rejectsNonStringRealm(t *testing.T) {
@@ -71,9 +57,7 @@ func TestRender_rejectsNonStringRealm(t *testing.T) {
 		"realm":   42,
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected type error when realm is not a string")
-	}
+	require.Error(t, err, "expected type error when realm is not a string")
 }
 
 func TestRender_unknownProfileReturnsError(t *testing.T) {
@@ -83,7 +67,5 @@ func TestRender_unknownProfileReturnsError(t *testing.T) {
 		"realm":   "gno.land/r/foo",
 		"profile": "ghost",
 	})
-	if err == nil {
-		t.Fatal("expected error when resolver returns nil for unknown profile")
-	}
+	require.Error(t, err, "expected error when resolver returns nil for unknown profile")
 }

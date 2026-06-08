@@ -3,24 +3,22 @@ package read
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBudgetResourceBody_TruncatesLarge(t *testing.T) {
 	big := strings.Repeat("x", 5000) // > DefaultBudget (4096)
 	body, truncated := budgetBody(big, "https://test11.testnets.gno.land/r/foo")
-	if !truncated {
-		t.Fatal("expected truncation for >4KB body")
-	}
-	if body == big {
-		t.Error("body should have been replaced by a summary")
-	}
+	require.True(t, truncated, "expected truncation for >4KB body")
+	assert.NotEqual(t, big, body, "body should have been replaced by a summary")
 }
 
 func TestBudgetResourceBody_KeepsSmall(t *testing.T) {
 	body, truncated := budgetBody("small", "https://x")
-	if truncated || body != "small" {
-		t.Errorf("small body should pass through unchanged: %q %v", body, truncated)
-	}
+	assert.False(t, truncated, "small body should not be truncated")
+	assert.Equal(t, "small", body, "small body should pass through unchanged")
 }
 
 func TestGnowebURLFor(t *testing.T) {
@@ -30,8 +28,7 @@ func TestGnowebURLFor(t *testing.T) {
 		{"http://127.0.0.1:26657", "gno.land/r/x", "", ""}, // local → not derivable
 	}
 	for _, tc := range cases {
-		if got := gnowebURLFor(tc.rpc, tc.realm, tc.path); got != tc.want {
-			t.Errorf("gnowebURLFor(%q,%q,%q) = %q, want %q", tc.rpc, tc.realm, tc.path, got, tc.want)
-		}
+		got := gnowebURLFor(tc.rpc, tc.realm, tc.path)
+		assert.Equal(t, tc.want, got, "gnowebURLFor(%q,%q,%q)", tc.rpc, tc.realm, tc.path)
 	}
 }

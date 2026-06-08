@@ -3,6 +3,9 @@ package profiles
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoad_validProfiles(t *testing.T) {
@@ -19,29 +22,18 @@ chain-id = "test5"
 tx-indexer-url = "https://indexer.test5.gno.land/graphql/query"
 `
 	cfg, err := Load(strings.NewReader(src))
-	if err != nil {
-		t.Fatalf("Load returned err: %v", err)
-	}
-	if len(cfg.Profiles) != 2 {
-		t.Fatalf("expected 2 profiles, got %d", len(cfg.Profiles))
-	}
+	require.NoError(t, err)
+	require.Len(t, cfg.Profiles, 2)
+
 	local, ok := cfg.Profiles["local"]
-	if !ok {
-		t.Fatal("missing local profile")
-	}
-	if local.ChainType != "local" || local.ChainID != "dev" {
-		t.Errorf("local profile mis-parsed: %+v", local)
-	}
-	if local.RPCURL != "http://127.0.0.1:26657" {
-		t.Errorf("local.RPCURL mis-parsed: got %q", local.RPCURL)
-	}
+	require.True(t, ok, "missing local profile")
+	assert.Equal(t, "local", local.ChainType, "local ChainType mis-parsed")
+	assert.Equal(t, "dev", local.ChainID, "local ChainID mis-parsed")
+	assert.Equal(t, "http://127.0.0.1:26657", local.RPCURL, "local.RPCURL mis-parsed")
+
 	testnet := cfg.Profiles["testnet5"]
-	if testnet.RPCURL != "https://rpc.test5.gno.land:443" {
-		t.Errorf("testnet5.RPCURL mis-parsed: got %q", testnet.RPCURL)
-	}
-	if testnet.TxIndexerURL == "" {
-		t.Error("testnet5 should have tx-indexer-url set")
-	}
+	assert.Equal(t, "https://rpc.test5.gno.land:443", testnet.RPCURL, "testnet5.RPCURL mis-parsed")
+	assert.NotEmpty(t, testnet.TxIndexerURL, "testnet5 should have tx-indexer-url set")
 }
 
 func TestLoad_malformedTOML(t *testing.T) {
@@ -49,9 +41,7 @@ func TestLoad_malformedTOML(t *testing.T) {
 chain-type = "local"
 `
 	_, err := Load(strings.NewReader(src))
-	if err == nil {
-		t.Fatal("expected error for malformed TOML, got nil")
-	}
+	require.Error(t, err, "expected error for malformed TOML")
 }
 
 func TestLoad_parsesWriteAuthFields(t *testing.T) {
@@ -65,20 +55,11 @@ default-expires-in = "4h"
 bypass-hard-limits = true
 `
 	cfg, err := Load(strings.NewReader(src))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
+	require.NoError(t, err)
+
 	p := cfg.Profiles["local"]
-	if p.MasterAddress != "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3" {
-		t.Errorf("expected master-address=g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3, got %q", p.MasterAddress)
-	}
-	if got := p.DefaultSpendLimit; got != "1000000ugnot" {
-		t.Errorf("expected default-spend-limit=1000000ugnot, got %q", got)
-	}
-	if got := p.DefaultExpiresIn; got != "4h" {
-		t.Errorf("expected default-expires-in=4h, got %q", got)
-	}
-	if !p.BypassHardLimits {
-		t.Error("expected bypass-hard-limits=true")
-	}
+	assert.Equal(t, "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3", p.MasterAddress)
+	assert.Equal(t, "1000000ugnot", p.DefaultSpendLimit)
+	assert.Equal(t, "4h", p.DefaultExpiresIn)
+	assert.True(t, p.BypassHardLimits, "expected bypass-hard-limits=true")
 }

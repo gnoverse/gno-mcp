@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFake_List(t *testing.T) {
@@ -12,12 +15,9 @@ func TestFake_List(t *testing.T) {
 		{Path: "gno.land/r/demo/tokens/grc20", Tags: []string{"fungible", "token"}},
 	})
 	got, err := f.List(context.Background(), ListFilter{Tag: "fungible"})
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(got) != 1 || got[0].Path != "gno.land/r/demo/tokens/grc20" {
-		t.Errorf("List = %+v", got)
-	}
+	require.NoError(t, err, "List")
+	require.Len(t, got, 1)
+	assert.Equal(t, "gno.land/r/demo/tokens/grc20", got[0].Path)
 }
 
 func TestFake_History(t *testing.T) {
@@ -26,12 +26,9 @@ func TestFake_History(t *testing.T) {
 		{Hash: "0xabc", Height: 100, Kind: "MsgAddPackage"},
 	})
 	got, err := f.History(context.Background(), "gno.land/r/foo")
-	if err != nil {
-		t.Fatalf("History: %v", err)
-	}
-	if len(got) != 1 || got[0].Hash != "0xabc" {
-		t.Errorf("History = %+v", got)
-	}
+	require.NoError(t, err, "History")
+	require.Len(t, got, 1)
+	assert.Equal(t, "0xabc", got[0].Hash)
 }
 
 func TestFake_Activity_filtersByTime(t *testing.T) {
@@ -43,12 +40,9 @@ func TestFake_Activity_filtersByTime(t *testing.T) {
 	})
 	since := now.Add(-1 * time.Hour)
 	got, err := f.Activity(context.Background(), "gno.land/r/x", &since, nil)
-	if err != nil {
-		t.Fatalf("Activity: %v", err)
-	}
-	if len(got) != 1 || got[0].Hash != "new" {
-		t.Errorf("expected only 'new' after filter, got %+v", got)
-	}
+	require.NoError(t, err, "Activity")
+	require.Len(t, got, 1, "expected only 'new' after filter, got %+v", got)
+	assert.Equal(t, "new", got[0].Hash)
 }
 
 func TestFake_Activity_filtersByUntil(t *testing.T) {
@@ -60,12 +54,9 @@ func TestFake_Activity_filtersByUntil(t *testing.T) {
 	})
 	until := now.Add(-1 * time.Hour)
 	got, err := f.Activity(context.Background(), "gno.land/r/x", nil, &until)
-	if err != nil {
-		t.Fatalf("Activity: %v", err)
-	}
-	if len(got) != 1 || got[0].Hash != "old" {
-		t.Errorf("expected only 'old' before until, got %+v", got)
-	}
+	require.NoError(t, err, "Activity")
+	require.Len(t, got, 1, "expected only 'old' before until, got %+v", got)
+	assert.Equal(t, "old", got[0].Hash)
 }
 
 func TestFake_Activity_unboundedReturnsAll(t *testing.T) {
@@ -76,10 +67,6 @@ func TestFake_Activity_unboundedReturnsAll(t *testing.T) {
 		{Hash: "b", Time: now.Add(-30 * time.Minute)},
 	})
 	got, err := f.Activity(context.Background(), "gno.land/r/x", nil, nil)
-	if err != nil {
-		t.Fatalf("Activity: %v", err)
-	}
-	if len(got) != 2 {
-		t.Errorf("expected both events with nil/nil bounds, got %+v", got)
-	}
+	require.NoError(t, err, "Activity")
+	assert.Len(t, got, 2, "expected both events with nil/nil bounds, got %+v", got)
 }

@@ -2,10 +2,11 @@ package read
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInspect_returnsText(t *testing.T) {
@@ -18,12 +19,8 @@ func TestInspect_returnsText(t *testing.T) {
 		"realm":   "gno.land/r/foo",
 		"profile": "testnet5",
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if res.Text != "package foo\n\nfunc Bar() string" {
-		t.Errorf("Text = %q", res.Text)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "package foo\n\nfunc Bar() string", res.Text)
 }
 
 func TestInspect_requiresRealm(t *testing.T) {
@@ -32,9 +29,7 @@ func TestInspect_requiresRealm(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_inspect", map[string]any{
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected error when realm is missing")
-	}
+	require.Error(t, err, "expected error when realm is missing")
 }
 
 func TestInspect_rejectsNonStringRealm(t *testing.T) {
@@ -44,9 +39,7 @@ func TestInspect_rejectsNonStringRealm(t *testing.T) {
 		"realm":   42,
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected type error when realm is not a string")
-	}
+	require.Error(t, err, "expected type error when realm is not a string")
 }
 
 func TestInspect_unknownProfileReturnsError(t *testing.T) {
@@ -56,9 +49,7 @@ func TestInspect_unknownProfileReturnsError(t *testing.T) {
 		"realm":   "gno.land/r/foo",
 		"profile": "ghost",
 	})
-	if err == nil {
-		t.Fatal("expected error when resolver returns nil for unknown profile")
-	}
+	require.Error(t, err, "expected error when resolver returns nil for unknown profile")
 }
 
 func TestInspect_propagatesDocError(t *testing.T) {
@@ -71,10 +62,6 @@ func TestInspect_propagatesDocError(t *testing.T) {
 		"realm":   "gno.land/r/foo",
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected error when Doc returns error")
-	}
-	if !strings.Contains(err.Error(), "gno_inspect:") {
-		t.Errorf("error should be wrapped with gno_inspect: prefix, got %q", err.Error())
-	}
+	require.Error(t, err, "expected error when Doc returns error")
+	assert.Contains(t, err.Error(), "gno_inspect:", "error should be wrapped with gno_inspect: prefix")
 }

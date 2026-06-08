@@ -2,7 +2,6 @@ package session
 
 import (
 	"crypto/ed25519"
-	"strings"
 	"testing"
 
 	"github.com/gnolang/gno/gno.land/pkg/gnoclient"
@@ -11,81 +10,62 @@ import (
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 	tmed25519 "github.com/gnolang/gno/tm2/pkg/crypto/ed25519"
 	"github.com/gnolang/gno/tm2/pkg/std"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewKeypair_distinctEachCall(t *testing.T) {
 	seen := make(map[string]bool, 100)
 	for i := 0; i < 100; i++ {
 		kp, err := NewKeypair()
-		if err != nil {
-			t.Fatalf("iteration %d: NewKeypair() error: %v", i, err)
-		}
+		require.NoError(t, err, "iteration %d: NewKeypair() error", i)
 		key := string(kp.Pub)
-		if seen[key] {
-			t.Fatalf("iteration %d: duplicate pubkey generated", i)
-		}
+		require.False(t, seen[key], "iteration %d: duplicate pubkey generated", i)
 		seen[key] = true
 	}
 }
 
 func TestPubkeyBech32_roundTrip(t *testing.T) {
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair(): %v", err)
-	}
+	require.NoError(t, err)
+
 	encoded := kp.PubkeyBech32()
-	if !strings.HasPrefix(encoded, "gpub1") {
-		t.Fatalf("PubkeyBech32() = %q, want prefix \"gpub1\"", encoded)
-	}
+	require.True(t, len(encoded) > 5 && encoded[:5] == "gpub1",
+		"PubkeyBech32() = %q, want prefix \"gpub1\"", encoded)
+
 	// The encoded form must round-trip through crypto.PubKeyFromBech32 (the
 	// chain's inverse), which amino-decodes the bytes into a typed PubKey.
 	pk, err := crypto.PubKeyFromBech32(encoded)
-	if err != nil {
-		t.Fatalf("crypto.PubKeyFromBech32(%q): %v", encoded, err)
-	}
+	require.NoError(t, err, "crypto.PubKeyFromBech32(%q)", encoded)
+
 	tmpk, ok := pk.(tmed25519.PubKeyEd25519)
-	if !ok {
-		t.Fatalf("decoded pubkey type = %T, want tmed25519.PubKeyEd25519", pk)
-	}
-	if string(tmpk[:]) != string(kp.Pub) {
-		t.Fatalf("decoded pubkey bytes do not match original:\n got  %x\n want %x", tmpk[:], kp.Pub)
-	}
+	require.True(t, ok, "decoded pubkey type = %T, want tmed25519.PubKeyEd25519", pk)
+	require.Equal(t, string(kp.Pub), string(tmpk[:]), "decoded pubkey bytes do not match original")
 }
 
 func TestAddress_format(t *testing.T) {
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair(): %v", err)
-	}
+	require.NoError(t, err)
+
 	addr := kp.Address()
-	if !strings.HasPrefix(addr, "g1") {
-		t.Fatalf("Address() = %q, want prefix \"g1\"", addr)
-	}
+	require.True(t, len(addr) >= 2 && addr[:2] == "g1",
+		"Address() = %q, want prefix \"g1\"", addr)
+
 	hrp, addrBytes, err := bech32.Decode(addr)
-	if err != nil {
-		t.Fatalf("bech32.Decode(%q): %v", addr, err)
-	}
-	if hrp != "g" {
-		t.Fatalf("address hrp = %q, want \"g\"", hrp)
-	}
-	if len(addrBytes) != addrSize {
-		t.Fatalf("address byte length = %d, want %d", len(addrBytes), addrSize)
-	}
+	require.NoError(t, err, "bech32.Decode(%q)", addr)
+	require.Equal(t, "g", hrp, "address hrp")
+	require.Equal(t, addrSize, len(addrBytes), "address byte length")
 }
 
 func TestKeypair_Sign_verifiable(t *testing.T) {
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair(): %v", err)
-	}
+	require.NoError(t, err)
+
 	payload := []byte("gnomcp-test-payload")
 	sig, err := kp.Sign(payload)
-	if err != nil {
-		t.Fatalf("Sign(): %v", err)
-	}
-	if !ed25519.Verify(ed25519.PublicKey(kp.Pub), payload, sig) {
-		t.Fatal("ed25519.Verify returned false for a freshly generated signature")
-	}
+	require.NoError(t, err)
+	require.True(t, ed25519.Verify(ed25519.PublicKey(kp.Pub), payload, sig),
+		"ed25519.Verify returned false for a freshly generated signature")
 }
 
 // TestKeypair_GnoclientSigner_signsTxWithSessionPubkey verifies that the
@@ -94,15 +74,11 @@ func TestKeypair_Sign_verifiable(t *testing.T) {
 // left zero — chain.Real.Call injects it after Sign returns.
 func TestKeypair_GnoclientSigner_signsTxWithSessionPubkey(t *testing.T) {
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair: %v", err)
-	}
+	require.NoError(t, err)
 
 	const chainID = "test-chain"
 	signer := kp.GnoclientSigner(chainID)
-	if signer == nil {
-		t.Fatal("GnoclientSigner returned nil")
-	}
+	require.NotNil(t, signer, "GnoclientSigner returned nil")
 
 	// Build a minimal unsigned tx. Caller is left zero — Sign only needs the
 	// tx for GetSignBytes(chainID, accNum, seq); it must not enforce slot match.
@@ -122,37 +98,22 @@ func TestKeypair_GnoclientSigner_signsTxWithSessionPubkey(t *testing.T) {
 		AccountNumber:  accNum,
 		SequenceNumber: seq,
 	})
-	if err != nil {
-		t.Fatalf("Sign: %v", err)
-	}
-
-	if len(signedTx.Signatures) != 1 {
-		t.Fatalf("len(Signatures) = %d, want 1", len(signedTx.Signatures))
-	}
+	require.NoError(t, err)
+	require.Len(t, signedTx.Signatures, 1)
 
 	sig := signedTx.Signatures[0]
-	if sig.PubKey == nil {
-		t.Fatal("Signature.PubKey is nil")
-	}
-	pk, ok := sig.PubKey.(tmed25519.PubKeyEd25519)
-	if !ok {
-		t.Fatalf("Signature.PubKey type = %T, want tmed25519.PubKeyEd25519", sig.PubKey)
-	}
-	if string(pk[:]) != string(kp.Pub) {
-		t.Errorf("Signature.PubKey bytes do not match keypair.Pub")
-	}
+	require.NotNil(t, sig.PubKey, "Signature.PubKey is nil")
 
-	if !sig.SessionAddr.IsZero() {
-		t.Errorf("Signature.SessionAddr should be zero (caller fills it); got %s", sig.SessionAddr)
-	}
+	pk, ok := sig.PubKey.(tmed25519.PubKeyEd25519)
+	require.True(t, ok, "Signature.PubKey type = %T, want tmed25519.PubKeyEd25519", sig.PubKey)
+	assert.Equal(t, string(kp.Pub), string(pk[:]), "Signature.PubKey bytes do not match keypair.Pub")
+	assert.True(t, sig.SessionAddr.IsZero(),
+		"Signature.SessionAddr should be zero (caller fills it); got %s", sig.SessionAddr)
 
 	signBytes, err := tx.GetSignBytes(chainID, accNum, seq)
-	if err != nil {
-		t.Fatalf("GetSignBytes: %v", err)
-	}
-	if !ed25519.Verify(ed25519.PublicKey(kp.Pub), signBytes, sig.Signature) {
-		t.Fatal("ed25519.Verify returned false for session-signed tx")
-	}
+	require.NoError(t, err)
+	require.True(t, ed25519.Verify(ed25519.PublicKey(kp.Pub), signBytes, sig.Signature),
+		"ed25519.Verify returned false for session-signed tx")
 }
 
 // TestKeypair_GnoclientSigner_Info exposes the session pubkey via the
@@ -160,33 +121,21 @@ func TestKeypair_GnoclientSigner_signsTxWithSessionPubkey(t *testing.T) {
 // uses chain.Signer directly), but the interface requires it.
 func TestKeypair_GnoclientSigner_Info(t *testing.T) {
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair: %v", err)
-	}
+	require.NoError(t, err)
+
 	signer := kp.GnoclientSigner("test-chain")
 	info, err := signer.Info()
-	if err != nil {
-		t.Fatalf("Info: %v", err)
-	}
-	if info.GetPubKey() == nil {
-		t.Fatal("Info().GetPubKey() is nil")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, info.GetPubKey(), "Info().GetPubKey() is nil")
+
 	pk, ok := info.GetPubKey().(tmed25519.PubKeyEd25519)
-	if !ok {
-		t.Fatalf("PubKey type = %T", info.GetPubKey())
-	}
-	if string(pk[:]) != string(kp.Pub) {
-		t.Errorf("Info().GetPubKey() bytes do not match keypair.Pub")
-	}
+	require.True(t, ok, "PubKey type = %T", info.GetPubKey())
+	assert.Equal(t, string(kp.Pub), string(pk[:]), "Info().GetPubKey() bytes do not match keypair.Pub")
 }
 
 // TestKeypair_GnoclientSigner_Validate verifies the signer reports itself valid.
 func TestKeypair_GnoclientSigner_Validate(t *testing.T) {
 	kp, err := NewKeypair()
-	if err != nil {
-		t.Fatalf("NewKeypair: %v", err)
-	}
-	if err := kp.GnoclientSigner("test-chain").Validate(); err != nil {
-		t.Errorf("Validate: %v", err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, kp.GnoclientSigner("test-chain").Validate())
 }

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	indexerpkg "github.com/gnoverse/gno-mcp/internal/indexer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const testRealm = "gno.land/r/demo/boards"
@@ -37,21 +39,11 @@ func TestHistory_returnsEvents(t *testing.T) {
 		"profile": "testnet5",
 		"realm":   testRealm,
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if !strings.Contains(res.Text, "0xabc") {
-		t.Errorf("Text does not contain hash 0xabc: %q", res.Text)
-	}
-	if !strings.Contains(res.Text, "0xdef") {
-		t.Errorf("Text does not contain hash 0xdef: %q", res.Text)
-	}
-	if !strings.Contains(res.Text, "kind=MsgAddPackage") {
-		t.Errorf("Text does not contain kind=MsgAddPackage: %q", res.Text)
-	}
-	if !strings.Contains(res.Text, "kind=MsgCall") {
-		t.Errorf("Text does not contain kind=MsgCall: %q", res.Text)
-	}
+	require.NoError(t, err, "Call")
+	assert.True(t, strings.Contains(res.Text, "0xabc"), "Text does not contain hash 0xabc: %q", res.Text)
+	assert.True(t, strings.Contains(res.Text, "0xdef"), "Text does not contain hash 0xdef: %q", res.Text)
+	assert.True(t, strings.Contains(res.Text, "kind=MsgAddPackage"), "Text does not contain kind=MsgAddPackage: %q", res.Text)
+	assert.True(t, strings.Contains(res.Text, "kind=MsgCall"), "Text does not contain kind=MsgCall: %q", res.Text)
 }
 
 func TestHistory_emptyHistoryReturnsMessage(t *testing.T) {
@@ -64,12 +56,8 @@ func TestHistory_emptyHistoryReturnsMessage(t *testing.T) {
 		"profile": "testnet5",
 		"realm":   testRealm,
 	})
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if res.Text != "No transactions found for this realm." {
-		t.Errorf("Text = %q, want exact no-tx message", res.Text)
-	}
+	require.NoError(t, err, "Call")
+	assert.Equal(t, "No transactions found for this realm.", res.Text)
 }
 
 func TestHistory_requiresRealm(t *testing.T) {
@@ -78,9 +66,7 @@ func TestHistory_requiresRealm(t *testing.T) {
 	_, err := s.Registry().Call(context.Background(), "gno_history", map[string]any{
 		"profile": "testnet5",
 	})
-	if err == nil {
-		t.Fatal("expected error when realm is missing")
-	}
+	require.Error(t, err, "expected error when realm is missing")
 }
 
 func TestHistory_profileWithoutIndexer(t *testing.T) {
@@ -91,10 +77,6 @@ func TestHistory_profileWithoutIndexer(t *testing.T) {
 		"profile": "ghost",
 		"realm":   testRealm,
 	})
-	if err == nil {
-		t.Fatal("expected error when resolver returns nil for profile without indexer")
-	}
-	if !strings.Contains(err.Error(), "no tx-indexer-url") {
-		t.Errorf("error = %q, want 'no tx-indexer-url'", err.Error())
-	}
+	require.Error(t, err, "expected error when resolver returns nil for profile without indexer")
+	assert.True(t, strings.Contains(err.Error(), "no tx-indexer-url"), "error = %q, want 'no tx-indexer-url'", err.Error())
 }

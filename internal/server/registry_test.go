@@ -4,14 +4,15 @@ package server
 import (
 	"context"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRegistry_addAndCount(t *testing.T) {
 	r := NewRegistry()
 	r.Add(&Tool{Name: "test", Capability: CapBaseRead})
-	if got := r.Count(); got != 1 {
-		t.Errorf("Count = %d, want 1", got)
-	}
+	assert.Equal(t, 1, r.Count())
 }
 
 func TestRegistry_filterByCapability(t *testing.T) {
@@ -20,9 +21,7 @@ func TestRegistry_filterByCapability(t *testing.T) {
 	r.Add(&Tool{Name: "b", Capability: CapIndexerRead})
 	r.Add(&Tool{Name: "c", Capability: CapBaseRead})
 	got := r.WithCapability(CapBaseRead)
-	if len(got) != 2 {
-		t.Errorf("WithCapability(CapBaseRead) = %d, want 2", len(got))
-	}
+	assert.Len(t, got, 2)
 }
 
 func TestRegistry_dispatch(t *testing.T) {
@@ -37,32 +36,22 @@ func TestRegistry_dispatch(t *testing.T) {
 		},
 	})
 	res, err := r.Call(context.Background(), "test_tool", nil)
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if !called {
-		t.Error("handler not invoked")
-	}
-	if res.Text != "ok" {
-		t.Errorf("res.Text = %q", res.Text)
-	}
+	require.NoError(t, err)
+	assert.True(t, called, "handler not invoked")
+	assert.Equal(t, "ok", res.Text)
 }
 
 func TestRegistry_callUnknownTool(t *testing.T) {
 	r := NewRegistry()
 	_, err := r.Call(context.Background(), "missing", nil)
-	if err == nil {
-		t.Fatal("expected error for unknown tool")
-	}
+	require.Error(t, err)
 }
 
 func TestRegistry_callToolWithoutHandler(t *testing.T) {
 	r := NewRegistry()
 	r.Add(&Tool{Name: "stub", Capability: CapBaseRead})
 	_, err := r.Call(context.Background(), "stub", nil)
-	if err == nil {
-		t.Fatal("expected error when tool has no handler")
-	}
+	require.Error(t, err)
 }
 
 func TestRegistry_allReturnsSortedTools(t *testing.T) {
@@ -71,10 +60,8 @@ func TestRegistry_allReturnsSortedTools(t *testing.T) {
 	r.Add(&Tool{Name: "alpha", Capability: CapBaseRead})
 	r.Add(&Tool{Name: "bravo", Capability: CapIndexerRead})
 	all := r.All()
-	if len(all) != 3 {
-		t.Fatalf("All() = %d tools, want 3", len(all))
-	}
-	if all[0].Name != "alpha" || all[1].Name != "bravo" || all[2].Name != "charlie" {
-		t.Errorf("All() not sorted by Name: %v", []string{all[0].Name, all[1].Name, all[2].Name})
-	}
+	require.Len(t, all, 3)
+	assert.Equal(t, "alpha", all[0].Name)
+	assert.Equal(t, "bravo", all[1].Name)
+	assert.Equal(t, "charlie", all[2].Name)
 }

@@ -3,6 +3,8 @@ package read
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
@@ -15,9 +17,8 @@ func newBaseTestServer(t *testing.T) *server.Server {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
 	}}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("validate: %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err)
 	return server.NewServer(cfg, "")
 }
 

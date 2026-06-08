@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/server"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAnnotations_Validate_okWhenIndependent(t *testing.T) {
@@ -15,24 +17,18 @@ func TestAnnotations_Validate_okWhenIndependent(t *testing.T) {
 		{Idempotent: true, OpenWorld: true},
 	}
 	for i, a := range cases {
-		if err := a.Validate(); err != nil {
-			t.Errorf("case %d: unexpected error: %v", i, err)
-		}
+		assert.NoError(t, a.Validate(), "case %d", i)
 	}
 }
 
 func TestAnnotations_Validate_rejectsReadOnlyAndDestructive(t *testing.T) {
 	a := server.Annotations{ReadOnly: true, Destructive: true}
-	if err := a.Validate(); err == nil {
-		t.Fatal("expected error when ReadOnly and Destructive are both true")
-	}
+	require.Error(t, a.Validate())
 }
 
 func TestToolError_Error(t *testing.T) {
 	e := &server.ToolError{Code: "x", Message: "bad"}
-	if e.Error() != "tool error [x]: bad" {
-		t.Errorf("Error() = %q", e.Error())
-	}
+	assert.Equal(t, "tool error [x]: bad", e.Error())
 }
 
 func TestToolError_Error_withExtra(t *testing.T) {
@@ -42,27 +38,22 @@ func TestToolError_Error_withExtra(t *testing.T) {
 		Extra:   map[string]any{"allow_paths": []string{"a", "b"}, "wanted_path": "c"},
 	}
 	got := e.Error()
-	if !strings.Contains(got, "scope_mismatch") {
-		t.Errorf("Error() = %q; want it to contain code", got)
-	}
-	if !strings.Contains(got, "extra=[allow_paths wanted_path]") {
-		t.Errorf("Error() = %q; want sorted extra key list", got)
-	}
+	assert.Contains(t, got, "scope_mismatch")
+	assert.True(t, strings.Contains(got, "extra=[allow_paths wanted_path]"),
+		"Error() = %q; want sorted extra key list", got)
 }
 
 func TestRegistry_Get_present(t *testing.T) {
 	r := server.NewRegistry()
 	r.Add(&server.Tool{Name: "x"})
-	if _, ok := r.Get("x"); !ok {
-		t.Error("expected Get to find registered tool")
-	}
+	_, ok := r.Get("x")
+	assert.True(t, ok, "expected Get to find registered tool")
 }
 
 func TestRegistry_Get_absent(t *testing.T) {
 	r := server.NewRegistry()
-	if _, ok := r.Get("ghost"); ok {
-		t.Error("expected Get to return ok=false for missing tool")
-	}
+	_, ok := r.Get("ghost")
+	assert.False(t, ok, "expected Get to return ok=false for missing tool")
 }
 
 func TestResult_roundtripThroughRegistry(t *testing.T) {
@@ -72,10 +63,6 @@ func TestResult_roundtripThroughRegistry(t *testing.T) {
 		Annotations: server.Annotations{ReadOnly: true, Idempotent: true},
 	})
 	tool, ok := r.Get("annotated_tool")
-	if !ok {
-		t.Fatal("tool not found after Add")
-	}
-	if !tool.Annotations.ReadOnly {
-		t.Error("Annotations.ReadOnly not preserved through registry")
-	}
+	require.True(t, ok, "tool not found after Add")
+	assert.True(t, tool.Annotations.ReadOnly, "Annotations.ReadOnly not preserved through registry")
 }

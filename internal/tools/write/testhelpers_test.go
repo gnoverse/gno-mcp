@@ -3,6 +3,8 @@ package write
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
@@ -22,9 +24,8 @@ func newBaseTestServer(t *testing.T) *server.Server {
 			MasterAddress: "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 		},
 	}}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("validate: %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "validate")
 	return server.NewServer(cfg, "")
 }
 
@@ -39,9 +40,8 @@ func newReadOnlyTestServer(t *testing.T) *server.Server {
 			ChainID:   "test5",
 		},
 	}}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("validate: %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "validate")
 	return server.NewServer(cfg, "")
 }
 
@@ -51,9 +51,8 @@ func newLocalTestServer(t *testing.T) *server.Server {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"local": {ChainType: profiles.ChainTypeLocal, RPCURL: "x", ChainID: "dev"},
 	}}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("validate: %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "validate")
 	return server.NewServer(cfg, "")
 }
 

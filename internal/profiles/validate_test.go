@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidate_requiresRPCURL(t *testing.T) {
@@ -11,12 +14,9 @@ func TestValidate_requiresRPCURL(t *testing.T) {
 [local]
 chain-id = "dev"
 `))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if _, err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for missing rpc-url")
-	}
+	require.NoError(t, err)
+	_, err = cfg.Validate()
+	require.Error(t, err, "expected error for missing rpc-url")
 }
 
 func TestValidate_requiresChainID(t *testing.T) {
@@ -24,12 +24,9 @@ func TestValidate_requiresChainID(t *testing.T) {
 [local]
 rpc-url = "http://127.0.0.1:26657"
 `))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if _, err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for missing chain-id")
-	}
+	require.NoError(t, err)
+	_, err = cfg.Validate()
+	require.Error(t, err, "expected error for missing chain-id")
 }
 
 func TestValidate_chainTypeDefaultsToTestnet(t *testing.T) {
@@ -38,22 +35,16 @@ func TestValidate_chainTypeDefaultsToTestnet(t *testing.T) {
 rpc-url = "https://rpc.example/"
 chain-id = "test5"
 `))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("Validate: %v", err)
-	}
-	if got := cfg.Profiles["mystery"].ChainType; got != "testnet" {
-		t.Errorf("expected chain-type=testnet default, got %q", got)
-	}
+	require.NoError(t, err)
+	_, err = cfg.Validate()
+	require.NoError(t, err)
+	assert.Equal(t, "testnet", cfg.Profiles["mystery"].ChainType, "expected chain-type=testnet default")
 }
 
 func TestValidate_rejectsEmptyProfileSet(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{}}
-	if _, err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for empty profile set")
-	}
+	_, err := cfg.Validate()
+	require.Error(t, err, "expected error for empty profile set")
 }
 
 func TestValidate_rejectsUnknownChainType(t *testing.T) {
@@ -63,12 +54,9 @@ chain-type = "moonchain"
 rpc-url = "http://x"
 chain-id = "x"
 `))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if _, err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for unknown chain-type")
-	}
+	require.NoError(t, err)
+	_, err = cfg.Validate()
+	require.Error(t, err, "expected error for unknown chain-type")
 }
 
 func TestLoad_rejectsUnknownKey(t *testing.T) {
@@ -79,13 +67,8 @@ chain-id = "dev"
 foo-bar = true
 `
 	_, err := Load(strings.NewReader(src))
-	if err == nil {
-		t.Fatal("expected error for unknown key foo-bar, got nil")
-	}
-	// Must mention the offending key so users can fix their config.
-	if !strings.Contains(err.Error(), "foo-bar") {
-		t.Errorf("error %q should mention the offending key", err)
-	}
+	require.Error(t, err, "expected error for unknown key foo-bar")
+	assert.Contains(t, err.Error(), "foo-bar", "error should mention the offending key")
 }
 
 func TestValidate_rejectsMalformedDefaultExpiresIn(t *testing.T) {
@@ -95,19 +78,12 @@ rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 default-expires-in = "forever"
 `))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
+	require.NoError(t, err)
+
 	_, err = cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error for malformed default-expires-in")
-	}
-	if !strings.Contains(err.Error(), "default-expires-in") {
-		t.Errorf("error %q should mention field name", err)
-	}
-	if !strings.Contains(err.Error(), "forever") {
-		t.Errorf("error %q should mention offending value", err)
-	}
+	require.Error(t, err, "expected error for malformed default-expires-in")
+	assert.Contains(t, err.Error(), "default-expires-in")
+	assert.Contains(t, err.Error(), "forever")
 }
 
 func TestValidate_rejectsMalformedDefaultSpendLimit(t *testing.T) {
@@ -124,16 +100,10 @@ rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 default-spend-limit = %q
 `, val)))
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
+			require.NoError(t, err)
 			_, err = cfg.Validate()
-			if err == nil {
-				t.Fatalf("expected error for spend-limit %q", val)
-			}
-			if !strings.Contains(err.Error(), "default-spend-limit") {
-				t.Errorf("error %q should mention field name", err)
-			}
+			require.Error(t, err, "expected error for spend-limit %q", val)
+			assert.Contains(t, err.Error(), "default-spend-limit")
 		})
 	}
 }
@@ -148,12 +118,9 @@ rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 default-expires-in = %q
 `, val)))
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
-			if _, err := cfg.Validate(); err != nil {
-				t.Errorf("Validate rejected valid duration %q: %v", val, err)
-			}
+			require.NoError(t, err)
+			_, err = cfg.Validate()
+			assert.NoError(t, err, "Validate rejected valid duration %q", val)
 		})
 	}
 }
@@ -169,12 +136,9 @@ default-spend-limit = "500000ugnot"
 default-expires-in = "2h"
 bypass-hard-limits = true
 `))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("Validate: unexpected error: %v", err)
-	}
+	require.NoError(t, err)
+	_, err = cfg.Validate()
+	require.NoError(t, err)
 }
 
 func TestValidate_rejectsMalformedMasterAddress(t *testing.T) {
@@ -184,16 +148,10 @@ rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 master-address = "not-a-bech32-address"
 `))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
+	require.NoError(t, err)
 	_, err = cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error for malformed master-address")
-	}
-	if !strings.Contains(err.Error(), "master-address") {
-		t.Errorf("error %q should mention master-address", err)
-	}
+	require.Error(t, err, "expected error for malformed master-address")
+	assert.Contains(t, err.Error(), "master-address")
 }
 
 func TestValidate_rejectsMalformedMasterAddressEvenWhenReadOnly(t *testing.T) {
@@ -203,19 +161,11 @@ rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 master-address = "not-a-bech32-address"
 `))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
+	require.NoError(t, err)
 	_, err = cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error for malformed master-address on read-only profile")
-	}
-	if !strings.Contains(err.Error(), "master-address") {
-		t.Errorf("error %q should mention master-address", err)
-	}
-	if !strings.Contains(err.Error(), "not-a-bech32-address") {
-		t.Errorf("error %q should mention the offending value", err)
-	}
+	require.Error(t, err, "expected error for malformed master-address on read-only profile")
+	assert.Contains(t, err.Error(), "master-address")
+	assert.Contains(t, err.Error(), "not-a-bech32-address")
 }
 
 func TestValidate_acceptsEmptyMasterAddressWhenReadOnly(t *testing.T) {
@@ -224,12 +174,9 @@ func TestValidate_acceptsEmptyMasterAddressWhenReadOnly(t *testing.T) {
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 `))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("Validate: unexpected error for read-only profile without master-address: %v", err)
-	}
+	require.NoError(t, err)
+	_, err = cfg.Validate()
+	require.NoError(t, err, "read-only profile without master-address should validate")
 }
 
 func TestValidate_ChainIDAllowlist(t *testing.T) {
@@ -251,39 +198,32 @@ func TestValidate_ChainIDAllowlist(t *testing.T) {
 				"p": {RPCURL: "https://rpc.example:443", ChainID: tc.chainID},
 			}}
 			_, err := cfg.Validate()
-			if tc.wantErr && err == nil {
-				t.Fatalf("chain-id %q: expected reject, got nil", tc.chainID)
-			}
-			if !tc.wantErr && err != nil {
-				t.Fatalf("chain-id %q: expected ok, got %v", tc.chainID, err)
+			if tc.wantErr {
+				require.Error(t, err, "chain-id %q: expected reject", tc.chainID)
+			} else {
+				require.NoError(t, err, "chain-id %q: expected ok", tc.chainID)
 			}
 		})
 	}
 }
 
 func TestValidate_MasterAddressOptional(t *testing.T) {
-	// No master-address → valid (read-only profile).
 	cfg := &Config{Profiles: map[string]Profile{
 		"testnet": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
 	}}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("read-only profile should validate, got %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "read-only profile should validate")
 }
 
 func TestValidate_BypassRequiresMaster(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
 		"p": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11", BypassHardLimits: true},
 	}}
-	if _, err := cfg.Validate(); err == nil {
-		t.Fatal("bypass-hard-limits without master-address should be rejected")
-	}
+	_, err := cfg.Validate()
+	require.Error(t, err, "bypass-hard-limits without master-address should be rejected")
 }
 
 func TestValidate_BypassWithMasterAccepted(t *testing.T) {
-	// bypass-hard-limits + a master-address is now valid. Under the old
-	// allow-dangerous-tools model this required dangerous=true and would
-	// have been rejected — this is the distinguishing behavior change.
 	cfg := &Config{Profiles: map[string]Profile{
 		"p": {
 			RPCURL:           "https://rpc.test11.testnets.gno.land:443",
@@ -292,9 +232,8 @@ func TestValidate_BypassWithMasterAccepted(t *testing.T) {
 			MasterAddress:    "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 		},
 	}}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("bypass + master-address should be accepted, got %v", err)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "bypass + master-address should be accepted")
 }
 
 func TestValidate_DerivesChainType(t *testing.T) {
@@ -302,13 +241,8 @@ func TestValidate_DerivesChainType(t *testing.T) {
 		"local":   {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
 		"testnet": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
 	}}
-	if _, err := cfg.Validate(); err != nil {
-		t.Fatalf("validate: %v", err)
-	}
-	if got := cfg.Profiles["local"].ChainType; got != ChainTypeLocal {
-		t.Errorf("local chain-type = %q, want %q", got, ChainTypeLocal)
-	}
-	if got := cfg.Profiles["testnet"].ChainType; got != ChainTypeTestnet {
-		t.Errorf("testnet chain-type = %q, want %q", got, ChainTypeTestnet)
-	}
+	_, err := cfg.Validate()
+	require.NoError(t, err)
+	assert.Equal(t, ChainTypeLocal, cfg.Profiles["local"].ChainType, "local chain-type")
+	assert.Equal(t, ChainTypeTestnet, cfg.Profiles["testnet"].ChainType, "testnet chain-type")
 }

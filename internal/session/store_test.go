@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func makeTestMeta(addr string) *SessionMeta {
@@ -29,44 +32,28 @@ func TestStore_writeReadCycle(t *testing.T) {
 	m1 := makeTestMeta("g1aaaa")
 	m2 := makeTestMeta("g1bbbb")
 
-	if err := s.Write("p", m1); err != nil {
-		t.Fatalf("Write m1: %v", err)
-	}
-	if err := s.Write("p", m2); err != nil {
-		t.Fatalf("Write m2: %v", err)
-	}
+	require.NoError(t, s.Write("p", m1), "Write m1")
+	require.NoError(t, s.Write("p", m2), "Write m2")
 
 	got1, err := s.Read("p", "g1aaaa")
-	if err != nil {
-		t.Fatalf("Read g1aaaa: %v", err)
-	}
-	if got1.SessionAddress != m1.SessionAddress {
-		t.Errorf("SessionAddress = %q, want %q", got1.SessionAddress, m1.SessionAddress)
-	}
-	if !bytes.Equal(got1.Privkey, m1.Privkey) {
-		t.Errorf("Privkey mismatch after read")
-	}
+	require.NoError(t, err, "Read g1aaaa")
+	assert.Equal(t, m1.SessionAddress, got1.SessionAddress)
+	assert.True(t, bytes.Equal(got1.Privkey, m1.Privkey), "Privkey mismatch after read")
 
 	got2, err := s.Read("p", "g1bbbb")
-	if err != nil {
-		t.Fatalf("Read g1bbbb: %v", err)
-	}
-	if got2.SessionAddress != m2.SessionAddress {
-		t.Errorf("SessionAddress = %q, want %q", got2.SessionAddress, m2.SessionAddress)
-	}
+	require.NoError(t, err, "Read g1bbbb")
+	assert.Equal(t, m2.SessionAddress, got2.SessionAddress)
 }
 
 func TestStore_writeCreatesProfileDir(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(dir, "")
 
-	if err := s.Write("myprofile", makeTestMeta("g1zzzz")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
+	require.NoError(t, s.Write("myprofile", makeTestMeta("g1zzzz")))
+
 	profileDir := filepath.Join(dir, "myprofile")
-	if _, err := os.Stat(profileDir); err != nil {
-		t.Fatalf("expected profile dir %s to exist: %v", profileDir, err)
-	}
+	_, err := os.Stat(profileDir)
+	require.NoError(t, err, "expected profile dir %s to exist", profileDir)
 }
 
 func TestStore_listEmpty(t *testing.T) {
@@ -74,12 +61,8 @@ func TestStore_listEmpty(t *testing.T) {
 	s := NewStore(dir, "")
 
 	metas, err := s.List("no-such-profile")
-	if err != nil {
-		t.Fatalf("List on missing profile: %v", err)
-	}
-	if len(metas) != 0 {
-		t.Fatalf("List on missing profile returned %d items, want 0", len(metas))
-	}
+	require.NoError(t, err)
+	assert.Empty(t, metas)
 }
 
 func TestStore_listMultiple(t *testing.T) {
@@ -87,18 +70,12 @@ func TestStore_listMultiple(t *testing.T) {
 	s := NewStore(dir, "")
 
 	for _, addr := range []string{"g1aaa", "g1bbb", "g1ccc"} {
-		if err := s.Write("prof", makeTestMeta(addr)); err != nil {
-			t.Fatalf("Write %s: %v", addr, err)
-		}
+		require.NoError(t, s.Write("prof", makeTestMeta(addr)), "Write %s", addr)
 	}
 
 	metas, err := s.List("prof")
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(metas) != 3 {
-		t.Fatalf("List returned %d items, want 3", len(metas))
-	}
+	require.NoError(t, err)
+	assert.Len(t, metas, 3)
 }
 
 func TestStore_deleteRemovesFile(t *testing.T) {
@@ -106,24 +83,17 @@ func TestStore_deleteRemovesFile(t *testing.T) {
 	s := NewStore(dir, "")
 
 	m := makeTestMeta("g1del")
-	if err := s.Write("p", m); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	if err := s.Delete("p", "g1del"); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
+	require.NoError(t, s.Write("p", m))
+	require.NoError(t, s.Delete("p", "g1del"))
+
 	_, err := s.Read("p", "g1del")
-	if err == nil {
-		t.Fatal("Read after Delete returned nil error, want error")
-	}
+	require.Error(t, err, "Read after Delete returned nil error, want error")
 }
 
 func TestStore_deleteMissingIsNotError(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(dir, "")
-	if err := s.Delete("p", "g1notexist"); err != nil {
-		t.Fatalf("Delete missing file: %v", err)
-	}
+	require.NoError(t, s.Delete("p", "g1notexist"))
 }
 
 func TestStore_filePermsAre0600(t *testing.T) {
@@ -133,17 +103,12 @@ func TestStore_filePermsAre0600(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(dir, "")
 	m := makeTestMeta("g1perms")
-	if err := s.Write("p", m); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
+	require.NoError(t, s.Write("p", m))
+
 	path := filepath.Join(dir, "p", "g1perms.key")
 	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("Stat: %v", err)
-	}
-	if got := info.Mode().Perm(); got != 0600 {
-		t.Fatalf("file mode = %04o, want 0600", got)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "file mode should be 0600")
 }
 
 func TestStore_allowRunRoundTrip(t *testing.T) {
@@ -152,17 +117,11 @@ func TestStore_allowRunRoundTrip(t *testing.T) {
 
 	m := makeTestMeta("g1runallowed")
 	m.AllowRun = true
-	if err := s.Write("p", m); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
+	require.NoError(t, s.Write("p", m))
 
 	got, err := s.Read("p", "g1runallowed")
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if !got.AllowRun {
-		t.Errorf("AllowRun = false, want true")
-	}
+	require.NoError(t, err)
+	assert.True(t, got.AllowRun, "AllowRun should be true after round-trip")
 }
 
 func TestStore_masterAddressRoundTrip(t *testing.T) {
@@ -171,17 +130,11 @@ func TestStore_masterAddressRoundTrip(t *testing.T) {
 
 	m := makeTestMeta("g1master")
 	m.MasterAddress = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
-	if err := s.Write("p", m); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
+	require.NoError(t, s.Write("p", m))
 
 	got, err := s.Read("p", "g1master")
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if got.MasterAddress != m.MasterAddress {
-		t.Errorf("MasterAddress = %q, want %q", got.MasterAddress, m.MasterAddress)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, m.MasterAddress, got.MasterAddress)
 }
 
 func TestStore_passphraseRoundTrip(t *testing.T) {
@@ -190,51 +143,30 @@ func TestStore_passphraseRoundTrip(t *testing.T) {
 	s := NewStore(dir, passphrase)
 
 	m := makeTestMeta("g1enc")
-	if err := s.Write("p", m); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
+	require.NoError(t, s.Write("p", m))
 
 	path := filepath.Join(dir, "p", "g1enc.key")
 	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
-	}
-	if bytes.Contains(raw, m.Privkey) {
-		t.Fatal("on-disk file contains plaintext privkey bytes; expected encrypted")
-	}
+	require.NoError(t, err)
+	assert.False(t, bytes.Contains(raw, m.Privkey), "on-disk file contains plaintext privkey bytes; expected encrypted")
 
 	got, err := s.Read("p", "g1enc")
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if !bytes.Equal(got.Privkey, m.Privkey) {
-		t.Fatalf("decrypted privkey mismatch:\n got  %x\n want %x", got.Privkey, m.Privkey)
-	}
-	if got.Encrypted {
-		t.Fatal("Read returned meta with Encrypted=true; should be cleared after decryption")
-	}
+	require.NoError(t, err)
+	assert.True(t, bytes.Equal(got.Privkey, m.Privkey), "decrypted privkey mismatch")
+	assert.False(t, got.Encrypted, "Read returned meta with Encrypted=true; should be cleared after decryption")
 }
 
 func TestStore_listSkipsCorruptFile(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(dir, "")
 
-	if err := s.Write("p", makeTestMeta("g1valid")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
+	require.NoError(t, s.Write("p", makeTestMeta("g1valid")))
+
 	garbage := filepath.Join(dir, "p", "badname.key")
-	if err := os.WriteFile(garbage, []byte("not json at all!!!"), 0600); err != nil {
-		t.Fatalf("WriteFile garbage: %v", err)
-	}
+	require.NoError(t, os.WriteFile(garbage, []byte("not json at all!!!"), 0600))
 
 	metas, err := s.List("p")
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(metas) != 1 {
-		t.Fatalf("List returned %d items, want 1 (corrupt file should be skipped)", len(metas))
-	}
-	if metas[0].SessionAddress != "g1valid" {
-		t.Fatalf("unexpected session addr %q", metas[0].SessionAddress)
-	}
+	require.NoError(t, err)
+	require.Len(t, metas, 1, "corrupt file should be skipped")
+	assert.Equal(t, "g1valid", metas[0].SessionAddress)
 }
