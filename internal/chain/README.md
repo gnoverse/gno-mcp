@@ -1,6 +1,8 @@
 # chain package — verified gnoclient API references
 
-Captured against `github.com/gnolang/gno v1.1.0`.
+Captured against `github.com/gnolang/gno v1.1.0`, except the session-lookup
+section, which is verified against the currently pinned
+`v0.0.0-20260520050230-64c945f1b117` (`go.mod`).
 Update this file if gno dependencies change.
 
 The chain Client exposes two write paths: **session** (`CallAsUser`/`RunAsUser` — act as the user,
@@ -82,34 +84,30 @@ Keep the `simulate` flag in the tool schema.
 
 ## ABCI path for per-pubkey session lookup
 
-**No session ABCI path exists in gnoclient v1.1.0.**
+Sessions are resolved by a direct ABCI query under the auth module:
 
-The auth module registers only two query sub-paths (verified in
-`tm2/pkg/sdk/auth/handler.go`):
+```
+auth/accounts/<master>/session/<sessionAddr>
+```
 
-- `auth/accounts/<bech32addr>` — returns `GnoAccount` (JSON)
-- `auth/gasprice` — returns current gas price
+Both segments are bech32 (`g1...`) addresses. The chain returns the
+`GnoSessionAccount` as amino-JSON; a missing record yields empty or `null`
+`Response.Data`.
 
-The vm module registers: `vm/qrender`, `vm/qeval`, `vm/qfile`, `vm/qdoc`,
-`vm/qpaths`. No session sub-path.
+`Real.QuerySession` (`real.go`) runs this query via
+`gnoclient.QueryCfg{Path: ...}` and maps the result to `SessionStatus`:
 
-No session realm exists in the genesis configuration either. There is no
-`auth/qsession`, `vm/qsession`, or equivalent path anywhere in the gno
-source tree at this version.
+- empty `master` or `sessionAddr` → `ErrSessionQueryUnsupported` (no query attempted)
+- a "session not found" query error → `SessionStatus{Active: false}, nil`
+- any other query failure → `ErrSessionQueryUnsupported`, so `session.Manager`
+  keeps local state authoritative rather than wiping sessions on an RPC flake
+- a decoded record → `Active: true`, with `AllowPaths`/`AllowRun` split from the
+  chain's `vm/exec:<realm>` and `vm/run` permission tokens, plus `SpendLimit`,
+  `SpendRemaining`, and `ExpiresAt`
 
-**Consequence for Real.QuerySession (Task 2.6):** The method cannot resolve
-session status from the chain using an ABCI query. Options at implementation
-time:
-
-1. Return `ErrSimulateUnsupported`-style sentinel `ErrSessionQueryUnsupported`
-   and let the tool surface `session_query_unsupported`.
-2. Query the session realm via `vm/qeval` if the session contract publishes a
-   query function by pubkey (requires knowing the realm path at runtime).
-3. Return `SessionStatus{Active: false}` (conservative: treat unknown = inactive).
-
-This is flagged as a **chain-side blocker** for a full per-pubkey session
-query. The design decision belongs to G. Do NOT implement Real.QuerySession
-as if a direct ABCI path exists.
+This route exists in the pinned gno commit
+(`v0.0.0-20260520050230-64c945f1b117`); the v1.1.0 surface the rest of this
+file was captured against had no session sub-path.
 
 ## gnoclient.Signer adapter
 
