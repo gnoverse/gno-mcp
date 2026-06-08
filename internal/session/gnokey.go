@@ -18,20 +18,20 @@ import (
 func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, scope Scope) string {
 	var sb strings.Builder
 	sb.WriteString("gnokey maketx session create \\\n")
-	sb.WriteString(fmt.Sprintf("  --pubkey %s \\\n", sessionPubkey))
+	fmt.Fprintf(&sb, "  --pubkey %s \\\n", sessionPubkey)
 	for _, p := range scope.AllowPaths {
-		sb.WriteString(fmt.Sprintf("  --allow-paths vm/exec:%s \\\n", p))
+		fmt.Fprintf(&sb, "  --allow-paths vm/exec:%s \\\n", p)
 	}
 	if scope.AllowRun {
 		sb.WriteString("  --allow-paths vm/run \\\n")
 	}
-	sb.WriteString(fmt.Sprintf("  --spend-limit %s \\\n", scope.SpendLimit))
+	fmt.Fprintf(&sb, "  --spend-limit %s \\\n", scope.SpendLimit)
 	expiresAt := time.Now().Add(scope.ExpiresIn).Unix()
-	sb.WriteString(fmt.Sprintf("  --expires-at %d \\\n", expiresAt))
-	sb.WriteString(fmt.Sprintf("  --gas-fee %s \\\n", defaultGnokeyGasFee))
-	sb.WriteString(fmt.Sprintf("  --gas-wanted %d \\\n", defaultGnokeyGasWanted))
-	sb.WriteString(fmt.Sprintf("  --remote %s \\\n", profile.RPCURL))
-	sb.WriteString(fmt.Sprintf("  --chainid %s \\\n", profile.ChainID))
+	fmt.Fprintf(&sb, "  --expires-at %d \\\n", expiresAt)
+	fmt.Fprintf(&sb, "  --gas-fee %s \\\n", defaultGnokeyGasFee)
+	fmt.Fprintf(&sb, "  --gas-wanted %d \\\n", defaultGnokeyGasWanted)
+	fmt.Fprintf(&sb, "  --remote %s \\\n", profile.RPCURL)
+	fmt.Fprintf(&sb, "  --chainid %s \\\n", profile.ChainID)
 	sb.WriteString("  --broadcast \\\n")
 	sb.WriteString("  <your-master-key-name>")
 	return sb.String()
@@ -50,11 +50,11 @@ const (
 func FormatGnokeyRevokeCommand(profile *profiles.Profile, sessionPubkey string) string {
 	var sb strings.Builder
 	sb.WriteString("gnokey maketx session revoke \\\n")
-	sb.WriteString(fmt.Sprintf("  --pubkey %s \\\n", sessionPubkey))
-	sb.WriteString(fmt.Sprintf("  --gas-fee %s \\\n", defaultGnokeyGasFee))
-	sb.WriteString(fmt.Sprintf("  --gas-wanted %d \\\n", defaultGnokeyGasWanted))
-	sb.WriteString(fmt.Sprintf("  --remote %s \\\n", profile.RPCURL))
-	sb.WriteString(fmt.Sprintf("  --chainid %s \\\n", profile.ChainID))
+	fmt.Fprintf(&sb, "  --pubkey %s \\\n", sessionPubkey)
+	fmt.Fprintf(&sb, "  --gas-fee %s \\\n", defaultGnokeyGasFee)
+	fmt.Fprintf(&sb, "  --gas-wanted %d \\\n", defaultGnokeyGasWanted)
+	fmt.Fprintf(&sb, "  --remote %s \\\n", profile.RPCURL)
+	fmt.Fprintf(&sb, "  --chainid %s \\\n", profile.ChainID)
 	sb.WriteString("  --broadcast \\\n")
 	sb.WriteString("  <your-master-key-name>")
 	return sb.String()
