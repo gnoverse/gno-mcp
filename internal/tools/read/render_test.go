@@ -9,6 +9,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRender_rejectsNonRealmPath(t *testing.T) {
+	f := chain.NewFake()
+	f.SetRender("gno.land/p/demo/avl", "", "would-render") // seed so the chain would answer
+	s := newBaseTestServer(t)
+	RegisterRender(s, constResolver(f))
+	_, err := s.Registry().Call(context.Background(), "gno_render", map[string]any{
+		"realm":   "gno.land/p/demo/avl",
+		"profile": "testnet5",
+	})
+	require.Error(t, err, "render must reject a non-realm path even if the chain would answer")
+	require.Contains(t, err.Error(), "realm")
+}
+
 func TestRender_returnsResource(t *testing.T) {
 	f := chain.NewFake()
 	f.SetRender("gno.land/r/foo", "", "# Hello\nBody.")

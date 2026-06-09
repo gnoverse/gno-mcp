@@ -13,9 +13,9 @@ import (
 func RegisterEval(s *server.Server, resolve chain.Resolver) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_eval",
-		Description: "Evaluates a Gno expression against a realm and returns the typed result as plain text. " +
-			"Use when the user or agent needs to inspect a value, call a pure function, or read exported " +
-			"state without rendering realm content. Returns the vm/qeval typed result " +
+		Description: "Evaluates a Gno expression against a Gno package (realm or pure) and returns the typed " +
+			"result as plain text. Use when the user or agent needs to inspect a value, call an exported " +
+			"function, or read exported state without rendering content. Returns the vm/qeval typed result " +
 			"(e.g. '(42 int)', '(\"hello\" string)') as OutputText — not an MCP resource, because the " +
 			"value is gnomcp-typed metadata rather than untrusted realm content. " +
 			"Does NOT return rendered markdown — use gno_render for that. " +
@@ -29,12 +29,15 @@ func RegisterEval(s *server.Server, resolve chain.Resolver) {
 
 func evalHandler(resolve chain.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
-		realm, err := stringArg(args, "realm")
+		path, err := stringArg(args, "path")
 		if err != nil {
 			return server.Result{}, err
 		}
-		if realm == "" {
-			return server.Result{}, fmt.Errorf("realm is required (e.g. gno.land/r/myorg/counter)")
+		if path == "" {
+			return server.Result{}, fmt.Errorf("path is required (e.g. gno.land/r/myorg/counter)")
+		}
+		if !chain.IsReadablePackagePath(path) {
+			return server.Result{}, fmt.Errorf("path must be a realm (gno.land/r/...) or pure package (gno.land/p/...); got %q", path)
 		}
 		expr, err := stringArg(args, "expr")
 		if err != nil {
@@ -52,7 +55,7 @@ func evalHandler(resolve chain.Resolver) server.Handler {
 		if c == nil {
 			return server.Result{}, fmt.Errorf("no chain client for profile %q", profile)
 		}
-		out, err := c.Eval(ctx, realm, expr)
+		out, err := c.Eval(ctx, path, expr)
 		if err != nil {
 			return server.Result{}, fmt.Errorf("gno_eval: %w", err)
 		}
@@ -63,19 +66,19 @@ func evalHandler(resolve chain.Resolver) server.Handler {
 
 func evalInputSchema(s *server.Server) map[string]any {
 	props := map[string]any{
-		"realm": map[string]any{
-			"type":        "string",
-			"description": "Realm package path (e.g. 'gno.land/r/myorg/counter'). Required.",
-			// Allow lowercase letters, digits, underscore, dot, hyphen, and slash.
-			// Hyphen is needed for realms like gno.land/r/some-org/foo.
-			"pattern": `^gno\.land/r/[a-z0-9_\-/\.]+$`,
+		"path": map[string]any{
+			"type": "string",
+			"description": "Package path: a realm (gno.land/r/myorg/counter) or pure package " +
+				"(gno.land/p/myorg/lib). Required.",
+			// Permissive hint only; authoritative validation is in the handler.
+			"pattern": `^[a-z0-9][a-z0-9._/\-]+$`,
 		},
 		"expr": map[string]any{
 			"type":        "string",
-			"description": "Gno expression to evaluate within the realm (e.g. 'Counter()' or 'GetBalance(\"addr\")'). Required.",
+			"description": "Gno expression to evaluate within the package (e.g. 'Counter()' or 'Sprintf(\"%d\", 7)'). Required.",
 		},
 	}
-	required := []string{"realm", "expr"}
+	required := []string{"path", "expr"}
 	addProfileArg(s, props, &required)
 	return map[string]any{
 		"type":                 "object",

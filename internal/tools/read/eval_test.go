@@ -16,7 +16,7 @@ func TestEval_returnsText(t *testing.T) {
 	s := newBaseTestServer(t)
 	RegisterEval(s, constResolver(f))
 	res, err := s.Registry().Call(context.Background(), "gno_eval", map[string]any{
-		"realm":   "gno.land/r/foo",
+		"path":    "gno.land/r/foo",
 		"expr":    "Bar()",
 		"profile": "testnet5",
 	})
@@ -24,42 +24,68 @@ func TestEval_returnsText(t *testing.T) {
 	assert.Equal(t, "(42 int)", res.Text)
 }
 
+func TestEval_acceptsPurePackage(t *testing.T) {
+	f := chain.NewFake()
+	f.SetEval("gno.land/p/demo/ufmt", `Sprintf("%d", 7)`, `("7" string)`)
+
+	s := newBaseTestServer(t)
+	RegisterEval(s, constResolver(f))
+	res, err := s.Registry().Call(context.Background(), "gno_eval", map[string]any{
+		"path":    "gno.land/p/demo/ufmt",
+		"expr":    `Sprintf("%d", 7)`,
+		"profile": "testnet5",
+	})
+	require.NoError(t, err, "eval must accept a pure /p/ package")
+	assert.Equal(t, `("7" string)`, res.Text)
+}
+
 func TestEval_requiresExpr(t *testing.T) {
 	s := newBaseTestServer(t)
 	RegisterEval(s, constResolver(chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_eval", map[string]any{
-		"realm":   "gno.land/r/foo",
+		"path":    "gno.land/r/foo",
 		"profile": "testnet5",
 	})
 	require.Error(t, err, "expected error when expr is missing")
 }
 
-func TestEval_requiresRealm(t *testing.T) {
+func TestEval_requiresPath(t *testing.T) {
 	s := newBaseTestServer(t)
 	RegisterEval(s, constResolver(chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_eval", map[string]any{
 		"expr":    "Bar()",
 		"profile": "testnet5",
 	})
-	require.Error(t, err, "expected error when realm is missing")
+	require.Error(t, err, "expected error when path is missing")
 }
 
-func TestEval_rejectsNonStringRealm(t *testing.T) {
+func TestEval_rejectsNonPackagePath(t *testing.T) {
 	s := newBaseTestServer(t)
 	RegisterEval(s, constResolver(chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_eval", map[string]any{
-		"realm":   42,
+		"path":    "std",
 		"expr":    "Bar()",
 		"profile": "testnet5",
 	})
-	require.Error(t, err, "expected type error when realm is not a string")
+	require.Error(t, err, "expected rejection for a non realm/pure path")
+}
+
+func TestEval_rejectsNonStringPath(t *testing.T) {
+	s := newBaseTestServer(t)
+	RegisterEval(s, constResolver(chain.NewFake()))
+	_, err := s.Registry().Call(context.Background(), "gno_eval", map[string]any{
+		"path":    42,
+		"expr":    "Bar()",
+		"profile": "testnet5",
+	})
+	require.Error(t, err, "expected type error when path is not a string")
 }
 
 func TestEval_rejectsNonStringExpr(t *testing.T) {
 	s := newBaseTestServer(t)
 	RegisterEval(s, constResolver(chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_eval", map[string]any{
-		"realm":   "gno.land/r/foo",
+		"path":    "gno.land/r/foo",
 		"expr":    42,
 		"profile": "testnet5",
 	})
@@ -70,7 +96,7 @@ func TestEval_unknownProfileReturnsError(t *testing.T) {
 	s := newBaseTestServer(t)
 	RegisterEval(s, onlyProfileResolver("testnet5", chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_eval", map[string]any{
-		"realm":   "gno.land/r/foo",
+		"path":    "gno.land/r/foo",
 		"expr":    "Bar()",
 		"profile": "ghost",
 	})

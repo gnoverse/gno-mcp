@@ -34,6 +34,9 @@ func renderHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 		if realm == "" {
 			return server.Result{}, fmt.Errorf("realm is required (e.g. gno.land/r/myorg/blog)")
 		}
+		if !chain.IsRealmPath(realm) {
+			return server.Result{}, fmt.Errorf("realm must be a realm path (gno.land/r/...); got %q (Render is realm-only)", realm)
+		}
 		path, err := stringArg(args, "path")
 		if err != nil {
 			return server.Result{}, err
