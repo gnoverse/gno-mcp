@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -11,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
 // srcDir returns the directory containing this test file.
@@ -220,4 +224,64 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 
 	assert.Contains(t, string(out), "gno_session_propose",
 		"expected instructions to mention gno_session_propose; response:\n%s", string(out))
+}
+
+func TestToSDKAnnotations_readOnly(t *testing.T) {
+	a := server.Annotations{ReadOnly: true}
+	got := toSDKAnnotations(a)
+	require.NotNil(t, got)
+	assert.True(t, got.ReadOnlyHint, "ReadOnlyHint should be true")
+	require.NotNil(t, got.DestructiveHint, "DestructiveHint must not be nil for read-only tool")
+	assert.False(t, *got.DestructiveHint, "DestructiveHint should be false for read-only tool")
+}
+
+func TestToSDKAnnotations_destructive(t *testing.T) {
+	a := server.Annotations{Destructive: true}
+	got := toSDKAnnotations(a)
+	require.NotNil(t, got)
+	require.NotNil(t, got.DestructiveHint, "DestructiveHint must not be nil")
+	assert.True(t, *got.DestructiveHint, "DestructiveHint should be true")
+}
+
+func TestFormatResult_structuredContent(t *testing.T) {
+	res := server.Result{
+		Text:              "x",
+		StructuredContent: map[string]any{"k": "v"},
+	}
+	got := formatResult(res, server.OutputText)
+	require.NotNil(t, got.StructuredContent)
+	sc, ok := got.StructuredContent.(map[string]any)
+	require.True(t, ok, "StructuredContent should be map[string]any")
+	assert.Equal(t, "v", sc["k"])
+}
+
+func TestToolErrorResult_toolError(t *testing.T) {
+	err := &server.ToolError{
+		Code:    "insufficient_funds",
+		Message: "m",
+		Extra:   map[string]any{"address": "g1abc"},
+	}
+	got := toolErrorResult(err)
+	require.NotNil(t, got)
+	assert.True(t, got.IsError, "IsError should be true")
+	require.Len(t, got.Content, 1)
+	tc, ok := got.Content[0].(*mcpsdk.TextContent)
+	require.True(t, ok, "Content[0] should be *TextContent")
+	assert.Equal(t, "m", tc.Text, "Text should be ToolError.Message, not Error()")
+	sc, ok := got.StructuredContent.(map[string]any)
+	require.True(t, ok, "StructuredContent should be map[string]any")
+	assert.Equal(t, "insufficient_funds", sc["code"])
+	assert.Equal(t, "g1abc", sc["address"])
+}
+
+func TestToolErrorResult_plainError(t *testing.T) {
+	err := errors.New("plain error")
+	got := toolErrorResult(err)
+	require.NotNil(t, got)
+	assert.True(t, got.IsError)
+	require.Len(t, got.Content, 1)
+	tc, ok := got.Content[0].(*mcpsdk.TextContent)
+	require.True(t, ok)
+	assert.Equal(t, "plain error", tc.Text)
+	assert.Nil(t, got.StructuredContent)
 }

@@ -23,10 +23,11 @@ func RegisterRun(s *server.Server, ks *keystore.Keystore, sessionMgr *session.Ma
 	s.Registry().Add(&server.Tool{
 		Name: "gno_run",
 		Description: "Executes ad-hoc Gno code via vm/MsgRun. The code must be a valid Gno package " +
-			"(package main with a main() entry point). On local profiles the agent key signs directly " +
-			"(no session required). On testnet/mainnet profiles an active gnomcp session with " +
-			"allow_run=true is required (use gno_session_propose with allow_run=true if no such " +
-			"session exists). Pass simulate=true to dry-run without spending gas. Required args: " +
+			"(package main with a main() entry point). " +
+			"On local and testnet profiles the agent key signs by default (local: the built-in test1 account; " +
+			"testnet: a key from gno_key_generate, funded via gno_faucet_fund). " +
+			"On other profiles, or when you pass identity=session, an active gnomcp session covering the target realm is required (use gno_session_propose). " +
+			"Pass simulate=true to dry-run without spending gas. Required args: " +
 			"profile, code. Optional: simulate (bool), identity (\"agent\" or \"session\"). " +
 			"The result reports which identity signed; always tell the user which account performed the write.",
 		InputSchema: runInputSchema(s),

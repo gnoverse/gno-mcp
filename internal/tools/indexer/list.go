@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gnoverse/gno-mcp/internal/budget"
 	"github.com/gnoverse/gno-mcp/internal/indexer"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
@@ -21,12 +22,11 @@ func RegisterList(s *server.Server, resolve indexer.Resolver) {
 		Description: "Filter-browse the on-chain realm catalog via the tx-indexer. " +
 			"Returns a typed listing of deployed realms matching the given filters. " +
 			"Use namespace, tag, or category to narrow the results. " +
-			"NOT for reading realm content — use gno_render or gno_read for that. " +
-			"Note: currently surfaces an 'error_unavailable' when the tx-indexer schema " +
-			"does not expose the realms query; this is expected until the indexer is extended.",
+			"NOT for reading realm content — use gno_render or gno_read for that.",
 		InputSchema: listInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapIndexerRead,
+		Annotations: server.Annotations{ReadOnly: true, Idempotent: true, OpenWorld: true},
 		Handler:     listHandler(resolve),
 	})
 }
@@ -64,7 +64,12 @@ func listHandler(resolve indexer.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf("gno_list: %w", err)
 		}
 
-		return server.Result{Text: formatRealms(realms)}, nil
+		r := budget.Apply(formatRealms(realms), "", false)
+		text := r.Full
+		if r.Truncated {
+			text = r.Summary
+		}
+		return server.Result{Text: text}, nil
 	}
 }
 

@@ -27,7 +27,7 @@ func RegisterKeyAddress(s *server.Server, ks *keystore.Keystore) {
 			ReadOnly:    true,
 			Destructive: false,
 			Idempotent:  true,
-			OpenWorld:   true,
+			OpenWorld:   false,
 		},
 		Handler: func(ctx context.Context, args map[string]any) (server.Result, error) {
 			return keyAddrHandler(ctx, args, s, ks)

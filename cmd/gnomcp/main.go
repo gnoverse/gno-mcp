@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -126,12 +127,12 @@ func main() {
 	}
 
 	// ---- build MCP SDK server
-	instructions := "gnomcp serves Gno realm reads via the official MCP Go SDK. " +
-		"Tools are registered conditionally based on profile capabilities (see profiles.toml). " +
-		"Write tools (gno_call, gno_run) default to the agent identity on local and testnet profiles: " +
-		"local profiles sign with the built-in test1 key; testnet profiles sign with a key generated via gno_key_generate. " +
-		"Pass identity=session (or call gno_session_propose first) to act as the user via a chain-bound session instead. " +
-		"For ANY write (gno_call/gno_run/gno_addpkg) always tell the user which account signed — the agent's own key or a session — so the acting identity is never ambiguous."
+	instructions := "gnomcp exposes Gno chain operations over MCP. Tools register per-profile capability (see profiles.toml), so the available set varies by config. Typical flows:\n" +
+		"- READ: gno_inspect (learn a realm's API) then gno_render / gno_eval / gno_read (read state or source).\n" +
+		"- WRITE on testnet: gno_key_generate (once) -> gno_faucet_fund (fund the agent key) -> gno_call / gno_run / gno_addpkg. An unfunded write returns insufficient_funds pointing at gno_faucet_fund.\n" +
+		"- WRITE as the user (any chain with a master-address): gno_session_propose -> the user runs the printed gnokey command to authorize -> retry the write with identity=session. gno_auth_status / gno_session_revoke inspect and revoke sessions.\n" +
+		"- New chain: gno_connect <gnoweb URL> -> run the printed `gnomcp profile add` command -> restart gnomcp.\n" +
+		"Always report which identity signed a write (the agent key vs a session) so it is never ambiguous."
 	mcpServer := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "gnomcp",
 		Version: version,
@@ -148,6 +149,7 @@ func main() {
 			Name:        t.Name,
 			Description: t.Description,
 			InputSchema: inputSchema,
+			Annotations: toSDKAnnotations(t.Annotations),
 		}, makeHandler(t, s, auditLog, *auditReads))
 	}
 
@@ -231,10 +233,7 @@ func makeHandler(t *server.Tool, s *server.Server, auditLog *audit.Log, auditRea
 		}
 
 		if callErr != nil {
-			return &mcpsdk.CallToolResult{
-				Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: callErr.Error()}},
-				IsError: true,
-			}, nil
+			return toolErrorResult(callErr), nil
 		}
 
 		return formatResult(res, t.OutputKind), nil
@@ -243,13 +242,14 @@ func makeHandler(t *server.Tool, s *server.Server, auditLog *audit.Log, auditRea
 
 // formatResult converts a server.Result to a *mcp.CallToolResult.
 func formatResult(res server.Result, kind server.OutputKind) *mcpsdk.CallToolResult {
+	var out *mcpsdk.CallToolResult
 	switch kind {
 	case server.OutputResource:
 		mime := res.ResourceMIME
 		if mime == "" {
 			mime = "text/markdown"
 		}
-		return &mcpsdk.CallToolResult{
+		out = &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
 				&mcpsdk.EmbeddedResource{
 					Resource: &mcpsdk.ResourceContents{
@@ -261,10 +261,14 @@ func formatResult(res server.Result, kind server.OutputKind) *mcpsdk.CallToolRes
 			},
 		}
 	default: // OutputText
-		return &mcpsdk.CallToolResult{
+		out = &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: res.Text}},
 		}
 	}
+	if len(res.StructuredContent) > 0 {
+		out.StructuredContent = res.StructuredContent
+	}
+	return out
 }
 
 // ---- schema conversion
@@ -405,6 +409,43 @@ func defaultAgentKeysPath() string {
 }
 
 // ---- helpers
+
+// toSDKAnnotations maps server.Annotations to the MCP SDK ToolAnnotations.
+// All four hints are set explicitly so SDK defaults (DestructiveHint=true,
+// OpenWorldHint=true) don't misrepresent read-only tools.
+func toSDKAnnotations(a server.Annotations) *mcpsdk.ToolAnnotations {
+	destructive := a.Destructive
+	openWorld := a.OpenWorld
+	return &mcpsdk.ToolAnnotations{
+		ReadOnlyHint:    a.ReadOnly,
+		DestructiveHint: &destructive,
+		IdempotentHint:  a.Idempotent,
+		OpenWorldHint:   &openWorld,
+	}
+}
+
+// toolErrorResult builds a CallToolResult for a tool-side error. If err is a
+// *server.ToolError its Code, Message, and Extra fields are wired into the
+// structured response; otherwise the error string is used as plain text.
+func toolErrorResult(err error) *mcpsdk.CallToolResult {
+	var te *server.ToolError
+	if errors.As(err, &te) {
+		sc := make(map[string]any, 1+len(te.Extra))
+		for k, v := range te.Extra {
+			sc[k] = v
+		}
+		sc["code"] = te.Code
+		return &mcpsdk.CallToolResult{
+			Content:           []mcpsdk.Content{&mcpsdk.TextContent{Text: te.Message}},
+			StructuredContent: sc,
+			IsError:           true,
+		}
+	}
+	return &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: err.Error()}},
+		IsError: true,
+	}
+}
 
 func argString(args map[string]any, key string) string {
 	v, _ := args[key].(string)

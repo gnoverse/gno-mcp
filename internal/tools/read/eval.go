@@ -56,7 +56,8 @@ func evalHandler(resolve chain.Resolver) server.Handler {
 		if err != nil {
 			return server.Result{}, fmt.Errorf("gno_eval: %w", err)
 		}
-		return server.Result{Text: out}, nil
+		text, _ := budgetBody(out, "")
+		return server.Result{Text: text}, nil
 	}
 }
 

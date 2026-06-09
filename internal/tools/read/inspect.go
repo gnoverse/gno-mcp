@@ -48,18 +48,20 @@ func inspectHandler(resolve chain.Resolver) server.Handler {
 		if err != nil {
 			return server.Result{}, fmt.Errorf("gno_inspect: %w", err)
 		}
-		return server.Result{Text: doc}, nil
+		text, _ := budgetBody(doc, "")
+		return server.Result{Text: text}, nil
 	}
 }
 
 func inspectInputSchema(s *server.Server) map[string]any {
 	props := map[string]any{
 		"realm": map[string]any{
-			"type":        "string",
-			"description": "Realm package path (e.g. 'gno.land/r/myorg/foo'). Required.",
-			// Allow lowercase letters, digits, underscore, dot, hyphen, and slash.
-			// Hyphen is needed for realms like gno.land/r/some-org/foo.
-			"pattern": `^gno\.land/r/[a-z0-9_\-/\.]+$`,
+			"type": "string",
+			"description": "Realm or pure-package path (e.g. 'gno.land/r/myorg/foo' for a realm " +
+				"or 'gno.land/p/myorg/lib' for a pure package). Required.",
+			// Allow /r/ realms and /p/ pure packages; lowercase letters, digits,
+			// underscore, dot, hyphen, and slash inside the path.
+			"pattern": `^gno\.land/[rp]/[a-z0-9_\-/\.]+$`,
 		},
 	}
 	required := []string{"realm"}

@@ -22,12 +22,12 @@ import (
 func RegisterCall(s *server.Server, ks *keystore.Keystore, sessionMgr *session.Manager, resolver chain.Resolver, alog *audit.Log) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_call",
-		Description: "Calls a public function in a deployed Gno realm (vm/MsgCall). On local " +
-			"profiles the agent key signs directly (no session required). On testnet/mainnet " +
-			"profiles an active gnomcp session that covers the target realm is required (use " +
-			"gno_session_propose if none exists). Pass simulate=true to dry-run without spending " +
-			"gas. Required args: profile, realm, func. Optional: args (array of strings), " +
-			"simulate (bool), identity (\"agent\" or \"session\"). " +
+		Description: "Calls a public function in a deployed Gno realm (vm/MsgCall). " +
+			"On local and testnet profiles the agent key signs by default (local: the built-in test1 account; " +
+			"testnet: a key from gno_key_generate, funded via gno_faucet_fund). " +
+			"On other profiles, or when you pass identity=session, an active gnomcp session covering the target realm is required (use gno_session_propose). " +
+			"Pass simulate=true to dry-run without spending gas. Required args: profile, realm, func. " +
+			"Optional: args (array of strings), simulate (bool), identity (\"agent\" or \"session\"). " +
 			"The result reports which identity signed; always tell the user which account performed the write.",
 		InputSchema: callInputSchema(s),
 		OutputKind:  server.OutputText,
@@ -339,9 +339,10 @@ func callInputSchema(s *server.Server) map[string]any {
 			"description": "Public function name to invoke in the realm.",
 		},
 		"args": map[string]any{
-			"type":        "array",
-			"items":       map[string]any{"type": "string"},
-			"description": "Positional string arguments for the function. Optional; omit or pass [] for zero-argument functions.",
+			"type":  "array",
+			"items": map[string]any{"type": "string"},
+			"description": "Positional string arguments for the function. Optional; omit or pass [] for zero-argument functions. " +
+				"e.g. [\"42\", \"g1abc...\"] — all arguments are passed as strings; numbers, addresses, and booleans are stringified.",
 		},
 		"simulate": map[string]any{
 			"type":        "boolean",

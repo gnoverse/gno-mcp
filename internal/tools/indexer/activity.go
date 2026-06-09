@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gnoverse/gno-mcp/internal/budget"
 	"github.com/gnoverse/gno-mcp/internal/indexer"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
@@ -26,6 +27,7 @@ func RegisterActivity(s *server.Server, resolve indexer.Resolver) {
 		InputSchema: activityInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapIndexerRead,
+		Annotations: server.Annotations{ReadOnly: true, Idempotent: true, OpenWorld: true},
 		Handler:     activityHandler(resolve),
 	})
 }
@@ -77,7 +79,12 @@ func activityHandler(resolve indexer.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf("gno_activity: %w", err)
 		}
 
-		return server.Result{Text: formatEvents(events)}, nil
+		r := budget.Apply(formatEvents(events), "", false)
+		text := r.Full
+		if r.Truncated {
+			text = r.Summary
+		}
+		return server.Result{Text: text}, nil
 	}
 }
 

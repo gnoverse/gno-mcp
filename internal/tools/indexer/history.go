@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gnoverse/gno-mcp/internal/budget"
 	"github.com/gnoverse/gno-mcp/internal/indexer"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
@@ -25,6 +26,7 @@ func RegisterHistory(s *server.Server, resolve indexer.Resolver) {
 		InputSchema: historyInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapIndexerRead,
+		Annotations: server.Annotations{ReadOnly: true, Idempotent: true, OpenWorld: true},
 		Handler:     historyHandler(resolve),
 	})
 }
@@ -54,7 +56,12 @@ func historyHandler(resolve indexer.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf("gno_history: %w", err)
 		}
 
-		return server.Result{Text: formatEvents(events)}, nil
+		r := budget.Apply(formatEvents(events), "", false)
+		text := r.Full
+		if r.Truncated {
+			text = r.Summary
+		}
+		return server.Result{Text: text}, nil
 	}
 }
 
