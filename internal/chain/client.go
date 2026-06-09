@@ -87,6 +87,12 @@ type Client interface {
 	// Backed by vm/qfile without a file name argument.
 	ListFiles(ctx context.Context, realm string) ([]string, error)
 
+	// ListPaths enumerates package paths under target via vm/qpaths. target is
+	// either a path prefix ("gno.land/r/demo/") or "@namespace" ("@demo" → both
+	// /p/ and /r/). limit<=0 uses the chain default (1000); the chain caps at
+	// 10000. Returns fully-qualified package paths.
+	ListPaths(ctx context.Context, target string, limit int) ([]string, error)
+
 	// Doc returns the realm's package + per-function godoc.
 	// Backed by vm/qdoc.
 	Doc(ctx context.Context, realm string) (string, error)

@@ -23,6 +23,8 @@ In both paths you load companion references on demand: `security.md` and `interr
 
 Run cheap pattern checks first to surface obvious problems and orient yourself before deep reading. Fast feedback; cheap cost.
 
+**Getting the source.** If a Gno MCP server is connected, pull the whole package in one call (`gno_read` with no `file` → txtar) and discover related packages (`gno_packages`) — works for `/r/` and `/p/`. See `references/mcp.md`. Otherwise read from local files or gnoweb. The procedure below is identical however the source arrives.
+
 Patterns to check against the realm source (see `security.md` Audit signals table for the full catalog):
 
 - `IsUser()` co-occurring with `OriginSend` → payment-bypass via MsgRun

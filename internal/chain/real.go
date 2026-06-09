@@ -114,6 +114,29 @@ func (r *Real) ListFiles(_ context.Context, realm string) ([]string, error) {
 	return files, nil
 }
 
+// ListPaths enumerates package paths under target.
+// Backed by vm/qpaths; result is newline-separated.
+func (r *Real) ListPaths(_ context.Context, target string, limit int) ([]string, error) {
+	qpath := "vm/qpaths"
+	if limit > 0 {
+		qpath = fmt.Sprintf("vm/qpaths?limit=%d", limit)
+	}
+	qres, err := r.cli.Query(gnoclient.QueryCfg{
+		Path: qpath,
+		Data: []byte(target),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("vm/qpaths: %w", err)
+	}
+	var paths []string
+	for _, p := range strings.Split(string(qres.Response.Data), "\n") {
+		if p = strings.TrimSpace(p); p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths, nil
+}
+
 // Doc returns the realm's package + per-function godoc.
 // Backed by vm/qdoc.
 func (r *Real) Doc(_ context.Context, realm string) (string, error) {

@@ -48,6 +48,7 @@ This SKILL.md is a router. References are categorized by topic; load whichever f
 | Rendering | `references/render.md` | Writing or auditing `Render(path string) string`; markdown extensions (alerts, columns, forms, imgvalidator, link, mentions); gnoweb output; `vm/qrender` query surface; XSS / untrusted-content posture. |
 | VM model | `references/memory.md` | Understanding what persists across transactions; typed values; heap items; closure captures; loop-variable semantics; pointer base/index model; data-structure choice (array vs slice vs map vs avl). Auditor: load when reasoning about object identity, aliasing, or "does this get persisted". |
 | Build, test, configure | `references/build.md` | Scaffolding a project; `gnomod.toml` and `gnowork.toml` fields; the `gno` binary; the three test flavors (unit, filetest, integration); filetest directives; Go-Gno compatibility surface; deploy mechanics. |
+| MCP acceleration | `references/mcp.md` | A Gno MCP server (e.g. gnomcp) is connected and you want to fetch on-chain package source or discover packages. Optional — the skill works without it; load to see when to reach for it. |
 
 ### Task hints (multi-reference loads)
 

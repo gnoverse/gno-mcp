@@ -3,25 +3,27 @@ package read
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/server"
+	"golang.org/x/tools/txtar"
 )
 
-// RegisterRead wires the gno_read tool into s. The resolver maps a
-// profile name to the chain.Client used to satisfy calls.
+// RegisterRead wires the gno_read tool into s. The resolver maps a profile
+// name to the chain.Client used to satisfy calls.
 //
-// When file is non-empty, gno_read fetches a single source file from the
-// realm (MIME text/x-gno). When file is empty, it returns the realm's
-// file listing joined by newlines (MIME text/plain).
+// When file is non-empty, gno_read returns that single source file
+// (MIME text/x-gno). When file is omitted, it returns the WHOLE package as a
+// txtar archive (MIME text/plain) — every file's name and body in one call.
 func RegisterRead(s *server.Server, resolve chain.Resolver) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_read",
-		Description: "Fetches realm source code or a file listing from a Gno realm. " +
+		Description: "Fetches Gno package source. " +
 			"When 'file' is provided, returns the raw source of that file (MIME text/x-gno). " +
-			"When 'file' is omitted, returns the newline-separated list of source file names " +
-			"that make up the realm (MIME text/plain). " +
+			"When 'file' is omitted, returns the WHOLE package as a txtar archive — every file's " +
+			"name (in '-- name --' headers) and body in one call (MIME text/plain). " +
+			"Works for any realm (gno.land/r/...) or pure package (gno.land/p/...). " +
+			"For the API surface only use gno_inspect; for rendered output use gno_render. " +
 			"Returns an MCP resource. Backed by vm/qfile; HEAD-only.",
 		InputSchema: readInputSchema(s),
 		OutputKind:  server.OutputResource,
@@ -32,12 +34,16 @@ func RegisterRead(s *server.Server, resolve chain.Resolver) {
 
 func readHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
-		realm, err := stringArg(args, "realm")
+		path, err := stringArg(args, "path")
 		if err != nil {
 			return server.Result{}, err
 		}
-		if realm == "" {
-			return server.Result{}, fmt.Errorf("realm is required (e.g. gno.land/r/myorg/foo)")
+		if path == "" {
+			return server.Result{}, fmt.Errorf("path is required (e.g. gno.land/r/myorg/foo)")
+		}
+		if !chain.IsReadablePackagePath(path) {
+			return server.Result{}, fmt.Errorf(
+				"path must be a realm (gno.land/r/...) or pure package (gno.land/p/...); got %q", path)
 		}
 		file, err := stringArg(args, "file")
 		if err != nil {
@@ -53,36 +59,39 @@ func readHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf("no chain client for profile %q", profile)
 		}
 
+		gnowebURL := ""
+		if p, ok := s.Config().Profiles[profile]; ok {
+			gnowebURL = gnowebURLFor(p.RPCURL, path, "")
+		}
+
 		if file != "" {
-			body, err := c.File(ctx, realm, file)
+			body, err := c.File(ctx, path, file)
 			if err != nil {
 				return server.Result{}, fmt.Errorf("gno_read: %w", err)
 			}
-			gnowebURL := ""
-			if p, ok := s.Config().Profiles[profile]; ok {
-				gnowebURL = gnowebURLFor(p.RPCURL, realm, "")
-			}
 			body, _ = budgetBody(body, gnowebURL)
 			return server.Result{
-				ResourceURI:  "gno://" + realm + "/" + file,
+				ResourceURI:  "gno://" + path + "/" + file,
 				ResourceBody: body,
 				ResourceMIME: "text/x-gno",
 			}, nil
 		}
 
-		names, err := c.ListFiles(ctx, realm)
+		files, err := chain.ReadPackageFiles(ctx, c, path)
 		if err != nil {
 			return server.Result{}, fmt.Errorf("gno_read: %w", err)
 		}
-		listing := strings.Join(names, "\n") + "\n"
-		gnowebURL := ""
-		if p, ok := s.Config().Profiles[profile]; ok {
-			gnowebURL = gnowebURLFor(p.RPCURL, realm, "")
+		if len(files) == 0 {
+			return server.Result{}, fmt.Errorf("gno_read: no files found at %q (not a deployed package?)", path)
 		}
-		listing, _ = budgetBody(listing, gnowebURL)
+		ar := &txtar.Archive{Files: make([]txtar.File, len(files))}
+		for i, mf := range files {
+			ar.Files[i] = txtar.File{Name: mf.Name, Data: []byte(mf.Body)}
+		}
+		body, _ := budgetBody(string(txtar.Format(ar)), gnowebURL)
 		return server.Result{
-			ResourceURI:  "gno://" + realm,
-			ResourceBody: listing,
+			ResourceURI:  "gno://" + path,
+			ResourceBody: body,
 			ResourceMIME: "text/plain",
 		}, nil
 	}
@@ -90,20 +99,19 @@ func readHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 
 func readInputSchema(s *server.Server) map[string]any {
 	props := map[string]any{
-		"realm": map[string]any{
+		"path": map[string]any{
 			"type": "string",
-			"description": "Realm or pure-package path (e.g. 'gno.land/r/myorg/foo' for a realm " +
-				"or 'gno.land/p/myorg/lib' for a pure package). Required.",
-			// Allow /r/ realms and /p/ pure packages; lowercase letters, digits,
-			// underscore, dot, hyphen, and slash inside the path.
-			"pattern": `^gno\.land/[rp]/[a-z0-9_\-/\.]+$`,
+			"description": "Package path: a realm (gno.land/r/myorg/foo) or pure package " +
+				"(gno.land/p/myorg/lib). Required.",
+			// Permissive hint only; authoritative validation is in the handler.
+			"pattern": `^[a-z0-9][a-z0-9._/\-]+$`,
 		},
 		"file": map[string]any{
 			"type":        "string",
-			"description": "Source file name within the realm (e.g. 'foo.gno'). Omit to list all files.",
+			"description": "Source file name within the package (e.g. 'foo.gno'). Omit to fetch the whole package as txtar.",
 		},
 	}
-	required := []string{"realm"}
+	required := []string{"path"}
 	addProfileArg(s, props, &required)
 	return map[string]any{
 		"type":                 "object",

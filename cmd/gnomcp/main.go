@@ -102,6 +102,7 @@ func main() {
 	readtools.RegisterEval(s, chainResolver)
 	readtools.RegisterRead(s, chainResolver)
 	readtools.RegisterInspect(s, chainResolver)
+	readtools.RegisterPackages(s, chainResolver)
 	readtools.RegisterConnect(s, &http.Client{Timeout: 10 * time.Second})
 
 	if s.AnyProfileHasIndexer() {

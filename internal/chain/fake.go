@@ -16,6 +16,7 @@ type Fake struct {
 	evals      map[string]string   // key: realm+"|"+expr
 	files      map[string]string   // key: realm+"|"+file
 	listings   map[string][]string // key: realm
+	paths      map[string][]string // key: qpaths target (prefix or @namespace)
 	docs       map[string]string   // key: realm
 	calls      map[string]CallResult
 	callErrors map[string]error
@@ -36,6 +37,7 @@ func NewFake() *Fake {
 		evals:           map[string]string{},
 		files:           map[string]string{},
 		listings:        map[string][]string{},
+		paths:           map[string][]string{},
 		docs:            map[string]string{},
 		calls:           map[string]CallResult{},
 		callErrors:      map[string]error{},
@@ -84,6 +86,16 @@ func (f *Fake) ListFiles(_ context.Context, realm string) ([]string, error) {
 	v, ok := f.listings[realm]
 	if !ok {
 		return nil, fmt.Errorf("fake: no listing for realm=%q", realm)
+	}
+	return v, nil
+}
+
+func (f *Fake) SetPaths(target string, paths []string) { f.paths[target] = paths }
+
+func (f *Fake) ListPaths(_ context.Context, target string, _ int) ([]string, error) {
+	v, ok := f.paths[target]
+	if !ok {
+		return nil, fmt.Errorf("fake: no paths for target=%q", target)
 	}
 	return v, nil
 }

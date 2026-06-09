@@ -196,3 +196,15 @@ func TestFake_Balance_unknownAddressIsZero(t *testing.T) {
 	require.NoError(t, err, "Balance")
 	require.Equal(t, int64(0), got, "unset must be 0")
 }
+
+func TestFake_ListPaths(t *testing.T) {
+	f := NewFake()
+	f.SetPaths("gno.land/r/demo/", []string{"gno.land/r/demo/foo", "gno.land/r/demo/bar"})
+
+	got, err := f.ListPaths(context.Background(), "gno.land/r/demo/", 0)
+	require.NoError(t, err)
+	require.Equal(t, []string{"gno.land/r/demo/foo", "gno.land/r/demo/bar"}, got)
+
+	_, err = f.ListPaths(context.Background(), "gno.land/r/unseeded/", 0)
+	require.Error(t, err)
+}
