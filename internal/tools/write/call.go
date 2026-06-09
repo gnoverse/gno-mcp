@@ -162,7 +162,7 @@ func callHandler(
 			if bal == 0 {
 				return server.Result{}, &server.ToolError{
 					Code:    "insufficient_funds",
-					Message: fmt.Sprintf("agent testnet account %s is unfunded — send it ugnot, then retry", signerAddr),
+					Message: fmt.Sprintf("agent testnet account %s is unfunded — run gno_faucet_fund (or send it ugnot), then retry", signerAddr),
 					Extra:   map[string]any{"profile": profileName, "address": signerAddr},
 				}
 			}

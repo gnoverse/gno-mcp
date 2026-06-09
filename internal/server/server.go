@@ -48,6 +48,17 @@ func (s *Server) AnyProfileAgentCapable() bool {
 	return false
 }
 
+// AnyProfileTestnet reports whether any profile is testnet — gates gno_faucet_fund
+// (local uses test1 and needs no faucet; prod has no agent key).
+func (s *Server) AnyProfileTestnet() bool {
+	for _, p := range s.cfg.Profiles {
+		if p.ChainType == profiles.ChainTypeTestnet {
+			return true
+		}
+	}
+	return false
+}
+
 // ProfileSchema returns the profile-arg schema for the current config + discovery.
 func (s *Server) ProfileSchema() ProfileSchema {
 	return ProfileArgSchema(s.cfg, s.discoveredLocal)

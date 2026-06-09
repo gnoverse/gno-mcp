@@ -121,6 +121,10 @@ func main() {
 		writetools.RegisterKeyGenerate(s, ks)
 	}
 
+	if s.AnyProfileTestnet() {
+		writetools.RegisterFaucetFund(s, ks, chainResolver, &http.Client{Timeout: 30 * time.Second})
+	}
+
 	// ---- build MCP SDK server
 	instructions := "gnomcp serves Gno realm reads via the official MCP Go SDK. " +
 		"Tools are registered conditionally based on profile capabilities (see profiles.toml). " +

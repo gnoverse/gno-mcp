@@ -2,6 +2,7 @@ package profiles
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"time"
 
@@ -81,6 +82,18 @@ func (c *Config) Validate() (warn error, err error) {
 		if p.MasterAddress != "" {
 			if _, err := crypto.AddressFromBech32(p.MasterAddress); err != nil {
 				return nil, fmt.Errorf("profile %q: invalid master-address %q: %w", name, p.MasterAddress, err)
+			}
+		}
+
+		for _, f := range []struct{ name, val string }{
+			{"faucet-url", p.FaucetURL},
+			{"faucet-service-url", p.FaucetServiceURL},
+		} {
+			if f.val == "" {
+				continue
+			}
+			if u, err := url.Parse(f.val); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				return nil, fmt.Errorf("profile %q: invalid %s %q (want an absolute http(s) URL)", name, f.name, f.val)
 			}
 		}
 

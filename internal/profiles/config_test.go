@@ -81,6 +81,21 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
 }
 
+func TestLoad_parsesFaucetFields(t *testing.T) {
+	src := `
+[testnet5]
+rpc-url = "https://rpc.test5.gno.land:443"
+chain-id = "test5"
+faucet-url = "https://faucet.test5.gno.land"
+faucet-service-url = "http://127.0.0.1:8590"
+`
+	cfg, err := Load(strings.NewReader(src))
+	require.NoError(t, err)
+	p := cfg.Profiles["testnet5"]
+	assert.Equal(t, "https://faucet.test5.gno.land", p.FaucetURL)
+	assert.Equal(t, "http://127.0.0.1:8590", p.FaucetServiceURL)
+}
+
 func TestMerge_LaterOverridesByName(t *testing.T) {
 	base := BuiltinProfiles()
 	overlay, err := Load(strings.NewReader(`

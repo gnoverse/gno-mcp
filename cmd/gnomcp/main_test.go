@@ -170,7 +170,7 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 		require.ErrorAs(t, err, &ee)
 	}
 
-	for _, tool := range []string{"gno_call", "gno_run", "gno_session_propose", "gno_session_revoke", "gno_auth_status"} {
+	for _, tool := range []string{"gno_call", "gno_run", "gno_session_propose", "gno_session_revoke", "gno_auth_status", "gno_faucet_fund"} {
 		assert.Contains(t, out, tool,
 			"write tool %q missing from initialize response for writable profile (master-address set)", tool)
 	}

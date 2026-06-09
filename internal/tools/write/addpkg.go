@@ -146,7 +146,7 @@ func addpkgHandler(
 		if bal == 0 {
 			return server.Result{}, &server.ToolError{
 				Code:    "insufficient_funds",
-				Message: fmt.Sprintf("agent testnet account %s is unfunded — send it ugnot, then retry", addr),
+				Message: fmt.Sprintf("agent testnet account %s is unfunded — run gno_faucet_fund (or send it ugnot), then retry", addr),
 				Extra:   map[string]any{"profile": profileName, "address": addr},
 			}
 		}

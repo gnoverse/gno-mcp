@@ -236,6 +236,24 @@ func TestValidate_BypassWithMasterAccepted(t *testing.T) {
 	require.NoError(t, err, "bypass + master-address should be accepted")
 }
 
+func TestValidate_rejectsBadFaucetURL(t *testing.T) {
+	cfg := &Config{Profiles: map[string]Profile{
+		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5", FaucetURL: "not a url"},
+	}}
+	_, err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "faucet-url")
+}
+
+func TestValidate_rejectsNonHTTPFaucetURL(t *testing.T) {
+	cfg := &Config{Profiles: map[string]Profile{
+		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5", FaucetServiceURL: "ftp://host/x"},
+	}}
+	_, err := cfg.Validate()
+	require.Error(t, err, "non-http(s) scheme must be rejected")
+	assert.Contains(t, err.Error(), "faucet-service-url")
+}
+
 func TestValidate_DerivesChainType(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
 		"local":   {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},

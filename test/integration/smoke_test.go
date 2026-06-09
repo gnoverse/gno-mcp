@@ -1,14 +1,12 @@
 //go:build integration
 // +build integration
 
-package integration
+package integration_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
-	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
@@ -17,25 +15,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSmoke_renderGnolandHome(t *testing.T) {
-	c, err := chain.NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
-	require.NoError(t, err, "NewReal")
-	out, err := c.Render(context.Background(), "gno.land/r/gnoland/home", "")
+const counterRealm = "gno.land/r/test/counter"
+
+// TestSmoke_renderCounter exercises Render against the in-process node seeded
+// with the counter testdata realm. No network access required.
+func TestSmoke_renderCounter(t *testing.T) {
+	c := newNodeBackedReal(t)
+	out, err := c.Render(context.Background(), counterRealm, "")
 	require.NoError(t, err, "Render")
 	require.NotEmpty(t, out, "expected non-empty render output")
-	assert.True(t, strings.Contains(strings.ToLower(out), "gno"),
-		"expected 'gno' somewhere in homepage output, got first 200 chars: %s", firstN(out, 200))
+	assert.Contains(t, out, "Counter",
+		"expected 'Counter' in render output, got first 200 chars: %s", firstN(out, 200))
 }
 
-func TestSmoke_inspectGrc20(t *testing.T) {
-	c, err := chain.NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
-	require.NoError(t, err, "NewReal")
-	doc, err := c.Doc(context.Background(), "gno.land/p/demo/tokens/grc20")
+// TestSmoke_docCounter exercises Doc against the in-process node seeded with
+// the counter testdata realm. No network access required.
+func TestSmoke_docCounter(t *testing.T) {
+	c := newNodeBackedReal(t)
+	doc, err := c.Doc(context.Background(), counterRealm)
 	require.NoError(t, err, "Doc")
-	assert.Contains(t, doc, "Transfer",
-		"expected grc20 to mention Transfer, got: %s", firstN(doc, 500))
+	assert.Contains(t, doc, "Increment",
+		"expected counter doc to mention Increment, got: %s", firstN(doc, 500))
 }
 
+// TestSmoke_sessionPropose_returnsValidCommand is already offline: it exercises
+// the session-propose tool's command-generation logic without hitting a network.
 func TestSmoke_sessionPropose_returnsValidCommand(t *testing.T) {
 	cfg := &profiles.Config{
 		Profiles: map[string]profiles.Profile{

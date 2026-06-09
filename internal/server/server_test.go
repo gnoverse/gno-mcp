@@ -67,6 +67,13 @@ func TestServer_noProfileAgentCapable(t *testing.T) {
 	assert.False(t, s.AnyProfileAgentCapable(), "AnyProfileAgentCapable should be false with no profiles")
 }
 
+func TestServer_anyProfileTestnet(t *testing.T) {
+	local := &profiles.Config{Profiles: map[string]profiles.Profile{"local": {ChainType: "local", ChainID: "dev", RPCURL: "x"}}}
+	assert.False(t, NewServer(local, "").AnyProfileTestnet(), "local-only -> false")
+	tn := &profiles.Config{Profiles: map[string]profiles.Profile{"t": {ChainType: "testnet", ChainID: "test5", RPCURL: "x"}}}
+	assert.True(t, NewServer(tn, "").AnyProfileTestnet(), "testnet -> true")
+}
+
 func TestServer_callsRegisteredTool(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"local": {RPCURL: "x", ChainID: "dev"},

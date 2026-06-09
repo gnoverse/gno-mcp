@@ -17,6 +17,12 @@ type Profile struct {
 	ChainID      string `toml:"chain-id"`
 	TxIndexerURL string `toml:"tx-indexer-url"`
 
+	// Faucet settings (optional; testnet only). FaucetServiceURL points at an
+	// automatic agent-faucet service (tier 2); FaucetURL at a human faucet page
+	// (tier 1). Precedence: service > link > manual fallback.
+	FaucetServiceURL string `toml:"faucet-service-url"`
+	FaucetURL        string `toml:"faucet-url"`
+
 	// Write authorization settings.
 	MasterAddress     string `toml:"master-address"`      // bech32 master account address (g1...); presence enables write tools for this profile. No key material — public address only.
 	DefaultSpendLimit string `toml:"default-spend-limit"` // optional; clamped at use
