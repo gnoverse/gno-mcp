@@ -65,3 +65,21 @@ func TestRegistry_allReturnsSortedTools(t *testing.T) {
 	assert.Equal(t, "bravo", all[1].Name)
 	assert.Equal(t, "charlie", all[2].Name)
 }
+
+// TestRegistry_callRecoversHandlerPanic pins the defense-in-depth contract: a
+// panicking handler (e.g. a nil-pointer deref from an unresolved profile)
+// degrades to a single tool error, never crashing the whole server process.
+func TestRegistry_callRecoversHandlerPanic(t *testing.T) {
+	r := NewRegistry()
+	r.Add(&Tool{
+		Name:       "boom",
+		Capability: CapBaseRead,
+		Handler: func(_ context.Context, _ map[string]any) (Result, error) {
+			panic("kaboom")
+		},
+	})
+	_, err := r.Call(context.Background(), "boom", map[string]any{})
+	require.Error(t, err, "a handler panic must surface as an error, not crash the process")
+	assert.Contains(t, err.Error(), "panic")
+	assert.Contains(t, err.Error(), "boom", "error should name the offending tool")
+}

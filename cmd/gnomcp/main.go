@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -172,7 +173,13 @@ func buildChainResolver(cfg *profiles.Config) chain.Resolver {
 		clients[name] = c
 	}
 	return func(profile string) chain.Client {
-		return clients[profile]
+		// Return an untyped-nil interface (not a typed-nil *chain.Real) for an
+		// unresolved profile, so callers' `if c == nil` guards actually fire.
+		c, ok := clients[profile]
+		if !ok {
+			return nil
+		}
+		return c
 	}
 }
 
@@ -195,7 +202,23 @@ func buildIndexerResolver(cfg *profiles.Config) indexer.Resolver {
 // ---- MCP handler adapter
 
 func makeHandler(t *server.Tool, s *server.Server, auditLog *audit.Log, auditReads bool) mcpsdk.ToolHandler {
-	return func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+	return func(ctx context.Context, req *mcpsdk.CallToolRequest) (result *mcpsdk.CallToolResult, err error) {
+		// The MCP SDK invokes this handler on a bare goroutine with no recover of
+		// its own, so an unrecovered panic anywhere in this adapter (argument
+		// decoding, profile defaulting, result formatting, or the tool handler
+		// below) would kill the whole server process. Convert any panic into one
+		// tool-error result; the stack goes to stderr so the bug stays visible.
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("tool %q panicked: %v\n%s", t.Name, rec, debug.Stack())
+				result = &mcpsdk.CallToolResult{
+					Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: fmt.Sprintf("tool %q panicked: %v", t.Name, rec)}},
+					IsError: true,
+				}
+				err = nil
+			}
+		}()
+
 		// unmarshal raw arguments to map
 		var args map[string]any
 		if req.Params.Arguments != nil {
@@ -209,6 +232,10 @@ func makeHandler(t *server.Tool, s *server.Server, auditLog *audit.Log, auditRea
 		if args == nil {
 			args = map[string]any{}
 		}
+		// JSON-Schema defaults are advisory; the client does not inject them.
+		// Apply the documented profile default server-side so an omitted profile
+		// resolves to a real client instead of "" (which resolves to nothing).
+		applyProfileDefault(t, s, args)
 
 		start := time.Now()
 		res, callErr := s.Registry().Call(ctx, t.Name, args)
@@ -239,6 +266,35 @@ func makeHandler(t *server.Tool, s *server.Server, auditLog *audit.Log, auditRea
 
 		return formatResult(res, t.OutputKind), nil
 	}
+}
+
+// applyProfileDefault fills in the server's default profile when tool t accepts a
+// `profile` argument and the caller omitted it (or passed empty). No-op when there
+// is no default (e.g. zero profiles loaded, where profile is required).
+func applyProfileDefault(t *server.Tool, s *server.Server, args map[string]any) {
+	def := s.ProfileSchema().Default
+	if def == "" || !toolAcceptsProfile(t) {
+		return
+	}
+	if v, present := args["profile"]; present {
+		str, isStr := v.(string)
+		if !isStr || str != "" {
+			// Explicit profile, or a malformed (non-string) value the handler
+			// should reject — leave it alone.
+			return
+		}
+	}
+	args["profile"] = def
+}
+
+// toolAcceptsProfile reports whether t's input schema declares a `profile` property.
+func toolAcceptsProfile(t *server.Tool) bool {
+	props, ok := t.InputSchema["properties"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, ok = props["profile"]
+	return ok
 }
 
 // formatResult converts a server.Result to a *mcp.CallToolResult.

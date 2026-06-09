@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"runtime/debug"
 	"sort"
 )
 
@@ -141,7 +143,7 @@ func (r *Registry) All() []*Tool {
 	return out
 }
 
-func (r *Registry) Call(ctx context.Context, name string, args map[string]any) (Result, error) {
+func (r *Registry) Call(ctx context.Context, name string, args map[string]any) (res Result, err error) {
 	t, ok := r.tools[name]
 	if !ok {
 		return Result{}, fmt.Errorf("unknown tool: %s", name)
@@ -149,5 +151,16 @@ func (r *Registry) Call(ctx context.Context, name string, args map[string]any) (
 	if t.Handler == nil {
 		return Result{}, fmt.Errorf("tool %q has no handler", name)
 	}
+	// Defense in depth: a panic inside a registered tool handler (e.g. a
+	// nil-pointer deref from an unresolved profile) degrades to one tool error
+	// rather than propagating to the caller. Panics in adapter code outside this
+	// dispatch are recovered at the MCP boundary (makeHandler in cmd/gnomcp).
+	// The stack goes to stderr so the underlying bug stays visible.
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("tool %q panicked: %v\n%s", name, rec, debug.Stack())
+			err = fmt.Errorf("tool %q panicked: %v", name, rec)
+		}
+	}()
 	return t.Handler(ctx, args)
 }

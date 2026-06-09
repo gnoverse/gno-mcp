@@ -62,6 +62,21 @@ func TestInspect_unknownProfileReturnsError(t *testing.T) {
 	require.Error(t, err, "expected error when resolver returns nil for unknown profile")
 }
 
+// TestInspect_typedNilClientRecovers is a regression test for the profile-
+// resolution crash: a resolver yielding a typed-nil *chain.Real bypasses the
+// handler's `if c == nil` guard, so c.Doc derefs a nil receiver. registry.Call's
+// recover must turn that into a tool error rather than segfaulting the server.
+func TestInspect_typedNilClientRecovers(t *testing.T) {
+	var typedNil *chain.Real
+	s := newBaseTestServer(t)
+	RegisterInspect(s, constResolver(chain.Client(typedNil)))
+	_, err := s.Registry().Call(context.Background(), "gno_inspect", map[string]any{
+		"path":    "gno.land/r/foo",
+		"profile": "testnet5",
+	})
+	require.Error(t, err, "typed-nil client must surface as an error, not crash")
+}
+
 func TestInspect_propagatesDocError(t *testing.T) {
 	// No SetDoc call — Fake.Doc will return an error for any realm.
 	f := chain.NewFake()
