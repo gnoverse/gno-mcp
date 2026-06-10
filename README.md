@@ -106,12 +106,15 @@ Writes are signed by one of two identities, chosen per call via the `identity` a
 - **Agent identity (default).** Testnet profiles sign with a per-profile key: run
   `gno_key_generate` once, then fund it (`gno_faucet_fund` or send it ugnot). Local
   (gnodev) profiles sign with the built-in `test1` key — no setup.
-- **Session (WIP — use with caution) — the agent acts as the user (requires
-  `master-address`).** Call `gno_session_propose` to get a paste-ready
-  `gnokey maketx session create` command; run it to authorize a chain-bound session with
-  explicit scope (`allow_paths`, `allow_run`, `spend_limit`, `expires_in`). Pass
-  `identity=session` to force this path on any profile. The session path is young and
-  will be improved — keep scopes tight and spend limits low.
+- **Session (WIP) — the agent acts as the user (requires `master-address`).** Call
+  `gno_session_propose` to get a paste-ready `gnokey maketx session create` command; run it
+  to authorize a chain-bound session with explicit scope (`allow_paths`, `allow_run`,
+  `spend_limit`, `expires_in`). Pass `identity=session` to force this path on any profile.
+
+> [!WARNING]
+> The session path is functional end-to-end but **WIP** and will be reworked. Use with
+> caution: authorize with tight `allow_paths`, a low `spend_limit`, and a short
+> `expires_in` — and revoke (`gno_session_revoke`) when you're done.
 
 ```text
 # Typical session flow
