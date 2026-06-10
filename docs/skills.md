@@ -2,6 +2,8 @@
 
 The `skills/` directory is a Claude plugin package. Each subdirectory is a single skill; `plugin.json` lists them. Skills are pure markdown — no Go code — and are designed to drive `gnomcp` tools through coherent workflows without dropping the security guardrails.
 
+**Source of truth:** skill content is currently hand-distilled from the [gnolang/gno](https://github.com/gnolang/gno) monorepo and can drift as the language evolves. The direction is to make the monorepo the sole reference and reduce skills to thin wrappers — routing, guidance, and best practice layered on monorepo knowledge, not a copy of it. When writing skill content, prefer pointing at monorepo sources over restating them.
+
 ## Bundled skills
 
 | Skill | Trigger |

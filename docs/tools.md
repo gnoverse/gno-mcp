@@ -1,6 +1,6 @@
 # Tools
 
-19 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
+21 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
 
 Chain-returned bytes are untrusted: the inline-text read/indexer tools (including `gno_render`) wrap their output in an `<untrusted_content>` envelope, and `gno_read` delivers content as an MCP resource (see `docs/security.md` §4).
 
@@ -85,7 +85,7 @@ These three tools are only registered when at least one profile has a `tx-indexe
 gnomcp signs writes with one of two identities, chosen per call via the `identity` arg (`"agent"` | `"session"`):
 
 - **Agent identity (default on local and testnet).** Local profiles sign with the built-in **test1** key directly — no session needed. Testnet profiles sign with a key generated and persisted by `gno_key_generate`; run that once and fund the address before making writes.
-- **Session (opt-in).** The agent acts *as the user* through a chain-bound session; authorize one with `gno_session_propose` first. Pass `identity=session` to choose this path on any profile with a `master-address`.
+- **Session (opt-in, WIP — use with caution).** The agent acts *as the user* through a chain-bound session; authorize one with `gno_session_propose` first. Pass `identity=session` to choose this path on any profile with a `master-address`. The session path is young and will be reworked — keep `allow_paths` tight and `spend_limit` low.
 
 Every write result names the signer (`Signed by: agent test1 (g1…)` or `Signed by: session g1… on behalf of master g1…`) and the structured output carries `identity` + `signer_address`.
 

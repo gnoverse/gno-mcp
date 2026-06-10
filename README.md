@@ -1,31 +1,54 @@
-# gnomcp v2
+# gnomcp
 
-MCP server for [gno.land](https://gno.land). Greenfield rewrite on the `v2` branch.
+> MCP server + agent skill for [gno.land](https://gno.land).
 
-> **Status:** read + write tools; session-gated writes; multi-chain via profiles. The
-> `main` branch has the older v1 server with a different architecture; this branch is the
-> ground-up rebuild per the ADRs in `adr/`.
+`gnomcp` exposes gno.land as a [Model Context Protocol](https://modelcontextprotocol.io) server: read realms, evaluate expressions, inspect accounts, manage testnet keys, simulate and broadcast transactions — from any MCP-aware client (Claude Code, Claude Desktop, Cursor, Gemini CLI, OpenCode, …). The repo also ships a `gno` skill that teaches coding agents the language, the security taxonomy, and how to drive the tools.
 
-## Zero-config reads
+---
 
-gnomcp ships with two built-in profiles that require no configuration:
+> [!WARNING]
+> **Work in progress. Unaudited. Pre-release.**
+>
+> - **No security review.** The threat model is written down ([docs/security.md](docs/security.md)) but no third party has audited the code, the tool descriptions, or the skill.
+> - **API surface is unstable.** Tool names, argument shapes, and error codes may change between pre-release tags.
+> - **Testnet and local dev only — by construction.** Only `dev` and `testNN` chain-ids pass config validation; mainnet ids are rejected outright and there is no flag to bypass that.
+> - **Sessions are WIP.** The session-signed write path (`gno_session_propose` → `identity=session`) works end-to-end but is young and will be reworked — use with caution and tight scopes.
+> - **No upgrade path guaranteed.** Config schema, session-file format, and audit-log shape may move.
+>
+> Use it on testnet. Read the security doc. File issues when something looks off.
+
+---
+
+## Why this exists
+
+LLMs are starting to drive real on-chain actions, and the bridge between an LLM and a live chain is where things go wrong: leaked seeds, prompt-injected realm output, transactions signed on the wrong network. MCP solves the "how does the model call a tool" half; the "how is the tool bounded and how does the model stay on rails" half is per-domain.
+
+`gnomcp` is that bridge for gno.land, shipped as two coupled artifacts:
+
+1. **An MCP server** — 21 tools under a single security spine: untrusted-content envelopes on every chain-derived byte, a chain-id allowlist that keeps mainnet out entirely, output budgeting, an append-only audit log, and user keys that never leave `gnokey`.
+2. **A `gno` skill** — the knowledge layer for coding agents: interrealm semantics, security taxonomy, idiomatic patterns, `Render()` conventions, stdlib surface, project setup. Skill and server are independent but complementary (skill = knowledge, server = on-chain tools).
+
+## Zero-config testnet
+
+gnomcp ships pointed at the public testnet — no configuration needed:
 
 | Profile | Chain-id | RPC |
 |---------|----------|-----|
-| `local` | `dev` | `http://127.0.0.1:26657` (auto-discovered local node) |
 | `testnet` | `test11` | `https://rpc.test11.testnets.gno.land:443` |
+| `local` | `dev` | `http://127.0.0.1:26657` (local gnodev node — see note) |
 
-The seven chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`, `gno_packages`, `gno_account`, `gno_status`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed. The write tools (see below) register out of the box as well — every allowed chain has an agent-key path.
+The seven chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`, `gno_packages`, `gno_account`, `gno_status`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed. The write tools register out of the box as well: generate an agent key once (`gno_key_generate`), fund it (`gno_faucet_fund`), and the agent can write.
 
-## Quick start
+> [!NOTE]
+> For local development with [gnodev](https://docs.gno.land/builders/local-dev-with-gnodev), the built-in `local` profile auto-discovers a node on `127.0.0.1:26657` and signs with the pre-funded `test1` key — zero setup, instant writes.
 
-### Install
+## Install
 
 ```bash
 go install github.com/gnoverse/gno-mcp/cmd/gnomcp@latest
 ```
 
-### MCP client config (installed binary)
+Then point your MCP client at the binary:
 
 ```json
 {
@@ -37,15 +60,9 @@ go install github.com/gnoverse/gno-mcp/cmd/gnomcp@latest
 
 For in-repo development the `.mcp.json` at the repo root uses `go run ./cmd/gnomcp` instead.
 
-### Chain-id allowlist
-
-Only `dev` and `testNN` chain-ids are accepted. Betanet (`gnoland1`), `staging`, and mainnet ids are rejected at config validation — they cannot enter a profile.
-
 ## Profiles
 
-Profiles are the source of truth for which chains gnomcp can reach. The built-in `local` and `testnet` are read-only defaults.
-
-### Adding a profile
+Profiles are the source of truth for which chains gnomcp can reach. The built-in `local` and `testnet` are read-only defaults. Only `dev` and `testNN` chain-ids are accepted — betanet, staging, and mainnet ids cannot enter a profile.
 
 ```bash
 # From a gnoweb URL (autofills rpc + chain-id from the page's gnoconnect meta-tags)
@@ -54,9 +71,12 @@ gnomcp profile add mychain --from-gnoweb https://mychain.testnets.gno.land
 # Manual
 gnomcp profile add mychain --rpc https://rpc.mychain.gno.land:443 --chain-id test99
 
-# With master address to enable writes
+# With master address to enable session writes
 gnomcp profile add mychain --from-gnoweb https://mychain.testnets.gno.land \
   --master g1youraddresshere
+
+gnomcp profile list
+gnomcp profile remove mychain
 ```
 
 Profiles are written to `~/.config/gnomcp/profiles.toml`. A project-local `./profiles.toml` overlays the global file; the `-config` flag overrides both.
@@ -64,11 +84,6 @@ Profiles are written to `~/.config/gnomcp/profiles.toml`. A project-local `./pro
 **Config precedence:** built-in defaults < `~/.config/gnomcp/profiles.toml` < `./profiles.toml` < `-config` flag.
 
 A profile entry in a config file is a whole-profile replacement — an overlay redefining a built-in must re-supply `rpc-url` and `chain-id`, not just `master-address`.
-
-```bash
-gnomcp profile list    # show all active profiles
-gnomcp profile remove mychain
-```
 
 ### Profile fields (profiles.toml)
 
@@ -88,13 +103,15 @@ faucet-service-url   = "..."         # optional; automatic faucet service gno_fa
 
 Writes are signed by one of two identities, chosen per call via the `identity` arg:
 
-- **Agent identity (default on local and testnet).** Local profiles sign with the built-in
-  `test1` key — no setup. Testnet profiles sign with a per-profile key: run
-  `gno_key_generate` once, then fund it (`gno_faucet_fund` or send it ugnot).
-- **Session — the agent acts as the user (requires `master-address`).** Call
-  `gno_session_propose` to get a paste-ready `gnokey maketx session create` command; run it
-  to authorize a chain-bound session with explicit scope (`allow_paths`, `allow_run`,
-  `spend_limit`, `expires_in`). Pass `identity=session` to force this path on any profile.
+- **Agent identity (default).** Testnet profiles sign with a per-profile key: run
+  `gno_key_generate` once, then fund it (`gno_faucet_fund` or send it ugnot). Local
+  (gnodev) profiles sign with the built-in `test1` key — no setup.
+- **Session (WIP — use with caution) — the agent acts as the user (requires
+  `master-address`).** Call `gno_session_propose` to get a paste-ready
+  `gnokey maketx session create` command; run it to authorize a chain-bound session with
+  explicit scope (`allow_paths`, `allow_run`, `spend_limit`, `expires_in`). Pass
+  `identity=session` to force this path on any profile. The session path is young and
+  will be improved — keep scopes tight and spend limits low.
 
 ```text
 # Typical session flow
@@ -135,17 +152,22 @@ See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (21 tools):
 | `gno_key_generate` | agent key | always |
 | `gno_faucet_fund` | agent key | a testnet profile exists |
 
-Gated tools appear mid-session when `gno_profile_add` flips their gate (the
-server sends `tools/list_changed`). Dynamic profiles are in-memory, testnet/dev
-only, and carry no `master-address` — reads and agent-key writes work, sessions
-require a profile persisted in `profiles.toml`.
+Gated tools appear mid-session when `gno_profile_add` flips their gate (the server sends `tools/list_changed`). Dynamic profiles are in-memory, testnet/dev only, and carry no `master-address` — reads and agent-key writes work, sessions require a profile persisted in `profiles.toml`.
+
+## Security posture
+
+- **User keys never leave `gnokey`.** Sessions are authorized by the user running a printed `gnokey` command on their own machine; gnomcp never sees a mnemonic and never asks for one.
+- **Mainnet cannot enter the config.** The chain-id allowlist (`dev`, `testNN`) is enforced at validation time — there is no confirm flag to get past it, because there is nothing to confirm against.
+- **Untrusted-content envelope on every chain byte.** Tool output derived from the chain is wrapped in `<untrusted_content kind="…" source="…">` with embedded-tag neutralization, so the LLM treats it as data, not instructions.
+- **Output budgeting.** Read tools cap inline output and summarize overflows instead of returning chopped halves.
+- **Audit log on every write.** JSON-lines, append-only, mode `0600`; records the tool, profile, result, and signing identity (agent vs session address). Operator-facing — not queryable through MCP.
+- **Structured errors.** Failures carry a machine-routable code (`insufficient_funds`, `authentication_required`, `scope_mismatch`, …) plus a recovery hint, so agents fail forward instead of guessing.
+
+See [docs/security.md](docs/security.md) for the full posture.
 
 ## Skill installation (for AI coding agents)
 
-The repo bundles a `gno` skill at `skills/gno/` covering interrealm semantics, the
-security taxonomy, idiomatic patterns, Render() conventions, the stdlib surface, the
-memory model, and project setup. It installs as a plugin for the major coding-agent
-harnesses.
+The repo bundles a `gno` skill at `skills/gno/` and installs as a plugin for the major coding-agent harnesses:
 
 | Agent | Install |
 | --- | --- |
@@ -155,53 +177,30 @@ harnesses.
 | **Gemini CLI** | `gemini extensions install https://github.com/gnoverse/gno-mcp` |
 | **OpenCode** | Add `"gnomcp@git+https://github.com/gnoverse/gno-mcp.git"` to your `opencode.json` `plugin` array. See `.opencode/INSTALL.md`. |
 
-The skill is independent of the MCP server — installing one does not require the other,
-but they're complementary (skill = knowledge, MCP server = on-chain tools).
+> [!NOTE]
+> The skill's content is currently hand-distilled from the [gnolang/gno](https://github.com/gnolang/gno) monorepo, so it can drift as the language evolves. The goal is a single source of truth — the monorepo as the sole reference — with the skill reduced to a thin wrapper that adds routing, guidance, and best practice on top of monorepo knowledge, never a fork of it.
 
-## Architecture
-
-ADRs in `adr/`:
-
-| ADR | What |
-| --- | ---- |
-| `prxxxx_multichain_via_profiles.md` | Profile-arg model with schema-conditional defaulting |
-| `prxxxx_tool_surface.md` | Tool inventory (read, write, session) |
-| `prxxxx_docker_default_deployment.md` | Docker as canonical deployment (future) |
-| `prxxxx_session_authorization.md` | OAuth-style session signing for writes |
-| `prxxxx_a2a_serve_mode.md` | a2a-realm protocol bridge (not yet built) |
-
-Built against the official MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`) and
-`github.com/gnolang/gno/gno.land/pkg/gnoclient` for chain RPC. tx-indexer GraphQL is
-hand-rolled against the schema at `gnolang/tx-indexer/serve/graph/schema/`.
+Authoring conventions live in [docs/skills.md](docs/skills.md).
 
 ## Development
 
 ```bash
 make test                # Unit tests (no network)
-make test-integration    # Live smoke against testnet11 (requires network)
+make test-integration    # In-process node + live tests (build tag: integration)
 make lint                # go vet + gofmt -l
 make build               # bin/gnomcp
 make dev                 # go run ./cmd/gnomcp (starts MCP server)
 ```
 
-Project layout:
+Built against the official MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`) and `github.com/gnolang/gno/gno.land/pkg/gnoclient` for chain RPC. Manual e2e protocols live in `test/e2e/`.
 
-```
-cmd/gnomcp/              # Entry point — flags, wire-up, MCP SDK, profile subcommand
-internal/
-  audit/                 # JSON-lines audit log
-  chain/                 # vm/q* abstraction (Client / Real / Fake / Resolver)
-  indexer/               # tx-indexer GraphQL (Client / GraphQL / Fake / Resolver)
-  profiles/              # profiles.toml loader + validator + local discovery
-  server/                # MCP server scaffold, tool Registry, profile schema
-  session/               # Session key management and scope enforcement
-  keystore/              # Per-profile agent keys (local test1, testnet generated)
-  tools/read/            # 6 chain/discovery read tool registrations
-  tools/indexer/         # 3 indexer read tool registrations
-  tools/write/           # 9 write/session/agent-key tool registrations
-  tools/admin/           # 1 admin tool registration (gno_profile_add)
-test/e2e/                # Manual e2e protocol (PROTOCOL.md)
-test/integration/        # Live smoke (build tag: integration)
-adr/                     # Architecture Decision Records
-docs/                    # tools.md, security.md, skills.md
-```
+## Roadmap
+
+- More side skills driving the tools through common workflows: onboarding, explicit audits, debugging a failed tx
+- Docker as the canonical deployment
+- a2a serve mode (agent-to-agent realm bridge)
+- External security audit before any "stable" claim
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

@@ -103,7 +103,7 @@ func main() {
 	instructions := "gnomcp exposes Gno chain operations over MCP. The indexer and faucet tools register only when a profile provides them (tx-indexer-url / a testnet); the rest are always available. Typical flows:\n" +
 		"- READ: gno_inspect (learn a realm's API) then gno_render / gno_eval / gno_read (read state or source).\n" +
 		"- WRITE on testnet: gno_key_generate (once) -> gno_faucet_fund (fund the agent key) -> gno_call / gno_run / gno_addpkg. An unfunded write returns insufficient_funds pointing at gno_faucet_fund.\n" +
-		"- WRITE as the user (any chain with a master-address): gno_session_propose -> the user runs the printed gnokey command to authorize -> retry the write with identity=session. gno_auth_status / gno_session_revoke inspect and revoke sessions.\n" +
+		"- WRITE as the user (any chain with a master-address): gno_session_propose -> the user runs the printed gnokey command to authorize -> retry the write with identity=session. gno_auth_status / gno_session_revoke inspect and revoke sessions. The session path is WIP — prefer tight allow_paths, a low spend_limit, and a short expires_in.\n" +
 		"- New chain (this session): gno_profile_add with gnoweb_url discovers, verifies, and adds in one call (in-memory, gone on restart; dev/testnets only) — or gno_connect first to preview without adding. " +
 		"To persist: run the returned persist_command and restart gnomcp. Dynamic profiles support reads and agent-key writes; sessions need a persisted profile with master-address.\n" +
 		"Always report which identity signed a write (the agent key vs a session) so it is never ambiguous."

@@ -17,7 +17,7 @@ Writes sign with one of two identities — never with the user's key.
 
 Both tiers are confined to dev/test by the chain-id allowlist (`^(dev|test-?\d+)$`); no path creates an agent key for mainnet.
 
-**Session — opt-in (`identity=session`).** On profiles with a `master-address` the agent acts *as the user* via a chain-bound session:
+**Session — opt-in (`identity=session`), WIP.** The session path is functional end-to-end but young and will be reworked — use with caution: keep `allow_paths` tight, `spend_limit` low, and `expires_in` short. On profiles with a `master-address` the agent acts *as the user* via a chain-bound session:
 
 1. **Profile has a `master-address` (g1...).** Without it the session write path is unavailable for that profile.
 2. **User-authorized session.** `gno_session_propose` generates an ephemeral ed25519 keypair and emits a paste-ready `gnokey maketx session create` command. The user runs it; their `gnokey` signs the authorization. gnomcp never sees the user's key or mnemonic.
