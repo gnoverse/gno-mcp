@@ -1,40 +1,47 @@
 # Tools
 
-15 tools across three categories. All tools accept a `profile` parameter that selects which profile (chain) to target; when only one profile is active it is omitted from the schema.
+18 tools across read, discovery, indexer, and write categories. All tools except `gno_connect` accept a `profile` parameter that selects which profile (chain) to target; when only one profile is active it is omitted from the schema.
+
+Chain-returned bytes are untrusted: the inline-text read/indexer tools (including `gno_render`) wrap their output in an `<untrusted_content>` envelope, and `gno_read` delivers content as an MCP resource (see `docs/security.md` §4).
 
 ## Read-only (chain)
 
-These four tools require no config — the built-in `local` and `testnet` profiles are available by default.
+These tools require no config — the built-in `local` and `testnet` profiles are available by default.
 
 ### `gno_render`
 
-- **Args:** `path` (required), `subpath?`, `profile?`
-- **Returns:** rendered markdown from the realm's `Render()` function.
+- **Args:** `realm` (required), `path?` (subpath), `profile?`
+- **Returns:** rendered markdown from the realm's `Render()` function, wrapped in an `<untrusted_content>` envelope (realm markdown is the highest-injection-risk content in the system).
 - Output is truncated at ~4 KB. When truncated, a hint points at the canonical gnoweb URL or suggests fetching a narrower subpath.
 
 ### `gno_read`
 
 - **Args:** `path` (required), `file?`, `profile?`
-- **Returns:** source listing (all files) or a single file's source, wrapped in an `<untrusted_content>` envelope.
+- **Returns:** the whole package as a txtar archive (all files) or a single file's source, as an MCP resource (EmbeddedResource trust posture; not textually wrapped).
 - Output is truncated at ~4 KB with a hint to narrow the request.
 
 ### `gno_eval`
 
 - **Args:** `path` (required), `expr` (required), `profile?`
-- **Returns:** the typed result of evaluating a Gno expression within a realm's context.
+- **Returns:** the typed result of evaluating a Gno expression within a package, wrapped in an `<untrusted_content>` envelope.
 
 ### `gno_inspect`
 
 - **Args:** `path` (required), `profile?`
-- **Returns:** godoc summary of a realm: package description, exported types, functions, and variables.
+- **Returns:** godoc summary of a package (description, exported types, functions, variables), wrapped in an `<untrusted_content>` envelope.
+
+### `gno_packages`
+
+- **Args:** `path` (required — a prefix like `gno.land/r/demo/`, or `@namespace`), `limit?`, `profile?`
+- **Returns:** newline-separated package paths deployed under the path (`vm/qpaths`, chain-native, no indexer required), wrapped in an `<untrusted_content>` envelope.
 
 ## Read-only (discovery)
 
 ### `gno_connect`
 
-- **Args:** `url` (required), `name?`, `profile?`
+- **Args:** `gnoweb_url` (required), `name?` (suggested profile name, default derived from chain-id)
 - **Returns:** the exact `gnomcp profile add` command the user must run to register this chain.
-- Reads gnoconnect meta-tags from the gnoweb page at `url` and derives the `--rpc` and `--chain-id` arguments. **Never mutates config.** Read-only; the user must run the printed command.
+- Reads gnoconnect meta-tags from the gnoweb page at `gnoweb_url` and derives the `--rpc` and `--chain-id` arguments. **Never mutates config.** Read-only; the user must run the printed command.
 
 ## Read-only (indexer)
 
@@ -43,17 +50,17 @@ These three tools are only registered when at least one profile has a `tx-indexe
 ### `gno_list`
 
 - **Args:** `namespace?`, `tag?`, `category?`, `profile?`
-- **Returns:** filtered list of realms from the tx-indexer catalog.
+- **Returns:** filtered list of realms from the tx-indexer catalog, wrapped in an `<untrusted_content>` envelope (entries echo realm-supplied paths and descriptions).
 
 ### `gno_history`
 
-- **Args:** `path` (required), `profile?`
-- **Returns:** full deploy and transaction log for a realm.
+- **Args:** `realm` (required), `profile?`
+- **Returns:** full deploy and transaction log for a realm, wrapped in an `<untrusted_content>` envelope.
 
 ### `gno_activity`
 
-- **Args:** `path` (required), `since?`, `until?`, `profile?`
-- **Returns:** MsgCall and MsgRun events for a realm, with optional RFC3339 time bounds.
+- **Args:** `realm` (required), `since?`, `until?`, `profile?`
+- **Returns:** MsgCall and MsgRun events for a realm, with optional RFC3339 time bounds, wrapped in an `<untrusted_content>` envelope.
 
 ## Write tools — agent identity or session
 
@@ -64,7 +71,7 @@ gnomcp signs writes with one of two identities, chosen per call via the `identit
 
 Every write result names the signer (`Signed by: agent test1 (g1…)` or `Signed by: session g1… on behalf of master g1…`) and the structured output carries `identity` + `signer_address`.
 
-Registration: `gno_call`/`gno_run` appear when a profile is writable — local/testnet (agent key) **or** has a `master-address` (session). `gno_addpkg`, `gno_key_address`, and `gno_key_generate` appear when any local or testnet profile exists.
+Registration: `gno_call`/`gno_run` appear when a profile is writable — local/testnet (agent key) **or** has a `master-address` (session). `gno_addpkg`, `gno_key_address`, `gno_key_generate`, and `gno_faucet_fund` appear when any local or testnet profile exists.
 
 ### `gno_session_propose`
 
@@ -109,3 +116,8 @@ Registration: `gno_call`/`gno_run` appear when a profile is writable — local/t
 
 - **Args:** `profile` (required — testnet profiles only)
 - **Returns:** the generated bech32 g1… address for the agent's testnet account. Persists the key. Refuses to overwrite an existing key.
+
+### `gno_faucet_fund`
+
+- **Args:** `profile?` (testnet only)
+- **Returns:** the outcome of requesting a testnet grant for the agent's generated key — an automatic service grant (tx hash), a faucet link, or manual instructions, depending on the profile's faucet config. Use after `gno_key_generate` when the agent account is unfunded.

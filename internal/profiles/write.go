@@ -3,10 +3,10 @@ package profiles
 import (
 	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/gnoverse/gno-mcp/internal/fsutil"
 )
 
 // WriteFile validates the profiles and writes them to path as TOML, atomically,
@@ -27,31 +27,8 @@ func WriteFile(path string, profiles map[string]Profile) error {
 		return fmt.Errorf("encode toml: %w", err)
 	}
 
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("mkdir config dir: %w", err)
-	}
-	// Unique temp file in the same dir → atomic rename, no fixed-name race and
-	// no leftover on failure.
-	tmp, err := os.CreateTemp(dir, ".profiles-*.toml")
-	if err != nil {
-		return fmt.Errorf("create temp: %w", err)
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op after a successful rename
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return fmt.Errorf("chmod temp: %w", err)
-	}
-	if _, err := tmp.Write(buf.Bytes()); err != nil {
-		tmp.Close()
-		return fmt.Errorf("write temp: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("rename temp: %w", err)
+	if err := fsutil.WriteFileAtomic(path, buf.Bytes(), 0o600); err != nil {
+		return fmt.Errorf("write profiles: %w", err)
 	}
 	return nil
 }

@@ -21,7 +21,8 @@ func TestEval_returnsText(t *testing.T) {
 		"profile": "testnet5",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "(42 int)", res.Text)
+	assert.Contains(t, res.Text, "(42 int)", "eval result must be present")
+	assert.Contains(t, res.Text, `<untrusted_content kind="eval"`, "eval output must be wrapped as untrusted")
 }
 
 func TestEval_acceptsPurePackage(t *testing.T) {
@@ -36,7 +37,7 @@ func TestEval_acceptsPurePackage(t *testing.T) {
 		"profile": "testnet5",
 	})
 	require.NoError(t, err, "eval must accept a pure /p/ package")
-	assert.Equal(t, `("7" string)`, res.Text)
+	assert.Contains(t, res.Text, `("7" string)`)
 }
 
 func TestEval_requiresExpr(t *testing.T) {

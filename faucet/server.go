@@ -3,6 +3,7 @@ package faucet
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 )
@@ -41,11 +42,17 @@ func (f *Faucet) handleFund(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(fundResponse{TxHash: tx, AmountUgnot: f.grantUgnot})
+	case errors.Is(err, ErrBadAddress):
+		http.Error(w, "bad request: invalid recipient address", http.StatusBadRequest)
 	case errors.Is(err, ErrChainRefused), errors.Is(err, ErrChainMismatch):
 		http.Error(w, err.Error(), http.StatusForbidden)
 	case errors.Is(err, ErrCooldown), errors.Is(err, ErrRateLimited), errors.Is(err, ErrDailyCap):
 		http.Error(w, err.Error(), http.StatusTooManyRequests)
 	default:
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		// Internal dispense failures (CheckTx logs, RPC transport details) aid
+		// probing of a service that holds a funded key: log them, return a
+		// generic error to the anonymous caller.
+		log.Printf("faucet: dispense failed for %s: %v", req.Address, err)
+		http.Error(w, "faucet: dispense failed", http.StatusBadGateway)
 	}
 }

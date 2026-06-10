@@ -9,7 +9,7 @@
     {
       "name": "gnomcp",
       "description": "Gno smart-contract skills + MCP server: realm semantics, security audit, Render() authoring, on-chain payments, project setup",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "source": "./",
       "author": {
         "name": "gfanton",

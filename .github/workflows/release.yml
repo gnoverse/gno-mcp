@@ -2,16 +2,55 @@ name: Release
 on:
   push:
     tags: ['v*']
+permissions: {} # each job declares exactly what it needs
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # create the GitHub release and upload artifacts
+      id-token: write # sign the build provenance attestation (keyless OIDC)
+      attestations: write # store the attestation
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with: { fetch-depth: 0 }
-      - uses: actions/setup-go@v5
-        with: { go-version: '1.26.1' }
-      - uses: goreleaser/goreleaser-action@v6
+      - name: Check manifest versions match the tag
+        # The binary takes its version from the tag via ldflags; the plugin
+        # manifests are hand-maintained. Every "version" field anywhere in each
+        # manifest must equal the tag — a missing file or absent version field
+        # is drift too, so the gate fails closed on those.
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          status=0
+          for f in package.json gemini-extension.json \
+                   .claude-plugin/plugin.json .claude-plugin/marketplace.json \
+                   .codex-plugin/plugin.json .cursor-plugin/plugin.json; do
+            if ! versions=$(jq -r '.. | objects | select(has("version")) | .version' "$f"); then
+              echo "::error file=$f::$f is missing or not valid JSON"
+              status=1
+              continue
+            fi
+            if [ -z "$versions" ]; then
+              echo "::error file=$f::$f has no version field"
+              status=1
+              continue
+            fi
+            while IFS= read -r v; do
+              if [ "$v" != "$tag_version" ]; then
+                echo "::error file=$f::$f has version $v, tag is $tag_version"
+                status=1
+              fi
+            done <<< "$versions"
+          done
+          exit "$status"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with: { go-version: '1.26.4' }
+      - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
+          version: '~> v2'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-checksums: dist/checksums.txt

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"sync"
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	"github.com/gnolang/gno/gno.land/pkg/gnoland/ugnot"
@@ -23,6 +24,7 @@ type Dispenser interface {
 }
 
 type gnoclientDispenser struct {
+	mu        sync.Mutex // serialises sends so concurrent grants don't race the account sequence
 	cli       *gnoclient.Client
 	from      crypto.Address
 	gasFee    string // e.g. "10000000ugnot"
@@ -36,11 +38,16 @@ func NewGnoclientDispenser(cli *gnoclient.Client, from crypto.Address, gasFee st
 }
 
 // Send ignores ctx: gnoclient has no context support (same limitation as chain.Real).
+// Sends are serialised: gnoclient queries the account sequence at sign time, so
+// two concurrent sends would sign with the same sequence and one would fail.
 func (d *gnoclientDispenser) Send(_ context.Context, to string, amountUgnot int64) (string, error) {
 	toAddr, err := crypto.AddressFromBech32(to)
 	if err != nil {
 		return "", fmt.Errorf("faucet: bad recipient %q: %w", to, err)
 	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	msg := bank.MsgSend{
 		FromAddress: d.from,
 		ToAddress:   toAddr,

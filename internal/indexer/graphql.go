@@ -5,9 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
+
+// maxRespBytes bounds the response read from the (profile-configured, possibly
+// plain-http) indexer so a malicious or broken endpoint can't stream unbounded
+// data into memory. The output budget truncates what reaches the LLM anyway.
+const maxRespBytes = 4 << 20 // 4 MiB
 
 // GraphQL is a Client backed by a tx-indexer GraphQL endpoint.
 type GraphQL struct {
@@ -98,7 +104,7 @@ func (c *GraphQL) do(ctx context.Context, query string, vars map[string]any, out
 		return fmt.Errorf("indexer returned %d", resp.StatusCode)
 	}
 	var env gqlEnvelope
-	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxRespBytes)).Decode(&env); err != nil {
 		return fmt.Errorf("decode envelope: %w", err)
 	}
 	if len(env.Errors) > 0 {

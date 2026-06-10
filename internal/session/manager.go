@@ -24,6 +24,19 @@ const (
 	StateRevoked = "revoked"
 )
 
+// applyStatus copies the chain-reported scope fields into the meta and marks it
+// StateActive. Callers set the in-memory sessionState separately. Keeping this in
+// one place ensures every lifecycle path syncs the same fields — a missed field
+// would silently desync the scope that enforcement depends on.
+func (meta *SessionMeta) applyStatus(st chain.SessionStatus) {
+	meta.AllowPaths = st.AllowPaths
+	meta.AllowRun = st.AllowRun
+	meta.SpendLimit = st.SpendLimit
+	meta.SpendRemaining = st.SpendRemaining
+	meta.ExpiresAt = st.ExpiresAt
+	meta.State = StateActive
+}
+
 // ---- sessionState
 
 // sessionState pairs in-memory lifecycle state with the persisted metadata.
@@ -121,12 +134,7 @@ func (m *Manager) Hydrate(ctx context.Context, resolver chain.Resolver) error {
 				continue
 			}
 			// Sync chain-side scope fields into meta before loading.
-			meta.AllowPaths = result.Status.AllowPaths
-			meta.AllowRun = result.Status.AllowRun
-			meta.SpendLimit = result.Status.SpendLimit
-			meta.SpendRemaining = result.Status.SpendRemaining
-			meta.ExpiresAt = result.Status.ExpiresAt
-			meta.State = StateActive
+			meta.applyStatus(result.Status)
 			m.insertState(profile, meta, StateActive)
 		}
 	}
@@ -223,12 +231,7 @@ func (m *Manager) pickSession(ctx context.Context, resolver chain.Resolver, prof
 			m.mu.Unlock()
 			continue
 		}
-		ss.meta.AllowPaths = res.Status.AllowPaths
-		ss.meta.AllowRun = res.Status.AllowRun
-		ss.meta.SpendLimit = res.Status.SpendLimit
-		ss.meta.SpendRemaining = res.Status.SpendRemaining
-		ss.meta.ExpiresAt = res.Status.ExpiresAt
-		ss.meta.State = StateActive
+		ss.meta.applyStatus(res.Status)
 		ss.state = StateActive
 		metaCopy := *ss.meta
 		metaCopy.AllowPaths = slices.Clone(ss.meta.AllowPaths)
@@ -373,12 +376,7 @@ func (m *Manager) MarkActive(profile, sessionAddr string, status chain.SessionSt
 	if ss == nil {
 		return fmt.Errorf("session/manager: MarkActive: session %q not found for profile %q", sessionAddr, profile)
 	}
-	ss.meta.AllowPaths = status.AllowPaths
-	ss.meta.AllowRun = status.AllowRun
-	ss.meta.SpendLimit = status.SpendLimit
-	ss.meta.SpendRemaining = status.SpendRemaining
-	ss.meta.ExpiresAt = status.ExpiresAt
-	ss.meta.State = StateActive
+	ss.meta.applyStatus(status)
 	ss.state = StateActive
 
 	if err := m.store.Write(profile, ss.meta); err != nil {

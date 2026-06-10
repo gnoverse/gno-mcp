@@ -46,17 +46,9 @@ func keyGenHandler(
 	s *server.Server,
 	ks *keystore.Keystore,
 ) (server.Result, error) {
-	profileName, err := stringArg(args, "profile")
+	profileName, p, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
-	}
-	if profileName == "" {
-		return server.Result{}, fmt.Errorf("profile: required — pick one of the configured profiles")
-	}
-
-	p, ok := s.Config().Profiles[profileName]
-	if !ok {
-		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
 	}
 
 	addr, err := ks.GenerateForProfile(profileName, p)
@@ -81,12 +73,9 @@ func keyGenHandler(
 				Extra: map[string]any{"profile": profileName},
 			}
 		}
-		if errors.Is(err, keystore.ErrNoKeyDir) {
-			return server.Result{}, &server.ToolError{
-				Code:    "key_storage_unconfigured",
-				Message: "the agent keystore has no storage directory configured; set GNOMCP_AGENT_KEYS_PATH (or use the default) so generated keys can be persisted",
-				Extra:   map[string]any{"profile": profileName},
-			}
+		// ErrNoAgentKey cannot flow from GenerateForProfile, so the hint is unused.
+		if terr := agentKeyToolError(err, profileName, ""); terr != nil {
+			return server.Result{}, terr
 		}
 		return server.Result{}, fmt.Errorf("gno_key_generate: %w", err)
 	}

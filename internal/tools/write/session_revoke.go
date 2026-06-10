@@ -42,25 +42,17 @@ func sessionRevokeHandler(
 	s *server.Server,
 	sessionMgr *session.Manager,
 ) (server.Result, error) {
-	profileName, err := stringArg(args, "profile")
+	profileName, profile, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
 	}
-	if profileName == "" {
-		return server.Result{}, fmt.Errorf("profile: required — pick one of the configured profiles")
-	}
 
-	sessionAddr, err := stringArg(args, "session_address")
+	sessionAddr, err := server.StringArg(args, "session_address")
 	if err != nil {
 		return server.Result{}, err
 	}
 	if sessionAddr == "" {
 		return server.Result{}, fmt.Errorf("session_address: required")
-	}
-
-	profile, ok := s.Config().Profiles[profileName]
-	if !ok {
-		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
 	}
 
 	meta := sessionMgr.Get(profileName, sessionAddr)

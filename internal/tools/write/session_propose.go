@@ -45,35 +45,27 @@ func sessionProposeHandler(
 	s *server.Server,
 	sessionMgr *session.Manager,
 ) (server.Result, error) {
-	profileName, err := stringArg(args, "profile")
-	if err != nil {
-		return server.Result{}, err
-	}
-	if profileName == "" {
-		return server.Result{}, fmt.Errorf("profile: required — pick one of the configured profiles")
-	}
-
-	allowPaths, err := stringSliceArg(args, "allow_paths")
-	if err != nil {
-		return server.Result{}, err
-	}
-	allowRun, err := boolArg(args, "allow_run")
+	profileName, profile, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
 	}
 
-	spendLimit, err := stringArg(args, "spend_limit")
+	allowPaths, err := server.StringSliceArg(args, "allow_paths")
 	if err != nil {
 		return server.Result{}, err
 	}
-	expiresIn, err := stringArg(args, "expires_in")
+	allowRun, err := server.BoolArg(args, "allow_run")
 	if err != nil {
 		return server.Result{}, err
 	}
 
-	profile, ok := s.Config().Profiles[profileName]
-	if !ok {
-		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
+	spendLimit, err := server.StringArg(args, "spend_limit")
+	if err != nil {
+		return server.Result{}, err
+	}
+	expiresIn, err := server.StringArg(args, "expires_in")
+	if err != nil {
+		return server.Result{}, err
 	}
 
 	if profile.MasterAddress == "" {

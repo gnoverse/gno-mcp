@@ -1,4 +1,7 @@
-// Package chain abstracts read-only access to a gno chain via the Client interface.
+// Package chain abstracts access to a gno chain via the Client interface: reads
+// (render, eval, doc, file, paths, balance, session query) and writes — Call,
+// Run, and AddPackage signed by the agent directly, plus CallAsUser/RunAsUser
+// signed through a user-authorized session.
 package chain
 
 import (

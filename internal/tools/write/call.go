@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
+	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	"github.com/gnoverse/gno-mcp/internal/audit"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/keystore"
-	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
+	"github.com/gnoverse/gno-mcp/internal/untrusted"
 )
 
 // RegisterCall registers the gno_call tool.
@@ -32,6 +33,7 @@ func RegisterCall(s *server.Server, ks *keystore.Keystore, sessionMgr *session.M
 		InputSchema: callInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
+		SelfAudited: true,
 		Annotations: server.Annotations{
 			ReadOnly:    false,
 			Destructive: true,
@@ -55,17 +57,35 @@ func callHandler(
 ) (server.Result, error) {
 	start := time.Now()
 
+	// One audit record per invocation, written on every return path — including the
+	// early validation and pre-check denials — because SelfAudited makes the MCP
+	// adapter skip its generic line. auditResult defaults to a denial; the dispatch
+	// paths overwrite it.
+	var (
+		profileName string
+		argsSummary string
+		sessionAddr string
+		auditResult = "tool_err"
+	)
+	defer func() {
+		alog.Record(audit.Entry{
+			Tool:           "gno_call",
+			Profile:        profileName,
+			ArgsSummary:    argsSummary,
+			Result:         auditResult,
+			Duration:       time.Since(start).Milliseconds(),
+			SessionAddress: sessionAddr,
+		})
+	}()
+
 	// ---- Validate args
 
-	profileName, err := stringArg(args, "profile")
+	profileName, profile, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
 	}
-	if profileName == "" {
-		return server.Result{}, fmt.Errorf("profile: required — pick one of the configured profiles")
-	}
 
-	realm, err := stringArg(args, "realm")
+	realm, err := server.StringArg(args, "realm")
 	if err != nil {
 		return server.Result{}, err
 	}
@@ -73,7 +93,7 @@ func callHandler(
 		return server.Result{}, fmt.Errorf("realm: required")
 	}
 
-	fn, err := stringArg(args, "func")
+	fn, err := server.StringArg(args, "func")
 	if err != nil {
 		return server.Result{}, err
 	}
@@ -81,7 +101,7 @@ func callHandler(
 		return server.Result{}, fmt.Errorf("func: required")
 	}
 
-	fnArgs, err := stringSliceArg(args, "args")
+	fnArgs, err := server.StringSliceArg(args, "args")
 	if err != nil {
 		return server.Result{}, err
 	}
@@ -89,16 +109,9 @@ func callHandler(
 		fnArgs = []string{}
 	}
 
-	simulate, err := boolArg(args, "simulate")
+	simulate, err := server.BoolArg(args, "simulate")
 	if err != nil {
 		return server.Result{}, err
-	}
-
-	// ---- Resolve profile + chain client
-
-	profile, ok := s.Config().Profiles[profileName]
-	if !ok {
-		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
 	}
 
 	// ---- Resolve chain client
@@ -108,104 +121,30 @@ func callHandler(
 		return server.Result{}, fmt.Errorf("profile %q: no chain client available", profileName)
 	}
 
-	// ---- Resolve identity (default by tier: local/testnet→agent, otherwise→session)
+	// ---- Build args summary for audit (arg values are NOT logged — they routinely
+	// carry addresses and amounts; only the count is recorded)
 
-	identity, _ := stringArg(args, "identity")
-	if identity == "" {
-		if profile.ChainType == profiles.ChainTypeLocal || profile.ChainType == profiles.ChainTypeTestnet {
-			identity = "agent"
-		} else {
-			identity = "session"
-		}
-	}
-
-	// ---- Build args summary for audit
-
-	argsSummary := fmt.Sprintf("realm=%s func=%s args=%v", realm, fn, fnArgs)
+	argsSummary = fmt.Sprintf("realm=%s func=%s nargs=%d", realm, fn, len(fnArgs))
 
 	// ---- Dispatch by identity
 
 	var cr chain.CallResult
-	var signerAddr string
-	var master string
-
-	switch identity {
-	case "agent":
-		// ---- Agent branch: sign with the agent's own key (local test1 or testnet generated key)
-
-		agentSigner, ksErr := ks.SignerForProfile(profileName, profile)
-		if ksErr != nil {
-			if errors.Is(ksErr, keystore.ErrNoAgentKey) {
-				return server.Result{}, &server.ToolError{
-					Code: "agent_identity_unavailable",
-					Message: fmt.Sprintf(
-						"no agent key for profile %q — run gno_key_generate (or pass identity=session to act as the user)",
-						profileName,
-					),
-					Extra: map[string]any{"profile": profileName},
-				}
-			}
-			return server.Result{}, fmt.Errorf("gno_call: signer: %w", ksErr)
-		}
-
-		info, infoErr := agentSigner.Info()
-		if infoErr != nil {
-			return server.Result{}, fmt.Errorf("gno_call: signer info: %w", infoErr)
-		}
-		signerAddr = info.GetAddress().String()
-
-		if profile.ChainType == profiles.ChainTypeTestnet && !simulate {
-			bal, balErr := c.Balance(ctx, signerAddr)
-			if balErr != nil {
-				return server.Result{}, fmt.Errorf("gno_call: balance check: %w", balErr)
-			}
-			if bal == 0 {
-				return server.Result{}, &server.ToolError{
-					Code:    "insufficient_funds",
-					Message: fmt.Sprintf("agent testnet account %s is unfunded — run gno_faucet_fund (or send it ugnot), then retry", signerAddr),
-					Extra:   map[string]any{"profile": profileName, "address": signerAddr},
-				}
-			}
-		}
-
-		cr, err = c.Call(ctx, agentSigner, realm, fn, fnArgs, simulate)
-		if err != nil {
-			result := "broadcast_err"
-			errPrefix := "gno_call broadcast"
-			if simulate {
-				result = "sim_err"
-				errPrefix = "gno_call simulate"
-			}
-			_ = alog.Append(audit.Entry{
-				Tool:        "gno_call",
-				Profile:     profileName,
-				ArgsSummary: argsSummary,
-				Result:      result,
-				Duration:    time.Since(start).Milliseconds(),
-			})
-			return server.Result{}, fmt.Errorf("%s: %w", errPrefix, err)
-		}
-
-		// Audit success (no UpdateSpend — agent pays from its own balance)
-		auditResult := "ok"
-		if simulate {
-			auditResult = "sim"
-		}
-		_ = alog.Append(audit.Entry{
-			Tool:        "gno_call",
-			Profile:     profileName,
-			ArgsSummary: argsSummary,
-			Result:      auditResult,
-			Duration:    time.Since(start).Milliseconds(),
-		})
-
-	case "session":
-		// ---- Session branch: existing flow preserved byte-for-byte
-
-		signer, pickErr := sessionMgr.PickSessionForProfile(ctx, resolver, profileName, realm)
-		if pickErr != nil {
+	identityArg, _ := server.StringArg(args, "identity")
+	identity, signerAddr, master, err := dispatchWriteTx(ctx, identityArg, writeTxDispatch{
+		tool:        "gno_call",
+		noKeyHint:   "run gno_key_generate (or pass identity=session to act as the user)",
+		profileName: profileName,
+		profile:     profile,
+		simulate:    simulate,
+		c:           c,
+		ks:          ks,
+		sessionMgr:  sessionMgr,
+		pickSession: func(ctx context.Context) (chain.Signer, error) {
+			return sessionMgr.PickSessionForProfile(ctx, resolver, profileName, realm)
+		},
+		mapPickErr: func(pickErr error) error {
 			if errors.Is(pickErr, session.ErrNoActiveSession) {
-				return server.Result{}, &server.ToolError{
+				return &server.ToolError{
 					Code: "authentication_required",
 					Message: fmt.Sprintf(
 						"no active session for profile %q — use gno_session_propose to create one",
@@ -215,7 +154,7 @@ func callHandler(
 				}
 			}
 			if scopeErr, ok := errors.AsType[*session.ErrScopeMismatch](pickErr); ok {
-				return server.Result{}, &server.ToolError{
+				return &server.ToolError{
 					Code: "scope_mismatch",
 					Message: fmt.Sprintf(
 						"realm %q is not covered by any active session for profile %q — "+
@@ -229,80 +168,33 @@ func callHandler(
 					},
 				}
 			}
-			return server.Result{}, fmt.Errorf("gno_call: pick session: %w", pickErr)
-		}
-
-		sessionAddr := signer.Address()
-		signerAddr = sessionAddr
-		master = profile.MasterAddress
-
-		cr, err = c.CallAsUser(ctx, signer, profile.MasterAddress, realm, fn, fnArgs, simulate)
-		if err != nil {
-			if simulate && errors.Is(err, chain.ErrSimulateUnsupported) {
-				return server.Result{}, &server.ToolError{
-					Code:    "simulate_unsupported",
-					Message: "this chain client does not support simulate; retry without simulate=true",
-					Extra:   map[string]any{"profile": profileName},
-				}
-			}
-			result := "broadcast_err"
-			errPrefix := "gno_call broadcast"
-			if simulate {
-				result = "sim_err"
-				errPrefix = "gno_call simulate"
-			}
-			_ = alog.Append(audit.Entry{
-				Tool:           "gno_call",
-				Profile:        profileName,
-				ArgsSummary:    argsSummary,
-				Result:         result,
-				Duration:       time.Since(start).Milliseconds(),
-				SessionAddress: sessionAddr,
-			})
-			return server.Result{}, fmt.Errorf("%s: %w", errPrefix, err)
-		}
-
-		// Update spend + audit (simulate skips spend update).
-		// The chain bills the session the full GasFee per tx, not GasUsed, so deduct
-		// that to keep local SpendRemaining in sync with the chain (see chain.DefaultGasFeeUgnot).
-		if !simulate {
-			_ = sessionMgr.UpdateSpend(profileName, sessionAddr, chain.DefaultGasFeeUgnot)
-		}
-
-		auditResult := "ok"
-		if simulate {
-			auditResult = "sim"
-		}
-		_ = alog.Append(audit.Entry{
-			Tool:           "gno_call",
-			Profile:        profileName,
-			ArgsSummary:    argsSummary,
-			Result:         auditResult,
-			Duration:       time.Since(start).Milliseconds(),
-			SessionAddress: sessionAddr,
-		})
-
-	default:
-		return server.Result{}, fmt.Errorf("identity: must be \"agent\" or \"session\", got %q", identity)
+			return nil
+		},
+		agentOp: func(ctx context.Context, signer gnoclient.Signer) error {
+			var opErr error
+			cr, opErr = c.Call(ctx, signer, realm, fn, fnArgs, simulate)
+			return opErr
+		},
+		sessionOp: func(ctx context.Context, signer chain.Signer) error {
+			var opErr error
+			cr, opErr = c.CallAsUser(ctx, signer, profile.MasterAddress, realm, fn, fnArgs, simulate)
+			return opErr
+		},
+		auditResult: &auditResult,
+		sessionAddr: &sessionAddr,
+	})
+	if err != nil {
+		return server.Result{}, err
 	}
 
-	// ---- Build result with identity metadata
-
-	out := buildCallResult(cr)
-	out.Text = signedByLine(identity, signerAddr, master, profile.ChainType) + "\n\n" + out.Text
-	if out.StructuredContent == nil {
-		out.StructuredContent = map[string]any{}
-	}
-	out.StructuredContent["identity"] = identity
-	out.StructuredContent["signer_address"] = signerAddr
-	if identity == "session" {
-		out.StructuredContent["master_address"] = master
-	}
-	return out, nil
+	return decorateWriteResult(buildCallResult(cr, realm), identity, signerAddr, master, profile.ChainType), nil
 }
 
-// buildCallResult constructs the server.Result from a chain.CallResult.
-func buildCallResult(cr chain.CallResult) server.Result {
+// buildCallResult constructs the server.Result from a chain.CallResult. The
+// realm function's return value is realm-authored, so the text rendering wraps
+// it in the untrusted envelope; the structured "result" field stays raw (the
+// machine-readable channel, documented in docs/security.md §4).
+func buildCallResult(cr chain.CallResult, realm string) server.Result {
 	var b strings.Builder
 	if cr.Simulated {
 		fmt.Fprintf(&b, "Simulated call result\n\n")
@@ -313,7 +205,7 @@ func buildCallResult(cr chain.CallResult) server.Result {
 	}
 	fmt.Fprintf(&b, "GasUsed: %d\n", cr.GasUsed)
 	if cr.Result != "" {
-		fmt.Fprintf(&b, "Result:  %s\n", cr.Result)
+		fmt.Fprintf(&b, "Result:\n%s\n", untrusted.Wrap(cr.Result, "call_result", realm))
 	}
 
 	return server.Result{

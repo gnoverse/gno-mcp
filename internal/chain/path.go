@@ -3,9 +3,9 @@ package chain
 import "github.com/gnolang/gno/gnovm/pkg/gnolang"
 
 // IsRealmPath reports whether pkgPath is a realm (/r/) user package — the kind
-// gno_render and gno_eval operate on (Render and stateful expression evaluation
-// are realm concepts). Returns false for pure packages, stdlib, ephemeral, run,
-// and _test paths.
+// gno_render operates on (Render is a realm concept). gno_eval and gno_read
+// accept pure packages too and use IsReadablePackagePath. Returns false for
+// pure packages, stdlib, ephemeral, run, and _test paths.
 func IsRealmPath(pkgPath string) bool {
 	return gnolang.IsRealmPath(pkgPath)
 }

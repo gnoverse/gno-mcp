@@ -156,6 +156,18 @@ func TestStore_passphraseRoundTrip(t *testing.T) {
 	assert.False(t, got.Encrypted, "Read returned meta with Encrypted=true; should be cleared after decryption")
 }
 
+func TestStore_encryptedReadWithoutPassphrase_errors(t *testing.T) {
+	dir := t.TempDir()
+	m := makeTestMeta("g1enc")
+	require.NoError(t, NewStore(dir, "pass").Write("p", m))
+
+	// Passphrase later unset: Read must fail rather than load the session with a
+	// garbage privkey (which a subsequent Write would persist as plaintext,
+	// bricking the key).
+	_, err := NewStore(dir, "").Read("p", "g1enc")
+	require.Error(t, err, "reading an encrypted session with no passphrase must error")
+}
+
 func TestStore_listSkipsCorruptFile(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(dir, "")

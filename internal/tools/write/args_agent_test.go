@@ -16,10 +16,10 @@ import (
 func newMixedTestServer(t *testing.T) *server.Server {
 	t.Helper()
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"local": {ChainType: profiles.ChainTypeLocal, RPCURL: "x", ChainID: "dev"},
+		"local": {ChainType: profiles.ChainTypeLocal, RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
 		"testnet5": {
 			ChainType:     profiles.ChainTypeTestnet,
-			RPCURL:        "x",
+			RPCURL:        "http://127.0.0.1:26657",
 			ChainID:       "test5",
 			MasterAddress: "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 		},
@@ -53,7 +53,7 @@ func Test_addAgentProfileArg_filtersToLocal(t *testing.T) {
 }
 
 func Test_profileWritableByAgent_testnet(t *testing.T) {
-	p := profiles.Profile{ChainType: profiles.ChainTypeTestnet, RPCURL: "x", ChainID: "test5"}
+	p := profiles.Profile{ChainType: profiles.ChainTypeTestnet, RPCURL: "http://127.0.0.1:26657", ChainID: "test5"}
 	assert.True(t, profileWritableByAgent(p), "profileWritableByAgent should be true for testnet profiles")
 }
 

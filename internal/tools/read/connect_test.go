@@ -29,6 +29,34 @@ func TestConnect_EmitsAddCommand(t *testing.T) {
 	assert.Contains(t, res.Text, "test11", "expected chain-id in output")
 }
 
+func TestConnect_RejectsInjectionInName(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.test11.testnets.gno.land" />` +
+			`<meta name="gnoconnect:chainid" content="test11" />`))
+	}))
+	defer srv.Close()
+
+	s := server.NewServer(&profiles.Config{Profiles: profiles.BuiltinProfiles()}, "")
+	RegisterConnect(s, srv.Client())
+	_, err := s.Registry().Call(context.Background(), "gno_connect", map[string]any{
+		"gnoweb_url": srv.URL, "name": "evil; rm -rf /",
+	})
+	require.Error(t, err, "expected injection in name to be rejected before building the paste command")
+}
+
+func TestConnect_RejectsInjectionInDiscoveredRPC(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<meta name="gnoconnect:rpc" content="http://evil/$(whoami)" />` +
+			`<meta name="gnoconnect:chainid" content="test11" />`))
+	}))
+	defer srv.Close()
+
+	s := server.NewServer(&profiles.Config{Profiles: profiles.BuiltinProfiles()}, "")
+	RegisterConnect(s, srv.Client())
+	_, err := s.Registry().Call(context.Background(), "gno_connect", map[string]any{"gnoweb_url": srv.URL})
+	require.Error(t, err, "expected a shell-unsafe discovered RPC to be rejected")
+}
+
 func TestConnect_RejectsForbiddenChain(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.betanet.testnets.gno.land" />` +

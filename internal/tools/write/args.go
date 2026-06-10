@@ -1,7 +1,10 @@
-// Package write holds the chain-write MCP tools (gno_call, gno_run,
-// gno_auth_status, gno_session_propose, gno_session_revoke). Each tool
-// exposes a Register* function. All tools register only when at least
-// one profile has a master-address set (writable profile).
+// Package write holds the chain-write and write-prep MCP tools: gno_call,
+// gno_run, gno_addpkg (transactions); gno_faucet_fund, gno_key_generate,
+// gno_key_address (agent key lifecycle); and gno_session_propose,
+// gno_auth_status, gno_session_revoke (session lifecycle). Each exposes a
+// Register* function. Registration is gated in cmd/gnomcp by profile
+// capability — an agent-capable local/testnet profile, or a master-address for
+// sessions — not unconditionally; see main.go.
 package write
 
 import (
@@ -11,56 +14,21 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
-// stringArg pulls a typed string from the schema-validated args map.
-// Missing key returns ("", nil); required-vs-optional is the caller's
-// concern. Present but wrong type returns an error.
-func stringArg(args map[string]any, name string) (string, error) {
-	raw, present := args[name]
-	if !present {
-		return "", nil
+// requireProfile resolves the required profile arg to its config entry,
+// applying the shared error wording for a missing or unknown profile.
+func requireProfile(args map[string]any, s *server.Server) (string, profiles.Profile, error) {
+	name, err := server.StringArg(args, "profile")
+	if err != nil {
+		return "", profiles.Profile{}, err
 	}
-	v, ok := raw.(string)
+	if name == "" {
+		return "", profiles.Profile{}, fmt.Errorf("profile: required — pick one of the configured profiles")
+	}
+	p, ok := s.Config().Profiles[name]
 	if !ok {
-		return "", fmt.Errorf("%s: expected string, got %T", name, raw)
+		return "", profiles.Profile{}, fmt.Errorf("profile %q: not found", name)
 	}
-	return v, nil
-}
-
-// boolArg pulls a typed bool from the args map.
-// Missing key returns (false, nil). Present but wrong type returns an error.
-func boolArg(args map[string]any, name string) (bool, error) {
-	raw, present := args[name]
-	if !present {
-		return false, nil
-	}
-	v, ok := raw.(bool)
-	if !ok {
-		return false, fmt.Errorf("%s: expected bool, got %T", name, raw)
-	}
-	return v, nil
-}
-
-// stringSliceArg pulls a []string from the args map.
-// Missing key returns (nil, nil). Present value must be []any with every
-// element a string; a non-string element returns an error.
-func stringSliceArg(args map[string]any, name string) ([]string, error) {
-	raw, present := args[name]
-	if !present {
-		return nil, nil
-	}
-	rawSlice, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("%s: expected array, got %T", name, raw)
-	}
-	out := make([]string, len(rawSlice))
-	for i, elem := range rawSlice {
-		s, ok := elem.(string)
-		if !ok {
-			return nil, fmt.Errorf("%s[%d]: expected string, got %T", name, i, elem)
-		}
-		out[i] = s
-	}
-	return out, nil
+	return name, p, nil
 }
 
 func profileWritableBySession(p profiles.Profile) bool { return p.MasterAddress != "" }

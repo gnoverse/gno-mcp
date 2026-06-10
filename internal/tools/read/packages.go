@@ -36,14 +36,14 @@ func RegisterPackages(s *server.Server, resolve chain.Resolver) {
 
 func packagesHandler(resolve chain.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
-		path, err := stringArg(args, "path")
+		path, err := server.StringArg(args, "path")
 		if err != nil {
 			return server.Result{}, err
 		}
 		if path == "" {
 			return server.Result{}, fmt.Errorf("path is required (e.g. 'gno.land/r/demo/' or '@demo')")
 		}
-		profile, err := stringArg(args, "profile")
+		profile, err := server.StringArg(args, "profile")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -70,11 +70,7 @@ func packagesHandler(resolve chain.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf("gno_packages: %w", err)
 		}
 
-		r := budget.Apply(strings.Join(paths, "\n"), "", false)
-		text := r.Full
-		if r.Truncated {
-			text = r.Summary
-		}
+		text, _ := budget.Wrapped(strings.Join(paths, "\n"), "", "packages", path)
 		return server.Result{Text: text}, nil
 	}
 }

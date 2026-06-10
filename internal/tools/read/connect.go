@@ -43,7 +43,7 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 			ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: true,
 		},
 		Handler: func(ctx context.Context, args map[string]any) (server.Result, error) {
-			url, err := stringArg(args, "gnoweb_url")
+			url, err := server.StringArg(args, "gnoweb_url")
 			if err != nil {
 				return server.Result{}, err
 			}
@@ -61,9 +61,19 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 					Extra:   map[string]any{"chain_id": conn.ChainID, "rpc": conn.RPC},
 				}
 			}
-			name, _ := stringArg(args, "name")
+			// conn.RPC comes verbatim from a meta-tag of an arbitrary fetched page,
+			// and name from an LLM-supplied arg — both are interpolated into the
+			// command the user is told to paste into a terminal, so both must be
+			// shell-safe before the command is built.
+			if !profiles.ValidRPCURL(conn.RPC) {
+				return server.Result{}, fmt.Errorf("gno_connect: discovered RPC %q is not a safe http(s) URL; refusing to build a paste command from it", conn.RPC)
+			}
+			name, _ := server.StringArg(args, "name")
 			if name == "" {
 				name = conn.ChainID
+			}
+			if !profiles.ValidProfileName(name) {
+				return server.Result{}, fmt.Errorf("gno_connect: profile name %q must be lowercase alphanumeric with '-' or '_' (e.g. %q)", name, conn.ChainID)
 			}
 			cmd := fmt.Sprintf("gnomcp profile add %s --rpc %s --chain-id %s", name, conn.RPC, conn.ChainID)
 			text := fmt.Sprintf(

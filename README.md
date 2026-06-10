@@ -15,7 +15,7 @@ gnomcp ships with two built-in profiles that require no configuration:
 | `local` | `dev` | `http://127.0.0.1:26657` (auto-discovered local node) |
 | `testnet` | `test11` | `https://rpc.test11.testnets.gno.land:443` |
 
-The four chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed.
+The five chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`, `gno_packages`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed. Both built-ins are also agent-capable, so the agent-identity write tools (see below) register out of the box.
 
 ## Quick start
 
@@ -76,47 +76,61 @@ gnomcp profile remove mychain
 [mychain]
 rpc-url              = "https://rpc.test99.testnets.gno.land:443"
 chain-id             = "test99"
-master-address       = "g1..."       # required to enable write tools (bech32)
+master-address       = "g1..."       # enables session writes — the agent acting as this user (bech32)
 tx-indexer-url       = "..."         # optional; enables gno_list/gno_history/gno_activity
 default-spend-limit  = "100000ugnot" # optional; per-session default
 default-expires-in   = "1h"          # optional; Go duration string
+faucet-url           = "..."         # optional; faucet page gno_faucet_fund links the user to
+faucet-service-url   = "..."         # optional; automatic faucet service gno_faucet_fund calls
 ```
 
 ## Write authorization
 
-Writes are session-gated:
+Writes are signed by one of two identities, chosen per call via the `identity` arg:
 
-1. **Profile has a `master-address`** — without it, write tools are not registered.
-2. **Authorized chain-bound session** — call `gno_session_propose` to get a paste-ready `gnokey maketx session create` command; run it to authorize a session. The session carries explicit scope (`allow_paths`, `allow_run`, `spend_limit`, `expires_in`).
+- **Agent identity (default on local and testnet).** Local profiles sign with the built-in
+  `test1` key — no setup. Testnet profiles sign with a per-profile key: run
+  `gno_key_generate` once, then fund it (`gno_faucet_fund` or send it ugnot).
+- **Session — the agent acts as the user (requires `master-address`).** Call
+  `gno_session_propose` to get a paste-ready `gnokey maketx session create` command; run it
+  to authorize a chain-bound session with explicit scope (`allow_paths`, `allow_run`,
+  `spend_limit`, `expires_in`). Pass `identity=session` to force this path on any profile.
 
 ```text
-# Typical flow
+# Typical session flow
 gno_session_propose(profile="mychain", allow_paths=["gno.land/r/myorg/blog"])
 # → prints gnokey command; user runs it
-gno_call(profile="mychain", path="gno.land/r/myorg/blog", func="AddPost", ...)
+gno_call(profile="mychain", realm="gno.land/r/myorg/blog", func="AddPost", identity="session", ...)
 ```
+
+Every write result names the identity that signed it.
 
 Session key files are stored in `~/.local/share/gnomcp/sessions` (mode `0600`). Set `GNOMCP_SESSION_PASSPHRASE` to enable encryption at rest.
 
 ## Tools
 
-See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary:
+See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (18 tools):
 
-| Tool | Category | Requires |
+| Tool | Category | Registered when |
 |------|----------|---------|
-| `gno_render` | chain read | built-in profiles |
-| `gno_eval` | chain read | built-in profiles |
-| `gno_read` | chain read | built-in profiles |
-| `gno_inspect` | chain read | built-in profiles |
-| `gno_connect` | discovery | — |
-| `gno_list` | indexer read | profile with `tx-indexer-url` |
-| `gno_history` | indexer read | profile with `tx-indexer-url` |
-| `gno_activity` | indexer read | profile with `tx-indexer-url` |
-| `gno_session_propose` | session | profile with `master-address` |
-| `gno_session_revoke` | session | profile with `master-address` |
-| `gno_auth_status` | session | profile with `master-address` |
-| `gno_call` | write | profile with `master-address` + active session |
-| `gno_run` | write | profile with `master-address` + active session |
+| `gno_render` | chain read | always |
+| `gno_eval` | chain read | always |
+| `gno_read` | chain read | always |
+| `gno_inspect` | chain read | always |
+| `gno_packages` | chain read | always |
+| `gno_connect` | discovery | always |
+| `gno_list` | indexer read | a profile has `tx-indexer-url` |
+| `gno_history` | indexer read | a profile has `tx-indexer-url` |
+| `gno_activity` | indexer read | a profile has `tx-indexer-url` |
+| `gno_call` | write | always (agent key or active session) |
+| `gno_run` | write | always (agent key or active session) |
+| `gno_session_propose` | session | always (needs `master-address` to succeed) |
+| `gno_session_revoke` | session | always (needs `master-address` to succeed) |
+| `gno_auth_status` | session | always |
+| `gno_addpkg` | write | a local or testnet profile exists |
+| `gno_key_address` | agent key | a local or testnet profile exists |
+| `gno_key_generate` | agent key | a local or testnet profile exists |
+| `gno_faucet_fund` | agent key | a testnet profile exists |
 
 ## Skill installation (for AI coding agents)
 
@@ -143,7 +157,7 @@ ADRs in `adr/`:
 | ADR | What |
 | --- | ---- |
 | `prxxxx_multichain_via_profiles.md` | Profile-arg model with schema-conditional defaulting |
-| `prxxxx_tool_surface.md` | 13-tool inventory (read, write, session) |
+| `prxxxx_tool_surface.md` | Tool inventory (read, write, session) |
 | `prxxxx_docker_default_deployment.md` | Docker as canonical deployment (future) |
 | `prxxxx_session_authorization.md` | OAuth-style session signing for writes |
 | `prxxxx_a2a_serve_mode.md` | a2a-realm protocol bridge (not yet built) |
@@ -173,9 +187,10 @@ internal/
   profiles/              # profiles.toml loader + validator + local discovery
   server/                # MCP server scaffold, tool Registry, profile schema
   session/               # Session key management and scope enforcement
-  tools/read/            # 5 chain/discovery read tool registrations
+  keystore/              # Per-profile agent keys (local test1, testnet generated)
+  tools/read/            # 6 chain/discovery read tool registrations
   tools/indexer/         # 3 indexer read tool registrations
-  tools/write/           # 5 write/session tool registrations
+  tools/write/           # 9 write/session/agent-key tool registrations
 test/e2e/                # Manual e2e protocol (PROTOCOL.md)
 test/integration/        # Live smoke (build tag: integration)
 adr/                     # Architecture Decision Records

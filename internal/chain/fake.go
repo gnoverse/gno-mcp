@@ -12,18 +12,19 @@ import (
 // Fake is an in-memory Client implementation for use in unit tests.
 // Not safe for concurrent use; tests should hold a Fake on a single goroutine.
 type Fake struct {
-	renders    map[string]string   // key: realm+"|"+path
-	evals      map[string]string   // key: realm+"|"+expr
-	files      map[string]string   // key: realm+"|"+file
-	listings   map[string][]string // key: realm
-	paths      map[string][]string // key: qpaths target (prefix or @namespace)
-	docs       map[string]string   // key: realm
-	calls      map[string]CallResult
-	callErrors map[string]error
-	runs       map[string]RunResult
-	runErrors  map[string]error
-	sessions   map[string]SessionStatus // key: master+"|"+sessionAddr
-	balances   map[string]int64         // key: bech32 addr; absent = 0 (never-funded)
+	renders       map[string]string   // key: realm+"|"+path
+	evals         map[string]string   // key: realm+"|"+expr
+	files         map[string]string   // key: realm+"|"+file
+	listings      map[string][]string // key: realm
+	paths         map[string][]string // key: qpaths target (prefix or @namespace)
+	docs          map[string]string   // key: realm
+	calls         map[string]CallResult
+	callErrors    map[string]error
+	runs          map[string]RunResult
+	runErrors     map[string]error
+	sessions      map[string]SessionStatus // key: master+"|"+sessionAddr
+	sessionErrors map[string]error         // key: master+"|"+sessionAddr; checked before sessions
+	balances      map[string]int64         // key: bech32 addr; absent = 0 (never-funded)
 	// agent-identity (standard tx, no session) maps
 	agentCalls      map[string]CallResult
 	agentRuns       map[string]RunResult
@@ -44,6 +45,7 @@ func NewFake() *Fake {
 		runs:            map[string]RunResult{},
 		runErrors:       map[string]error{},
 		sessions:        map[string]SessionStatus{},
+		sessionErrors:   map[string]error{},
 		balances:        map[string]int64{},
 		agentCalls:      map[string]CallResult{},
 		agentRuns:       map[string]RunResult{},
@@ -140,11 +142,23 @@ func (f *Fake) RunAsUser(_ context.Context, _ Signer, _, code string, simulate b
 	return r, nil
 }
 
-// QuerySession returns the seeded SessionStatus for (master, sessionAddr).
-// If no seed is set, returns the zero value (Active=false) without error —
-// matching chain semantics where an unknown session is "not found".
+// QuerySession returns the seeded SessionStatus for (master, sessionAddr), or a
+// seeded error (see SetSessionError) to exercise the query-failure path. If no
+// seed is set, returns the zero value (Active=false) without error — matching
+// chain semantics where an unknown session is "not found".
 func (f *Fake) QuerySession(_ context.Context, master, sessionAddr string) (SessionStatus, error) {
-	return f.sessions[sessionKey(master, sessionAddr)], nil
+	key := sessionKey(master, sessionAddr)
+	if err := f.sessionErrors[key]; err != nil {
+		return SessionStatus{}, err
+	}
+	return f.sessions[key], nil
+}
+
+// SetSessionError seeds an error returned by QuerySession for (master,
+// sessionAddr). Use chain.ErrSessionQueryUnsupported (or an error wrapping it)
+// to exercise the "preserve local state on a flake" path.
+func (f *Fake) SetSessionError(master, sessionAddr string, err error) {
+	f.sessionErrors[sessionKey(master, sessionAddr)] = err
 }
 
 func (f *Fake) SetCallAsUser(realm, fn string, args []string, result CallResult) {
@@ -197,7 +211,7 @@ func (f *Fake) Run(_ context.Context, _ gnoclient.Signer, code string, simulate 
 }
 
 // AddPackage returns the seeded result for deployPath, ignoring signer.
-// Records files so Task 5 addpkg tests can assert the file list.
+// Records files so addpkg tests can assert the file list.
 func (f *Fake) AddPackage(_ context.Context, _ gnoclient.Signer, deployPath string, files []*std.MemFile, simulate bool) (AddPackageResult, error) {
 	f.lastAddPkgFiles[deployPath] = files
 	r, ok := f.addPkgs[deployPath]

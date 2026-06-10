@@ -2,7 +2,6 @@ package write
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -47,26 +46,15 @@ func faucetFundInputSchema(s *server.Server) map[string]any {
 }
 
 func faucetFundHandler(ctx context.Context, args map[string]any, s *server.Server, ks *keystore.Keystore, resolver chain.Resolver, httpClient *http.Client) (server.Result, error) {
-	profileName, err := stringArg(args, "profile")
+	profileName, profile, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
 	}
-	if profileName == "" {
-		return server.Result{}, fmt.Errorf("profile: required")
-	}
-	profile, ok := s.Config().Profiles[profileName]
-	if !ok {
-		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
-	}
 	addr, err := ks.AgentAddress(profileName, profile)
-	if errors.Is(err, keystore.ErrNoAgentKey) {
-		return server.Result{}, &server.ToolError{
-			Code:    "agent_identity_unavailable",
-			Message: fmt.Sprintf("no agent key for profile %q — run gno_key_generate first, then gno_faucet_fund", profileName),
-			Extra:   map[string]any{"profile": profileName},
-		}
-	}
 	if err != nil {
+		if terr := agentKeyToolError(err, profileName, "run gno_key_generate first, then gno_faucet_fund"); terr != nil {
+			return server.Result{}, terr
+		}
 		return server.Result{}, fmt.Errorf("gno_faucet_fund: agent address: %w", err)
 	}
 	c := resolver(profileName)

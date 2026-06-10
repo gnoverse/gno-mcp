@@ -29,6 +29,29 @@ func TestFaucetFund_linkBackend_reportsFunded(t *testing.T) {
 	assert.Contains(t, res.Text, "funded")
 }
 
+func TestFaucetFund_missingProfileHint(t *testing.T) {
+	s := newTestnetTestServer(t)
+	ks := keystore.New(t.TempDir(), "")
+	RegisterFaucetFund(s, ks, constChainResolver(chain.NewFake()), &http.Client{})
+
+	_, err := s.Registry().Call(context.Background(), "gno_faucet_fund", map[string]any{"profile": ""})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pick one of the configured profiles",
+		"the missing-profile hint must match the other write tools")
+}
+
+func TestFaucetFund_keystoreUnconfigured(t *testing.T) {
+	s := newTestnetTestServer(t)
+	ks := keystore.New("", "") // no agent-keys directory configured
+	RegisterFaucetFund(s, ks, constChainResolver(chain.NewFake()), &http.Client{})
+
+	_, err := s.Registry().Call(context.Background(), "gno_faucet_fund", map[string]any{"profile": "testnet9999"})
+	require.Error(t, err)
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "key_storage_unconfigured", te.Code)
+}
+
 func TestFaucetFund_noAgentKey(t *testing.T) {
 	s := newTestnetTestServer(t)
 	ks := keystore.New(t.TempDir(), "") // no key generated

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"sync"
 	"time"
 )
@@ -44,4 +45,14 @@ func (l *Log) Append(e Entry) error {
 		return fmt.Errorf("audit append: %w", err)
 	}
 	return nil
+}
+
+// Record appends e and logs a warning (to stderr via the standard logger) if the
+// write fails. It is the best-effort variant for callers that must not abort the
+// tool call on an audit failure but also must not let one pass silently — a
+// missing audit record for a write is a security-relevant event.
+func (l *Log) Record(e Entry) {
+	if err := l.Append(e); err != nil {
+		log.Printf("%v", err)
+	}
 }

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -95,7 +96,7 @@ func TestResolveScope_clampsAllowPathsCount(t *testing.T) {
 	p := testProfile(profiles.ChainTypeTestnet)
 	var paths []string
 	for i := 0; i < 15; i++ {
-		paths = append(paths, "gno.land/r/myorg/p"+string(rune('0'+i)))
+		paths = append(paths, fmt.Sprintf("gno.land/r/myorg/p%d", i))
 	}
 	args := ScopeArgs{
 		SpendLimit: "100ugnot",
@@ -178,6 +179,51 @@ func TestResolveScope_allowPathsOnlyWorks(t *testing.T) {
 	assert.Len(t, scope.AllowPaths, 1)
 }
 
+// ---- Injection: allow_paths and spend_limit feed a pasted gnokey command
+
+func TestResolveScope_rejectsInjectionInAllowPaths(t *testing.T) {
+	p := testProfile(profiles.ChainTypeTestnet)
+	for _, bad := range []string{
+		"gno.land/r/foo\n  --allow-paths vm/run",
+		"gno.land/r/foo; rm -rf /",
+		"gno.land/r/foo$(whoami)",
+		"gno.land/r/foo `id`",
+		"gno.land/r/foo && echo pwned",
+		"gno.land/r/foo ",
+	} {
+		_, _, err := ResolveScope(ScopeArgs{AllowPaths: []string{bad}}, p)
+		require.Error(t, err, "expected rejection of allow_paths %q", bad)
+	}
+}
+
+func TestResolveScope_rejectsNonRealmAllowPath(t *testing.T) {
+	p := testProfile(profiles.ChainTypeTestnet)
+	for _, bad := range []string{
+		"gno.land/p/demo/avl", // pure package, not a realm
+		"not-a-path",
+		"gno.land/r/Foo", // uppercase is not a valid realm name
+	} {
+		_, _, err := ResolveScope(ScopeArgs{AllowPaths: []string{bad}}, p)
+		require.Error(t, err, "expected rejection of non-realm allow_paths %q", bad)
+	}
+}
+
+func TestResolveScope_rejectsMalformedSpendLimit(t *testing.T) {
+	// Covers both the hard-limit path and the BypassHardLimits early return,
+	// where clampCoin (the only prior parse) never runs.
+	profs := []*profiles.Profile{
+		testProfile(profiles.ChainTypeTestnet),
+		{ChainType: profiles.ChainTypeTestnet, BypassHardLimits: true},
+	}
+	for _, prof := range profs {
+		_, _, err := ResolveScope(ScopeArgs{
+			SpendLimit: "100ugnot; rm -rf /",
+			AllowPaths: []string{"gno.land/r/myorg/blog"},
+		}, prof)
+		require.Error(t, err, "expected rejection of malformed spend_limit (bypass=%v)", prof.BypassHardLimits)
+	}
+}
+
 // ---- Unknown chain-type falls back to testnet limits
 
 func TestResolveScope_unknownChainTypeFallback(t *testing.T) {
@@ -185,7 +231,7 @@ func TestResolveScope_unknownChainTypeFallback(t *testing.T) {
 	// testnet cap: MaxAllowPathsCount=10; supply 15
 	var paths []string
 	for i := 0; i < 15; i++ {
-		paths = append(paths, "gno.land/r/myorg/p"+string(rune('0'+i)))
+		paths = append(paths, fmt.Sprintf("gno.land/r/myorg/p%d", i))
 	}
 	args := ScopeArgs{AllowPaths: paths}
 	scope, warns, err := ResolveScope(args, p)

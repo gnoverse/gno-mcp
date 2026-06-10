@@ -236,9 +236,44 @@ func TestValidate_BypassWithMasterAccepted(t *testing.T) {
 	require.NoError(t, err, "bypass + master-address should be accepted")
 }
 
+func TestValidate_rejectsInjectionInRPCURL(t *testing.T) {
+	// The persisted rpc-url is interpolated into gnokey commands the user
+	// pastes into a terminal (session create/revoke), and `profile add
+	// --from-gnoweb` copies it verbatim from a remote page's meta-tag — so
+	// Validate is the trust boundary that must reject shell metacharacters.
+	cases := map[string]string{
+		"command substitution": "http://h/$(whoami)",
+		"semicolon":            "http://h/;id",
+		"newline":              "http://h/\nrm -rf ~",
+		"backtick":             "http://h/`id`",
+		"space":                "http://h/a b",
+		"non-http scheme":      "ftp://h/x",
+		"userinfo":             "http://evil@h/x",
+	}
+	for name, val := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := &Config{Profiles: map[string]Profile{
+				"p": {RPCURL: val, ChainID: "dev"},
+			}}
+			_, err := cfg.Validate()
+			require.Error(t, err, "rpc-url %q must be rejected", val)
+			assert.Contains(t, err.Error(), "rpc-url")
+		})
+	}
+}
+
+func TestValidate_acceptsMixedCaseRPCHost(t *testing.T) {
+	// DNS hostnames are case-insensitive and shell-safe in any case.
+	cfg := &Config{Profiles: map[string]Profile{
+		"p": {RPCURL: "http://MyNode.example:26657", ChainID: "dev"},
+	}}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "a mixed-case hostname is a valid, shell-safe rpc-url")
+}
+
 func TestValidate_rejectsBadFaucetURL(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
-		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5", FaucetURL: "not a url"},
+		"testnet5": {ChainType: "testnet", RPCURL: "https://rpc.example:443", ChainID: "test5", FaucetURL: "not a url"},
 	}}
 	_, err := cfg.Validate()
 	require.Error(t, err)
@@ -247,7 +282,7 @@ func TestValidate_rejectsBadFaucetURL(t *testing.T) {
 
 func TestValidate_rejectsNonHTTPFaucetURL(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
-		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5", FaucetServiceURL: "ftp://host/x"},
+		"testnet5": {ChainType: "testnet", RPCURL: "https://rpc.example:443", ChainID: "test5", FaucetServiceURL: "ftp://host/x"},
 	}}
 	_, err := cfg.Validate()
 	require.Error(t, err, "non-http(s) scheme must be rejected")

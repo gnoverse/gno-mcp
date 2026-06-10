@@ -78,7 +78,7 @@ func TestKeyGenerate_localProfile_keyGenerationUnsupported(t *testing.T) {
 // testnet9999Profile is the testnet profile fixture shared by the key-generate
 // server builders.
 func testnet9999Profile() profiles.Profile {
-	return profiles.Profile{ChainType: profiles.ChainTypeTestnet, RPCURL: "x", ChainID: "test9999"}
+	return profiles.Profile{ChainType: profiles.ChainTypeTestnet, RPCURL: "http://127.0.0.1:26657", ChainID: "test9999"}
 }
 
 // newTestnetServerFromProfiles validates ps and wraps it in a Server.
@@ -104,7 +104,7 @@ func newTestnetTestServer(t *testing.T) *server.Server {
 func newLocalTestServerWithTestnet(t *testing.T) *server.Server {
 	t.Helper()
 	return newTestnetServerFromProfiles(t, map[string]profiles.Profile{
-		"local":       {ChainType: profiles.ChainTypeLocal, RPCURL: "x", ChainID: "dev"},
+		"local":       {ChainType: profiles.ChainTypeLocal, RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
 		"testnet9999": testnet9999Profile(),
 	})
 }

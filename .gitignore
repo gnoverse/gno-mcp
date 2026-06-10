@@ -13,4 +13,5 @@ go.work.sum
 
 # Local profiles & runtime data
 profiles.toml
-audit.log
+audit.jsonl
+.worktrees/

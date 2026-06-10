@@ -17,6 +17,7 @@ import (
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 
+	"github.com/gnoverse/gno-mcp/internal/fsutil"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	secret "github.com/gnoverse/gno-mcp/internal/secret"
 )
@@ -171,14 +172,17 @@ func (k *Keystore) loadMnemonic(profileName string) (string, error) {
 }
 
 func (k *Keystore) saveMnemonic(profileName, mnemonic string) error {
-	if err := os.MkdirAll(k.rootDir, 0o700); err != nil {
-		return fmt.Errorf("keystore: mkdir: %w", err)
-	}
 	enc, err := secret.Encrypt([]byte(mnemonic), k.passphrase)
 	if err != nil {
 		return fmt.Errorf("keystore: encrypt: %w", err)
 	}
-	if err := os.WriteFile(k.keyPath(profileName), enc, 0o600); err != nil {
+	// Exclusive atomic write: the create-or-fail is race-safe against a concurrent
+	// generate, and a crash mid-write never leaves a partial file that would wedge
+	// the profile behind ErrKeyExists.
+	if err := fsutil.WriteFileExclusive(k.keyPath(profileName), enc, 0o600); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("keystore: profile %q: %w", profileName, ErrKeyExists)
+		}
 		return fmt.Errorf("keystore: write: %w", err)
 	}
 	return nil

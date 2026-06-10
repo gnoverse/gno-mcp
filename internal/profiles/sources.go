@@ -19,7 +19,7 @@ type Sources struct {
 
 // LoadResolved builds the effective config: built-in defaults overlaid by each
 // present file in precedence order, then validated. Returns a single error;
-// Validate's warning return is dead (always nil after Task 5) so it is dropped.
+// Validate's warning return is always nil so it is dropped.
 func LoadResolved(s Sources) (*Config, error) {
 	merged := BuiltinProfiles()
 

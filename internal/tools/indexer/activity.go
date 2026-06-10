@@ -6,17 +6,17 @@ import (
 	"time"
 
 	"github.com/gnoverse/gno-mcp/internal/budget"
-	"github.com/gnoverse/gno-mcp/internal/indexer"
+	indexerpkg "github.com/gnoverse/gno-mcp/internal/indexer"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
 // RegisterActivity wires the gno_activity tool into s. The resolver maps a
-// profile name to the indexer.Client used to satisfy calls.
+// profile name to the indexerpkg.Client used to satisfy calls.
 //
 // gno_activity returns MsgCall and MsgRun transactions for a realm, optionally
 // filtered to a closed [since, until] time range. Use gno_history for the full
 // deploy+transaction log; use gno_inspect to explore function signatures.
-func RegisterActivity(s *server.Server, resolve indexer.Resolver) {
+func RegisterActivity(s *server.Server, resolve indexerpkg.Resolver) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_activity",
 		Description: "Return MsgCall and MsgRun activity for a realm via the tx-indexer. " +
@@ -32,9 +32,9 @@ func RegisterActivity(s *server.Server, resolve indexer.Resolver) {
 	})
 }
 
-func activityHandler(resolve indexer.Resolver) server.Handler {
+func activityHandler(resolve indexerpkg.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
-		realm, err := stringArg(args, "realm")
+		realm, err := server.StringArg(args, "realm")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -44,7 +44,7 @@ func activityHandler(resolve indexer.Resolver) server.Handler {
 
 		var since, until *time.Time
 
-		if sv, err := stringArg(args, "since"); err != nil {
+		if sv, err := server.StringArg(args, "since"); err != nil {
 			return server.Result{}, err
 		} else if sv != "" {
 			t, err := time.Parse(time.RFC3339, sv)
@@ -54,7 +54,7 @@ func activityHandler(resolve indexer.Resolver) server.Handler {
 			since = &t
 		}
 
-		if uv, err := stringArg(args, "until"); err != nil {
+		if uv, err := server.StringArg(args, "until"); err != nil {
 			return server.Result{}, err
 		} else if uv != "" {
 			t, err := time.Parse(time.RFC3339, uv)
@@ -64,7 +64,7 @@ func activityHandler(resolve indexer.Resolver) server.Handler {
 			until = &t
 		}
 
-		profile, err := stringArg(args, "profile")
+		profile, err := server.StringArg(args, "profile")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -79,11 +79,7 @@ func activityHandler(resolve indexer.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf("gno_activity: %w", err)
 		}
 
-		r := budget.Apply(formatEvents(events), "", false)
-		text := r.Full
-		if r.Truncated {
-			text = r.Summary
-		}
+		text, _ := budget.Wrapped(formatEvents(events), "", "activity", realm)
 		return server.Result{Text: text}, nil
 	}
 }

@@ -18,7 +18,7 @@ func newBaseTestServer(t *testing.T) *server.Server {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"testnet5": {
 			ChainType:    "testnet",
-			RPCURL:       "x",
+			RPCURL:       "http://127.0.0.1:26657",
 			ChainID:      "test5",
 			TxIndexerURL: "https://indexer.test5/graphql",
 		},

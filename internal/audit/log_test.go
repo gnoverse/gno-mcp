@@ -3,6 +3,8 @@ package audit
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"log"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("disk full") }
 
 func TestLog_appendWritesJSONLine(t *testing.T) {
 	var buf bytes.Buffer
@@ -49,6 +55,18 @@ func TestLog_appendDefaultsTimeToNow(t *testing.T) {
 	require.NoError(t, json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got))
 	assert.False(t, got.Time.Before(before) || got.Time.After(after),
 		"Time not auto-defaulted to now: got %v, want in [%v, %v]", got.Time, before, after)
+}
+
+func TestLog_RecordLogsOnWriteFailure(t *testing.T) {
+	var logbuf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&logbuf)
+	t.Cleanup(func() { log.SetOutput(prev) })
+
+	NewLog(failWriter{}).Record(Entry{Tool: "gno_call", Result: "ok"})
+
+	assert.Contains(t, logbuf.String(), "audit append",
+		"a failed audit write must be logged, not silently dropped")
 }
 
 func TestLog_durationMarshalsAsMilliseconds(t *testing.T) {

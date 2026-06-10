@@ -57,6 +57,23 @@ func TestGraphQL_History(t *testing.T) {
 	assert.Equal(t, "MsgAddPackage", events[0].Kind)
 }
 
+// TestGraphQL_oversizeResponseRejected pins the response-size cap: a body
+// larger than maxRespBytes must produce a decode error, not a partial success.
+func TestGraphQL_oversizeResponseRejected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":{"transactions":[{"hash":"`)
+		_, _ = io.WriteString(w, strings.Repeat("a", maxRespBytes+1024))
+		_, _ = io.WriteString(w, `"}]}}`)
+	}))
+	defer srv.Close()
+
+	c := NewGraphQL(srv.URL)
+	_, err := c.History(context.Background(), "gno.land/r/foo")
+	require.Error(t, err, "oversize indexer response must be rejected")
+	assert.Contains(t, err.Error(), "decode envelope")
+}
+
 func TestGraphQL_History_MsgCall(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

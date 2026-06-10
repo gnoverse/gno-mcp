@@ -8,10 +8,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KEYRING_DIR="${SCRIPT_DIR}/.keyring"
 SESSION_BASE="${HOME}/.local/share/gnomcp/sessions"
-AUDIT_LOG="${HOME}/.local/share/gnomcp/audit.log"
+AUDIT_LOG="${HOME}/.local/share/gnomcp/audit.jsonl"
 
 echo "INFO: stopping gnodev..."
-if pids=$(pgrep -f 'gnodev.*listen=127\.0\.0\.1' 2>/dev/null); then
+# Match setup.sh's launch: `gnodev local ... -node-rpc-listener 127.0.0.1:<port>`.
+if pids=$(pgrep -f 'gnodev local.*-node-rpc-listener' 2>/dev/null); then
   for pid in $pids; do
     kill "$pid" 2>/dev/null && echo "INFO: killed gnodev PID ${pid}." || true
   done

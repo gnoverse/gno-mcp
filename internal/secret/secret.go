@@ -12,21 +12,34 @@ import (
 )
 
 const (
-	saltLen  = 16
-	nonceLen = 12
-	keyLen   = 32
+	saltLen   = 16
+	nonceLen  = 12
+	keyLen    = 32
+	gcmTagLen = 16
 
 	scryptN = 32768
 	scryptR = 8
 	scryptP = 1
 )
 
-// Encrypt returns salt(16) || nonce(12) || ciphertext+authTag using
-// AES-256-GCM with a key derived via scrypt. Empty passphrase returns
-// plaintext unchanged (opt-in encryption semantic).
+// Scheme tags prefix every blob so Decrypt knows how the bytes were produced
+// and a passphrase/format mismatch fails loudly instead of mis-decoding.
+const (
+	schemePlain  = 0x00 // no passphrase: tag || plaintext
+	schemeScrypt = 0x01 // tag || salt(16) || nonce(12) || ciphertext+authTag
+)
+
+// ErrPassphraseRequired reports that the blob was encrypted with a passphrase
+// but Decrypt was called with an empty one (e.g. GNOMCP_SESSION_PASSPHRASE was
+// set when the data was written but is unset now).
+var ErrPassphraseRequired = errors.New("secret: data is encrypted but no passphrase is set (set GNOMCP_SESSION_PASSPHRASE)")
+
+// Encrypt returns a scheme-tagged blob. With a passphrase the body is
+// salt(16) || nonce(12) || ciphertext+authTag (AES-256-GCM, scrypt-derived
+// key); with an empty passphrase the body is the plaintext (opt-in encryption).
 func Encrypt(plaintext []byte, passphrase string) ([]byte, error) {
 	if passphrase == "" {
-		return plaintext, nil
+		return append([]byte{schemePlain}, plaintext...), nil
 	}
 
 	salt := make([]byte, saltLen)
@@ -56,27 +69,41 @@ func Encrypt(plaintext []byte, passphrase string) ([]byte, error) {
 
 	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
 
-	out := make([]byte, 0, saltLen+nonceLen+len(ciphertext))
+	out := make([]byte, 0, 1+saltLen+nonceLen+len(ciphertext))
+	out = append(out, schemeScrypt)
 	out = append(out, salt...)
 	out = append(out, nonce...)
 	out = append(out, ciphertext...)
 	return out, nil
 }
 
-// Decrypt reverses Encrypt. Empty passphrase returns ciphertext unchanged.
-func Decrypt(ciphertext []byte, passphrase string) ([]byte, error) {
-	if passphrase == "" {
-		return ciphertext, nil
+// Decrypt reverses Encrypt, dispatching on the scheme tag. A scrypt blob with
+// an empty passphrase returns ErrPassphraseRequired rather than mis-decoding.
+func Decrypt(blob []byte, passphrase string) ([]byte, error) {
+	if len(blob) == 0 {
+		return nil, errors.New("secret: empty input")
+	}
+	scheme, body := blob[0], blob[1:]
+	switch scheme {
+	case schemePlain:
+		return body, nil
+	case schemeScrypt:
+		// fall through to the decrypt path below
+	default:
+		return nil, fmt.Errorf("secret: unknown encryption scheme 0x%02x (file written by an incompatible gnomcp version?) — delete the file and regenerate the key or session", scheme)
 	}
 
-	minLen := saltLen + nonceLen + 16
-	if len(ciphertext) < minLen {
+	if passphrase == "" {
+		return nil, ErrPassphraseRequired
+	}
+	minLen := saltLen + nonceLen + gcmTagLen
+	if len(body) < minLen {
 		return nil, errors.New("secret: ciphertext too short")
 	}
 
-	salt := ciphertext[:saltLen]
-	nonce := ciphertext[saltLen : saltLen+nonceLen]
-	data := ciphertext[saltLen+nonceLen:]
+	salt := body[:saltLen]
+	nonce := body[saltLen : saltLen+nonceLen]
+	data := body[saltLen+nonceLen:]
 
 	key, err := deriveKey(passphrase, salt)
 	if err != nil {

@@ -150,119 +150,110 @@ func (r *Real) Doc(_ context.Context, realm string) (string, error) {
 	return string(qres.Response.Data), nil
 }
 
-// CallAsUser broadcasts (or simulates) a session-signed vm/MsgCall through
-// gnoclient. MsgCall.Caller is the master address; the signature carries the
-// session's pubkey and SessionAddr so the chain's ante handler verifies against
-// the session record at auth/accounts/<master>/session/<sessionAddr>.
-func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error) {
+// txOutcome is the delivery result shared by every write pipeline; the typed
+// CallResult/RunResult/AddPackageResult are mapped from it per method.
+type txOutcome struct {
+	Simulated bool
+	TxHash    string
+	Height    int64
+	Data      string
+	GasUsed   int64
+}
+
+// asUserTx runs the session-signed write pipeline shared by CallAsUser and
+// RunAsUser: validate the signer/master pair, build the unsigned tx via
+// buildTx, session-sign it, then simulate or broadcast. errPrefix tags every
+// error with the calling op.
+func (r *Real) asUserTx(signer Signer, master, errPrefix string, buildTx func(masterAddr crypto.Address) (*std.Tx, error), simulate bool) (txOutcome, error) {
 	if signer == nil {
-		return CallResult{}, fmt.Errorf("call as user: signer required (got nil)")
+		return txOutcome{}, fmt.Errorf("%s: signer required (got nil)", errPrefix)
 	}
 	if master == "" {
-		return CallResult{}, fmt.Errorf("call as user: master address required for session-signed tx")
+		return txOutcome{}, fmt.Errorf("%s: master address required for session-signed tx", errPrefix)
 	}
 
 	masterAddr, err := crypto.AddressFromBech32(master)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call as user: invalid master address %q: %w", master, err)
+		return txOutcome{}, fmt.Errorf("%s: invalid master address %q: %w", errPrefix, master, err)
 	}
 	sessionAddr, err := crypto.AddressFromBech32(signer.Address())
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call as user: invalid session address %q: %w", signer.Address(), err)
+		return txOutcome{}, fmt.Errorf("%s: invalid session address %q: %w", errPrefix, signer.Address(), err)
 	}
 
-	msg := vm.MsgCall{
-		Caller:  masterAddr,
-		PkgPath: realm,
-		Func:    fn,
-		Args:    args,
-	}
-	unsignedTx, err := gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
+	unsignedTx, err := buildTx(masterAddr)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call as user: build unsigned tx: %w", err)
+		return txOutcome{}, fmt.Errorf("%s: build unsigned tx: %w", errPrefix, err)
 	}
 
 	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call as user: sign tx: %w", err)
+		return txOutcome{}, fmt.Errorf("%s: sign tx: %w", errPrefix, err)
 	}
 
 	if simulate {
 		deliver, err := r.cli.Simulate(signedTx)
 		if err != nil {
-			return CallResult{}, fmt.Errorf("call as user: simulate: %w", err)
+			return txOutcome{}, fmt.Errorf("%s: simulate: %w", errPrefix, err)
 		}
-		return CallResult{
-			Simulated: true,
-			GasUsed:   deliver.GasUsed,
-			Result:    string(deliver.Data),
-		}, nil
+		return txOutcome{Simulated: true, GasUsed: deliver.GasUsed, Data: string(deliver.Data)}, nil
 	}
 
 	res, err := r.cli.BroadcastTxCommit(signedTx)
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call as user: broadcast tx: %w", err)
+		return txOutcome{}, fmt.Errorf("%s: broadcast tx: %w", errPrefix, err)
 	}
-	return CallResult{
+	return txOutcome{
 		TxHash:  hex.EncodeToString(res.Hash),
 		Height:  res.Height,
-		Result:  string(res.DeliverTx.Data),
+		Data:    string(res.DeliverTx.Data),
 		GasUsed: res.DeliverTx.GasUsed,
+	}, nil
+}
+
+// CallAsUser broadcasts (or simulates) a session-signed vm/MsgCall through
+// gnoclient. MsgCall.Caller is the master address; the signature carries the
+// session's pubkey and SessionAddr so the chain's ante handler verifies against
+// the session record at auth/accounts/<master>/session/<sessionAddr>.
+func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error) {
+	out, err := r.asUserTx(signer, master, "call as user", func(masterAddr crypto.Address) (*std.Tx, error) {
+		msg := vm.MsgCall{
+			Caller:  masterAddr,
+			PkgPath: realm,
+			Func:    fn,
+			Args:    args,
+		}
+		return gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
+	}, simulate)
+	if err != nil {
+		return CallResult{}, err
+	}
+	return CallResult{
+		Simulated: out.Simulated,
+		TxHash:    out.TxHash,
+		Height:    out.Height,
+		Result:    out.Data,
+		GasUsed:   out.GasUsed,
 	}, nil
 }
 
 // RunAsUser broadcasts (or simulates) a session-signed vm/MsgRun. The code is
 // wrapped in a single-file MemPackage with package name "main".
 func (r *Real) RunAsUser(_ context.Context, signer Signer, master, code string, simulate bool) (RunResult, error) {
-	if signer == nil {
-		return RunResult{}, fmt.Errorf("run as user: signer required (got nil)")
-	}
-	if master == "" {
-		return RunResult{}, fmt.Errorf("run as user: master address required for session-signed tx")
-	}
-
-	masterAddr, err := crypto.AddressFromBech32(master)
+	out, err := r.asUserTx(signer, master, "run as user", func(masterAddr crypto.Address) (*std.Tx, error) {
+		files := []*std.MemFile{{Name: "main.gno", Body: code}}
+		msg := vm.NewMsgRun(masterAddr, nil, files)
+		return gnoclient.NewRunTx(defaultBaseTxCfg(), msg)
+	}, simulate)
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run as user: invalid master address %q: %w", master, err)
-	}
-	sessionAddr, err := crypto.AddressFromBech32(signer.Address())
-	if err != nil {
-		return RunResult{}, fmt.Errorf("run as user: invalid session address %q: %w", signer.Address(), err)
-	}
-
-	files := []*std.MemFile{{Name: "main.gno", Body: code}}
-	msg := vm.NewMsgRun(masterAddr, nil, files)
-	unsignedTx, err := gnoclient.NewRunTx(defaultBaseTxCfg(), msg)
-	if err != nil {
-		return RunResult{}, fmt.Errorf("run as user: build unsigned tx: %w", err)
-	}
-
-	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
-	if err != nil {
-		return RunResult{}, fmt.Errorf("run as user: sign tx: %w", err)
-	}
-
-	if simulate {
-		deliver, err := r.cli.Simulate(signedTx)
-		if err != nil {
-			return RunResult{}, fmt.Errorf("run as user: simulate: %w", err)
-		}
-		return RunResult{
-			Simulated: true,
-			GasUsed:   deliver.GasUsed,
-			Output:    string(deliver.Data),
-		}, nil
-	}
-
-	res, err := r.cli.BroadcastTxCommit(signedTx)
-	if err != nil {
-		return RunResult{}, fmt.Errorf("run as user: broadcast tx: %w", err)
+		return RunResult{}, err
 	}
 	return RunResult{
-		TxHash:  hex.EncodeToString(res.Hash),
-		Height:  res.Height,
-		Output:  string(res.DeliverTx.Data),
-		GasUsed: res.DeliverTx.GasUsed,
+		Simulated: out.Simulated,
+		TxHash:    out.TxHash,
+		Height:    out.Height,
+		Output:    out.Data,
+		GasUsed:   out.GasUsed,
 	}, nil
 }
 
@@ -291,7 +282,11 @@ func (r *Real) QuerySession(_ context.Context, master, sessionAddr string) (Sess
 
 	acc, err := decodeSessionAccount(qres.Response.Data)
 	if err != nil {
-		return SessionStatus{}, fmt.Errorf("querysession: decode session account: %w", err)
+		// A malformed response is a query failure, not "session gone": wrap the
+		// sentinel so the Manager preserves local state (see chain_check) rather
+		// than wiping a live session on a transient/schema flake. The decode detail
+		// is kept for diagnostics.
+		return SessionStatus{}, fmt.Errorf("querysession: decode session account: %w: %w", err, ErrSessionQueryUnsupported)
 	}
 
 	realmPaths, allowRun := splitAllowPaths(acc.AllowPaths)
@@ -417,6 +412,10 @@ func isSessionNotFoundErr(err error) bool {
 // not GasUsed — to stay in sync with the chain's accounting.
 const DefaultGasFeeUgnot int64 = 10_000_000
 
+// DefaultGasWanted is the gas limit of every write tx. The chain requires
+// 1ugnot of fee per 1000 gas, so DefaultGasFeeUgnot is sized to cover it.
+const DefaultGasWanted int64 = 10_000_000
+
 // DefaultMaxDepositUgnot caps the storage deposit for an agent AddPackage. Sufficient
 // for typical realms; a deploy rejected for an insufficient deposit is the signal to raise it.
 const DefaultMaxDepositUgnot int64 = 10_000_000
@@ -427,32 +426,54 @@ func (r *Real) agentClient(signer gnoclient.Signer) *gnoclient.Client {
 	return &gnoclient.Client{RPCClient: r.cli.RPCClient, Signer: signer}
 }
 
-// Call broadcasts (or simulates) a STANDARD vm/MsgCall signed by the agent key.
-// Caller is the signer's own address; no session machinery is involved.
-func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string, args []string, simulate bool) (CallResult, error) {
+// agentTxSetup validates the agent signer and returns its address plus a
+// gnoclient bound to it, shared by every agent-signed write method.
+func (r *Real) agentTxSetup(signer gnoclient.Signer, errPrefix string) (crypto.Address, *gnoclient.Client, error) {
 	if signer == nil {
-		return CallResult{}, fmt.Errorf("call: signer required (got nil)")
+		return crypto.Address{}, nil, fmt.Errorf("%s: signer required (got nil)", errPrefix)
 	}
 	info, err := signer.Info()
 	if err != nil {
-		return CallResult{}, fmt.Errorf("call: signer info: %w", err)
+		return crypto.Address{}, nil, fmt.Errorf("%s: signer info: %w", errPrefix, err)
 	}
-	cli := r.agentClient(signer)
-	msg := vm.MsgCall{Caller: info.GetAddress(), PkgPath: realm, Func: fn, Args: args}
+	return info.GetAddress(), r.agentClient(signer), nil
+}
+
+// agentSimulate runs the agent-signed dry-run shared by Call/Run/AddPackage:
+// build the unsigned tx via buildTx, sign it with the client's signer, and
+// simulate without broadcasting.
+func agentSimulate(cli *gnoclient.Client, errPrefix string, buildTx func() (*std.Tx, error)) (txOutcome, error) {
+	unsigned, err := buildTx()
+	if err != nil {
+		return txOutcome{}, fmt.Errorf("%s: build tx: %w", errPrefix, err)
+	}
+	signed, err := cli.SignTx(*unsigned, 0, 0)
+	if err != nil {
+		return txOutcome{}, fmt.Errorf("%s: sign: %w", errPrefix, err)
+	}
+	deliver, err := cli.Simulate(signed)
+	if err != nil {
+		return txOutcome{}, fmt.Errorf("%s: simulate: %w", errPrefix, err)
+	}
+	return txOutcome{Simulated: true, GasUsed: deliver.GasUsed, Data: string(deliver.Data)}, nil
+}
+
+// Call broadcasts (or simulates) a STANDARD vm/MsgCall signed by the agent key.
+// Caller is the signer's own address; no session machinery is involved.
+func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string, args []string, simulate bool) (CallResult, error) {
+	caller, cli, err := r.agentTxSetup(signer, "call")
+	if err != nil {
+		return CallResult{}, err
+	}
+	msg := vm.MsgCall{Caller: caller, PkgPath: realm, Func: fn, Args: args}
 	if simulate {
-		unsigned, err := gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
+		out, err := agentSimulate(cli, "call", func() (*std.Tx, error) {
+			return gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
+		})
 		if err != nil {
-			return CallResult{}, fmt.Errorf("call: build tx: %w", err)
+			return CallResult{}, err
 		}
-		signed, err := cli.SignTx(*unsigned, 0, 0)
-		if err != nil {
-			return CallResult{}, fmt.Errorf("call: sign: %w", err)
-		}
-		deliver, err := cli.Simulate(signed)
-		if err != nil {
-			return CallResult{}, fmt.Errorf("call: simulate: %w", err)
-		}
-		return CallResult{Simulated: true, GasUsed: deliver.GasUsed, Result: string(deliver.Data)}, nil
+		return CallResult{Simulated: true, GasUsed: out.GasUsed, Result: out.Data}, nil
 	}
 	res, err := cli.Call(defaultBaseTxCfg(), msg)
 	if err != nil {
@@ -464,30 +485,20 @@ func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string
 // Run broadcasts (or simulates) a STANDARD vm/MsgRun signed by the agent key.
 // The code is wrapped in a single-file MemPackage with package name "main".
 func (r *Real) Run(_ context.Context, signer gnoclient.Signer, code string, simulate bool) (RunResult, error) {
-	if signer == nil {
-		return RunResult{}, fmt.Errorf("run: signer required (got nil)")
-	}
-	info, err := signer.Info()
+	caller, cli, err := r.agentTxSetup(signer, "run")
 	if err != nil {
-		return RunResult{}, fmt.Errorf("run: signer info: %w", err)
+		return RunResult{}, err
 	}
-	cli := r.agentClient(signer)
 	files := []*std.MemFile{{Name: "main.gno", Body: code}}
-	msg := vm.NewMsgRun(info.GetAddress(), nil, files)
+	msg := vm.NewMsgRun(caller, nil, files)
 	if simulate {
-		unsigned, err := gnoclient.NewRunTx(defaultBaseTxCfg(), msg)
+		out, err := agentSimulate(cli, "run", func() (*std.Tx, error) {
+			return gnoclient.NewRunTx(defaultBaseTxCfg(), msg)
+		})
 		if err != nil {
-			return RunResult{}, fmt.Errorf("run: build tx: %w", err)
+			return RunResult{}, err
 		}
-		signed, err := cli.SignTx(*unsigned, 0, 0)
-		if err != nil {
-			return RunResult{}, fmt.Errorf("run: sign: %w", err)
-		}
-		deliver, err := cli.Simulate(signed)
-		if err != nil {
-			return RunResult{}, fmt.Errorf("run: simulate: %w", err)
-		}
-		return RunResult{Simulated: true, GasUsed: deliver.GasUsed, Output: string(deliver.Data)}, nil
+		return RunResult{Simulated: true, GasUsed: out.GasUsed, Output: out.Data}, nil
 	}
 	res, err := cli.Run(defaultBaseTxCfg(), msg)
 	if err != nil {
@@ -497,34 +508,24 @@ func (r *Real) Run(_ context.Context, signer gnoclient.Signer, code string, simu
 }
 
 // AddPackage broadcasts (or simulates) a vm/MsgAddPackage signed by the agent key.
-// Defense-in-depth: MemPackage.ValidateBasic rejects unsorted files. The addpkg handler
-// (Task 5) sorts authoritatively; this guards any direct caller.
+// Defense-in-depth: MemPackage.ValidateBasic rejects unsorted files. The gno_addpkg
+// handler sorts authoritatively; this guards any direct caller.
 func (r *Real) AddPackage(_ context.Context, signer gnoclient.Signer, deployPath string, files []*std.MemFile, simulate bool) (AddPackageResult, error) {
-	if signer == nil {
-		return AddPackageResult{}, fmt.Errorf("addpackage: signer required (got nil)")
-	}
-	info, err := signer.Info()
+	creator, cli, err := r.agentTxSetup(signer, "addpackage")
 	if err != nil {
-		return AddPackageResult{}, fmt.Errorf("addpackage: signer info: %w", err)
+		return AddPackageResult{}, err
 	}
 	slices.SortFunc(files, func(a, b *std.MemFile) int { return strings.Compare(a.Name, b.Name) })
-	cli := r.agentClient(signer)
-	msg := vm.NewMsgAddPackage(info.GetAddress(), deployPath, files)
+	msg := vm.NewMsgAddPackage(creator, deployPath, files)
 	msg.MaxDeposit = std.Coins{{Denom: ugnot.Denom, Amount: DefaultMaxDepositUgnot}}
 	if simulate {
-		unsigned, err := gnoclient.NewAddPackageTx(defaultBaseTxCfg(), msg)
+		out, err := agentSimulate(cli, "addpackage", func() (*std.Tx, error) {
+			return gnoclient.NewAddPackageTx(defaultBaseTxCfg(), msg)
+		})
 		if err != nil {
-			return AddPackageResult{}, fmt.Errorf("addpackage: build tx: %w", err)
+			return AddPackageResult{}, err
 		}
-		signed, err := cli.SignTx(*unsigned, 0, 0)
-		if err != nil {
-			return AddPackageResult{}, fmt.Errorf("addpackage: sign: %w", err)
-		}
-		deliver, err := cli.Simulate(signed)
-		if err != nil {
-			return AddPackageResult{}, fmt.Errorf("addpackage: simulate: %w", err)
-		}
-		return AddPackageResult{Simulated: true, GasUsed: deliver.GasUsed}, nil
+		return AddPackageResult{Simulated: true, GasUsed: out.GasUsed}, nil
 	}
 	res, err := cli.AddPackage(defaultBaseTxCfg(), msg)
 	if err != nil {
@@ -551,11 +552,10 @@ func (r *Real) Balance(_ context.Context, bech32 string) (int64, error) {
 }
 
 // defaultBaseTxCfg returns the gas/fee defaults for write txs.
-// Chain requires 1ugnot per 1000 gas; padded to 10000000ugnot @ 10M gas.
 func defaultBaseTxCfg() gnoclient.BaseTxCfg {
 	return gnoclient.BaseTxCfg{
 		GasFee:    fmt.Sprintf("%dugnot", DefaultGasFeeUgnot),
-		GasWanted: 10_000_000,
+		GasWanted: DefaultGasWanted,
 	}
 }
 

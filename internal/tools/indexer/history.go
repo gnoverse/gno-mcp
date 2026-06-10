@@ -6,17 +6,17 @@ import (
 	"strings"
 
 	"github.com/gnoverse/gno-mcp/internal/budget"
-	"github.com/gnoverse/gno-mcp/internal/indexer"
+	indexerpkg "github.com/gnoverse/gno-mcp/internal/indexer"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
 // RegisterHistory wires the gno_history tool into s. The resolver maps a
-// profile name to the indexer.Client used to satisfy calls.
+// profile name to the indexerpkg.Client used to satisfy calls.
 //
 // gno_history returns the full deploy + transaction log for a realm in
 // chronological order. Use gno_activity to filter by time range, and
 // gno_inspect to explore function signatures.
-func RegisterHistory(s *server.Server, resolve indexer.Resolver) {
+func RegisterHistory(s *server.Server, resolve indexerpkg.Resolver) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_history",
 		Description: "Return the complete deploy and transaction log for a realm via the tx-indexer. " +
@@ -31,9 +31,9 @@ func RegisterHistory(s *server.Server, resolve indexer.Resolver) {
 	})
 }
 
-func historyHandler(resolve indexer.Resolver) server.Handler {
+func historyHandler(resolve indexerpkg.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
-		realm, err := stringArg(args, "realm")
+		realm, err := server.StringArg(args, "realm")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -41,7 +41,7 @@ func historyHandler(resolve indexer.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf("realm: required argument is missing")
 		}
 
-		profile, err := stringArg(args, "profile")
+		profile, err := server.StringArg(args, "profile")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -56,25 +56,27 @@ func historyHandler(resolve indexer.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf("gno_history: %w", err)
 		}
 
-		r := budget.Apply(formatEvents(events), "", false)
-		text := r.Full
-		if r.Truncated {
-			text = r.Summary
-		}
+		text, _ := budget.Wrapped(formatEvents(events), "", "history", realm)
 		return server.Result{Text: text}, nil
 	}
 }
 
 // formatEvents renders TxEvents as a markdown-friendly bulleted listing.
 // Used by both gno_history and gno_activity.
-func formatEvents(events []indexer.TxEvent) string {
+func formatEvents(events []indexerpkg.TxEvent) string {
 	if len(events) == 0 {
 		return "No transactions found for this realm."
 	}
 	var b strings.Builder
 	for _, e := range events {
-		fmt.Fprintf(&b, "- %s @ height %d (%s)  kind=%s",
-			e.Time.UTC().Format("2006-01-02 15:04:05"), e.Height, e.Hash, e.Kind)
+		// The indexer schema exposes no block time, so e.Time is usually zero;
+		// only print a timestamp when one is actually populated.
+		if e.Time.IsZero() {
+			fmt.Fprintf(&b, "- height %d (%s)  kind=%s", e.Height, e.Hash, e.Kind)
+		} else {
+			fmt.Fprintf(&b, "- %s @ height %d (%s)  kind=%s",
+				e.Time.UTC().Format("2006-01-02 15:04:05"), e.Height, e.Hash, e.Kind)
+		}
 		if e.Caller != "" {
 			b.WriteString("  caller=")
 			b.WriteString(e.Caller)

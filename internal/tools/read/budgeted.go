@@ -10,6 +10,14 @@ import (
 // (possibly summarized) body and whether it was truncated. v2 has no
 // line/symbol slicing param, so the budget always applies — including to a
 // single large source file (the most common context-blowup payload).
+//
+// Unlike the OutputText tools, gno_read does NOT wrap the body in an
+// <untrusted_content> envelope: the body is delivered as an MCP
+// EmbeddedResource, whose trust posture is the untrusted-content marker, and
+// wrapping would corrupt the txtar archive (the closing tag would merge into
+// the last file). This relies on the client honoring the resource boundary; a
+// client that flattens resources into the prompt as plain text would see this
+// content unwrapped.
 func budgetBody(full, gnowebURL string) (string, bool) {
 	r := budget.Apply(full, gnowebURL, false)
 	if r.Truncated {

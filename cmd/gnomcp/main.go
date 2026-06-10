@@ -32,9 +32,12 @@ import (
 	idxtools "github.com/gnoverse/gno-mcp/internal/tools/indexer"
 	readtools "github.com/gnoverse/gno-mcp/internal/tools/read"
 	writetools "github.com/gnoverse/gno-mcp/internal/tools/write"
+	"github.com/gnoverse/gno-mcp/internal/untrusted"
 )
 
-const version = "v0.2.0"
+// version is overridden at release time via -ldflags "-X main.version=...";
+// dev builds report "dev".
+var version = "dev"
 
 func main() {
 	if len(os.Args) > 1 {
@@ -241,10 +244,7 @@ func makeHandler(t *server.Tool, s *server.Server, auditLog *audit.Log, auditRea
 		res, callErr := s.Registry().Call(ctx, t.Name, args)
 		dur := time.Since(start)
 
-		// determine audit class
-		shouldAudit := t.Capability == server.CapWrite || t.Capability == server.CapWritePrep || auditReads
-
-		if shouldAudit {
+		if shouldAuditAtAdapter(t.Capability, t.SelfAudited, auditReads) {
 			entry := audit.Entry{
 				Time:        time.Now().UTC(),
 				Tool:        t.Name,
@@ -257,7 +257,7 @@ func makeHandler(t *server.Tool, s *server.Server, auditLog *audit.Log, auditRea
 			} else {
 				entry.Result = "ok"
 			}
-			_ = auditLog.Append(entry) // audit errors are non-fatal
+			auditLog.Record(entry) // non-fatal, but logs on failure rather than silently dropping
 		}
 
 		if callErr != nil {
@@ -440,9 +440,9 @@ func defaultAuditPath() string {
 		return v
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".local", "share", "gnomcp", "audit.log")
+		return filepath.Join(home, ".local", "share", "gnomcp", "audit.jsonl")
 	}
-	return "audit.log"
+	return "audit.jsonl"
 }
 
 func defaultSessionsPath() string {
@@ -493,13 +493,16 @@ func toolErrorResult(err error) *mcpsdk.CallToolResult {
 		}
 		sc["code"] = te.Code
 		return &mcpsdk.CallToolResult{
-			Content:           []mcpsdk.Content{&mcpsdk.TextContent{Text: te.Message}},
+			Content:           []mcpsdk.Content{&mcpsdk.TextContent{Text: untrusted.Neutralize(te.Message)}},
 			StructuredContent: sc,
 			IsError:           true,
 		}
 	}
+	// Error text is mixed-trust: gnomcp's own framing around chain/network
+	// bytes (e.g. a realm panic string in an ABCI log). It is neutralized — not
+	// enveloped — so embedded text cannot forge or close an envelope.
 	return &mcpsdk.CallToolResult{
-		Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: err.Error()}},
+		Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: untrusted.Neutralize(err.Error())}},
 		IsError: true,
 	}
 }
@@ -509,11 +512,40 @@ func argString(args map[string]any, key string) string {
 	return v
 }
 
+// shouldAuditAtAdapter reports whether the generic MCP adapter writes an audit
+// line for a tool. Self-audited tools (the write-tx tools) write their own
+// enriched entry, so the adapter skips them to avoid an unlinked duplicate.
+func shouldAuditAtAdapter(capability server.Capability, selfAudited, auditReads bool) bool {
+	if selfAudited {
+		return false
+	}
+	return capability == server.CapWrite || capability == server.CapWritePrep || auditReads
+}
+
+// safeArgKeys are the args allowed to appear verbatim in an audit summary.
+// Every other key is redacted, so a tool added later cannot leak a sensitive
+// value (function args, code, file bodies, expressions, secrets) by default —
+// over-redaction is harmless for an audit log, under-redaction is not.
+var safeArgKeys = map[string]bool{
+	"profile": true, "realm": true, "func": true, "path": true, "file": true,
+	"deploy_path": true, "simulate": true, "identity": true, "limit": true,
+	"since": true, "until": true, "namespace": true, "tag": true, "category": true,
+	"allow_run": true, "expires_in": true, "gnoweb_url": true, "name": true, "address": true,
+}
+
 func argsSummary(args map[string]any) string {
 	if len(args) == 0 {
 		return ""
 	}
-	b, err := json.Marshal(args)
+	redacted := make(map[string]any, len(args))
+	for k, v := range args {
+		if safeArgKeys[k] {
+			redacted[k] = v
+		} else {
+			redacted[k] = "[redacted]"
+		}
+	}
+	b, err := json.Marshal(redacted)
 	if err != nil {
 		return ""
 	}

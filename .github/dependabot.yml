@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # Keep the SHA-pinned actions fresh — Dependabot bumps the pin to the new
+  # commit when a referenced major tag advances.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  # Surface dependency updates (and the security advisories that motivated the
+  # toolchain/go-sdk/x-net bumps) early.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly

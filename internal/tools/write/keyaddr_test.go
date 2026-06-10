@@ -28,6 +28,20 @@ func TestKeyAddress_localProfile_returnsAddress(t *testing.T) {
 	assert.Equal(t, wantAddr, addr)
 }
 
+func TestKeyAddress_keystoreUnconfigured(t *testing.T) {
+	s := newBaseTestServer(t)
+	ks := keystore.New("", "") // no agent-keys directory configured
+	RegisterKeyAddress(s, ks)
+
+	_, err := s.Registry().Call(context.Background(), "gno_key_address", map[string]any{
+		"profile": "testnet5",
+	})
+	require.Error(t, err, "expected key_storage_unconfigured error, got nil")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "key_storage_unconfigured", te.Code)
+}
+
 func TestKeyAddress_testnetProfile_agentIdentityUnavailable(t *testing.T) {
 	s := newBaseTestServer(t)
 	ks := keystore.New(t.TempDir(), "")

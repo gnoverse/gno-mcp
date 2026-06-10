@@ -1,12 +1,30 @@
 name: CI
+# pull_request (not pull_request_target) runs untrusted fork code under a
+# read-only, secret-less token. Do NOT add any secrets.* to this file: doing so
+# would expose them to fork PRs.
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version: '1.26.1' }
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with: { go-version: '1.26.4' }
       - run: go test -short -race ./...
       - run: go vet ./...
+      # Compile-check the integration-tagged tests so the real-node harness can't rot unnoticed.
+      - run: go vet -tags=integration ./test/integration/...
       - run: gofmt -l -d . | tee /tmp/fmt && test ! -s /tmp/fmt
+  vuln:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with: { go-version: '1.26.4' }
+      # govulncheck is intentionally @latest: it is a first-party Go-team tool and
+      # the vuln database is fetched at run time regardless, so @latest keeps the
+      # scanner and its advisory tooling current.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

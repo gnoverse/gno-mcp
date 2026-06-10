@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gnoverse/gno-mcp/internal/fsutil"
 	"github.com/gnoverse/gno-mcp/internal/secret"
 )
 
@@ -53,11 +54,6 @@ func (s *Store) keyPath(profile, sessionAddr string) string {
 // Write serialises meta to disk. Creates the profile dir if absent.
 // When passphrase is set, encrypts Privkey before writing and sets Encrypted=true.
 func (s *Store) Write(profile string, meta *SessionMeta) error {
-	dir := s.profileDir(profile)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("session/store: mkdir %s: %w", dir, err)
-	}
-
 	m := *meta
 	if s.passphrase != "" {
 		encrypted, err := secret.Encrypt(m.Privkey, s.passphrase)
@@ -76,7 +72,7 @@ func (s *Store) Write(profile string, meta *SessionMeta) error {
 	}
 
 	path := s.keyPath(profile, meta.SessionAddress)
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := fsutil.WriteFileAtomic(path, data, 0600); err != nil {
 		return fmt.Errorf("session/store: write %s: %w", path, err)
 	}
 	return nil
@@ -159,6 +155,12 @@ func (s *Store) decode(data []byte, path string) (*SessionMeta, error) {
 	var m SessionMeta
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("unmarshal %s: %w", path, err)
+	}
+	if m.Encrypted && s.passphrase == "" {
+		// Fail loud rather than mis-decode: secret.Decrypt would also reject this,
+		// but catching it here keeps a garbage privkey out of the Manager and avoids
+		// a later Write persisting ciphertext as plaintext, which bricks the key.
+		return nil, fmt.Errorf("session file at %s is encrypted but no passphrase is set (set GNOMCP_SESSION_PASSPHRASE)", path)
 	}
 	if m.Encrypted {
 		plain, err := secret.Decrypt(m.Privkey, s.passphrase)

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gnoverse/gno-mcp/internal/profiles"
@@ -79,6 +80,40 @@ func TestTestnet_wrongPassphrase_failsNotErrNoAgentKey(t *testing.T) {
 	_, err = New(dir, "wrong").SignerForProfile("tnet", testnet9999Profile())
 	require.Error(t, err, "wrong passphrase must fail")
 	require.NotErrorIs(t, err, ErrNoAgentKey, "wrong passphrase must NOT be reported as ErrNoAgentKey")
+}
+
+func TestTestnet_encryptedThenNoPassphrase_clearError(t *testing.T) {
+	dir := t.TempDir()
+	_, err := New(dir, "pass").GenerateForProfile("tnet", testnet9999Profile())
+	require.NoError(t, err)
+	// Passphrase unset on reload: loading must fail clearly, not derive a signer
+	// from a garbage mnemonic, and must not masquerade as "no key generated".
+	_, err = New(dir, "").SignerForProfile("tnet", testnet9999Profile())
+	require.Error(t, err, "loading an encrypted key with no passphrase must fail")
+	require.NotErrorIs(t, err, ErrNoAgentKey, "must not be reported as ErrNoAgentKey")
+}
+
+func TestGenerate_concurrent_oneWinner(t *testing.T) {
+	ks := New(t.TempDir(), "")
+	const n = 8
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := range n {
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = ks.GenerateForProfile("tnet", testnet9999Profile())
+		}(i)
+	}
+	wg.Wait()
+
+	ok := 0
+	for _, e := range errs {
+		if e == nil {
+			ok++
+		}
+	}
+	require.Equal(t, 1, ok, "exactly one concurrent generate must succeed (no clobber)")
 }
 
 func TestTestnet_encryptedAtRest(t *testing.T) {

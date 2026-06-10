@@ -57,7 +57,17 @@ func TestHistory_emptyHistoryReturnsMessage(t *testing.T) {
 		"realm":   testRealm,
 	})
 	require.NoError(t, err, "Call")
-	assert.Equal(t, "No transactions found for this realm.", res.Text)
+	assert.Contains(t, res.Text, "No transactions found for this realm.")
+	assert.Contains(t, res.Text, `<untrusted_content kind="history"`, "history output must be wrapped as untrusted")
+}
+
+func TestFormatEvents_omitsZeroTimestamp(t *testing.T) {
+	// The indexer schema doesn't expose block time, so TxEvent.Time is zero;
+	// it must not render as a bogus 0001-01-01 date.
+	out := formatEvents([]indexerpkg.TxEvent{{Hash: "0xabc", Height: 7, Kind: "MsgCall"}})
+	assert.NotContains(t, out, "0001", "a zero TxEvent.Time must not render as a date")
+	assert.Contains(t, out, "0xabc")
+	assert.Contains(t, out, "height 7")
 }
 
 func TestHistory_requiresRealm(t *testing.T) {

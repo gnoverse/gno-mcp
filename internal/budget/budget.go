@@ -1,6 +1,10 @@
 package budget
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/gnoverse/gno-mcp/internal/untrusted"
+)
 
 const DefaultBudget = 4 * 1024 // bytes
 
@@ -25,4 +29,16 @@ func Apply(full, gnowebURL string, sliceRequested bool) Result {
 	}
 	r.Truncated = true
 	return r
+}
+
+// Wrapped applies the budget to chain-derived content and wraps the surviving
+// content in an untrusted-content envelope tagged with kind/source. When the
+// content is over budget it is dropped for gnomcp's own truncation summary
+// (framing, not chain bytes), returned unwrapped; truncated reports which case.
+func Wrapped(full, gnowebURL, kind, source string) (text string, truncated bool) {
+	r := Apply(full, gnowebURL, false)
+	if r.Truncated {
+		return r.Summary, true
+	}
+	return untrusted.Wrap(r.Full, kind, source), false
 }

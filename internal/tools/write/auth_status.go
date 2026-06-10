@@ -45,16 +45,9 @@ func authStatusHandler(
 	sessionMgr *session.Manager,
 	resolver chain.Resolver,
 ) (server.Result, error) {
-	profileName, err := stringArg(args, "profile")
+	profileName, _, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
-	}
-	if profileName == "" {
-		return server.Result{}, fmt.Errorf("profile: required — pick one of the configured profiles")
-	}
-
-	if _, ok := s.Config().Profiles[profileName]; !ok {
-		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
 	}
 
 	metas := sessionMgr.ListForProfile(profileName)

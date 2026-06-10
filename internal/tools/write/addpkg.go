@@ -2,7 +2,6 @@ package write
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -14,7 +13,6 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/audit"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/keystore"
-	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
@@ -33,6 +31,7 @@ func RegisterAddPkg(s *server.Server, ks *keystore.Keystore, resolver chain.Reso
 		InputSchema: addpkgInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
+		SelfAudited: true,
 		Annotations: server.Annotations{
 			ReadOnly:    false,
 			Destructive: true,
@@ -55,17 +54,33 @@ func addpkgHandler(
 ) (server.Result, error) {
 	start := time.Now()
 
+	// One audit record per invocation, written on every return path — including the
+	// early validation and pre-check denials — because SelfAudited makes the MCP
+	// adapter skip its generic line. auditResult defaults to a denial; the dispatch
+	// paths overwrite it.
+	var (
+		profileName string
+		argsSummary string
+		auditResult = "tool_err"
+	)
+	defer func() {
+		alog.Record(audit.Entry{
+			Tool:        "gno_addpkg",
+			Profile:     profileName,
+			ArgsSummary: argsSummary,
+			Result:      auditResult,
+			Duration:    time.Since(start).Milliseconds(),
+		})
+	}()
+
 	// ---- Validate args
 
-	profileName, err := stringArg(args, "profile")
+	profileName, p, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
 	}
-	if profileName == "" {
-		return server.Result{}, fmt.Errorf("profile: required — pick one of the configured profiles")
-	}
 
-	deployPath, err := stringArg(args, "deploy_path")
+	deployPath, err := server.StringArg(args, "deploy_path")
 	if err != nil {
 		return server.Result{}, err
 	}
@@ -73,7 +88,7 @@ func addpkgHandler(
 		return server.Result{}, fmt.Errorf("deploy_path: required")
 	}
 
-	simulate, err := boolArg(args, "simulate")
+	simulate, err := server.BoolArg(args, "simulate")
 	if err != nil {
 		return server.Result{}, err
 	}
@@ -83,35 +98,12 @@ func addpkgHandler(
 		return server.Result{}, fmt.Errorf("files: %w", err)
 	}
 
-	// ---- Resolve profile
+	// ---- Resolve chain client
 
-	p, ok := s.Config().Profiles[profileName]
-	if !ok {
-		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
+	c := resolver(profileName)
+	if c == nil {
+		return server.Result{}, fmt.Errorf("profile %q: no chain client available", profileName)
 	}
-
-	// ---- Acquire agent signer
-
-	signer, err := ks.SignerForProfile(profileName, p)
-	if err != nil {
-		if errors.Is(err, keystore.ErrNoAgentKey) {
-			return server.Result{}, &server.ToolError{
-				Code: "agent_identity_unavailable",
-				Message: fmt.Sprintf(
-					"no agent key for profile %q — run gno_key_generate to create one",
-					profileName,
-				),
-				Extra: map[string]any{"profile": profileName},
-			}
-		}
-		return server.Result{}, fmt.Errorf("gno_addpkg: signer: %w", err)
-	}
-
-	info, err := signer.Info()
-	if err != nil {
-		return server.Result{}, fmt.Errorf("gno_addpkg: signer info: %w", err)
-	}
-	addr := info.GetAddress().String()
 
 	// ---- Inject gnomod.toml if missing, then sort
 
@@ -125,66 +117,35 @@ func addpkgHandler(
 		return strings.Compare(a.Name, b.Name)
 	})
 
-	// ---- Resolve chain client
+	// ---- Build args summary for audit (before the signer pre-check so denials carry it)
 
-	c := resolver(profileName)
-	if c == nil {
-		return server.Result{}, fmt.Errorf("profile %q: no chain client available", profileName)
-	}
+	argsSummary = fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
 
-	// ---- Build args summary for audit
+	// ---- Acquire agent signer (with the testnet unfunded pre-check)
 
-	argsSummary := fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
-
-	// ---- Testnet balance pre-check: block unfunded agent accounts before broadcast
-
-	if p.ChainType == profiles.ChainTypeTestnet && !simulate {
-		bal, balErr := c.Balance(ctx, addr)
-		if balErr != nil {
-			return server.Result{}, fmt.Errorf("gno_addpkg: balance check: %w", balErr)
-		}
-		if bal == 0 {
-			return server.Result{}, &server.ToolError{
-				Code:    "insufficient_funds",
-				Message: fmt.Sprintf("agent testnet account %s is unfunded — run gno_faucet_fund (or send it ugnot), then retry", addr),
-				Extra:   map[string]any{"profile": profileName, "address": addr},
-			}
-		}
+	signer, addr, aerr := acquireAgentSigner(ctx, ks, c, "gno_addpkg",
+		"run gno_key_generate to create one", profileName, p, simulate)
+	if aerr != nil {
+		return server.Result{}, aerr
 	}
 
 	// ---- Deploy
 
 	res, deployErr := c.AddPackage(ctx, signer, deployPath, files, simulate)
 	if deployErr != nil {
-		result := "broadcast_err"
 		errPrefix := "gno_addpkg broadcast"
+		auditResult = "broadcast_err"
 		if simulate {
-			result = "sim_err"
 			errPrefix = "gno_addpkg simulate"
+			auditResult = "sim_err"
 		}
-		_ = alog.Append(audit.Entry{
-			Tool:        "gno_addpkg",
-			Profile:     profileName,
-			ArgsSummary: argsSummary,
-			Result:      result,
-			Duration:    time.Since(start).Milliseconds(),
-		})
 		return server.Result{}, fmt.Errorf("%s: %w", errPrefix, deployErr)
 	}
 
-	// ---- Audit
-
-	auditResult := "ok"
+	auditResult = "ok"
 	if simulate {
 		auditResult = "sim"
 	}
-	_ = alog.Append(audit.Entry{
-		Tool:        "gno_addpkg",
-		Profile:     profileName,
-		ArgsSummary: argsSummary,
-		Result:      auditResult,
-		Duration:    time.Since(start).Milliseconds(),
-	})
 
 	// ---- Build result text
 

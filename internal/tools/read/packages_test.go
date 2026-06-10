@@ -20,7 +20,8 @@ func TestPackages_listsUnderPrefix(t *testing.T) {
 		"profile": "testnet5",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "gno.land/r/demo/foo\ngno.land/r/demo/bar", res.Text)
+	assert.Contains(t, res.Text, "gno.land/r/demo/foo\ngno.land/r/demo/bar")
+	assert.Contains(t, res.Text, `<untrusted_content kind="packages"`, "package list must be wrapped as untrusted")
 }
 
 func TestPackages_namespaceTarget(t *testing.T) {
@@ -34,7 +35,7 @@ func TestPackages_namespaceTarget(t *testing.T) {
 		"profile": "testnet5",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "gno.land/p/demo/lib\ngno.land/r/demo/foo", res.Text)
+	assert.Contains(t, res.Text, "gno.land/p/demo/lib\ngno.land/r/demo/foo")
 }
 
 func TestPackages_requiresPath(t *testing.T) {
@@ -74,5 +75,5 @@ func TestPackages_acceptsValidLimit(t *testing.T) {
 		"profile": "testnet5",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "gno.land/r/demo/foo", res.Text)
+	assert.Contains(t, res.Text, "gno.land/r/demo/foo")
 }

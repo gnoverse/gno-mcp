@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 )
 
@@ -38,11 +39,12 @@ func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, 
 }
 
 // Defaults baked into the emitted gnokey commands so the user can paste and run
-// without hunting for flag values. Match chain.Real's BaseTxCfg so gnokey
-// broadcasts behave the same as gnomcp's session-signed ones.
-const (
-	defaultGnokeyGasFee    = "10000000ugnot"
-	defaultGnokeyGasWanted = 10_000_000
+// without hunting for flag values. Sourced from chain.Real's BaseTxCfg constants
+// so gnokey broadcasts behave the same as gnomcp's session-signed ones — drift
+// here would desync session spend accounting.
+var (
+	defaultGnokeyGasFee    = fmt.Sprintf("%dugnot", chain.DefaultGasFeeUgnot)
+	defaultGnokeyGasWanted = chain.DefaultGasWanted
 )
 
 // FormatGnokeyRevokeCommand returns the gnokey shell command the user must run

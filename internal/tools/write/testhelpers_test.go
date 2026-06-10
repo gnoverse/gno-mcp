@@ -19,7 +19,7 @@ func newBaseTestServer(t *testing.T) *server.Server {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"testnet5": {
 			ChainType:     "testnet",
-			RPCURL:        "x",
+			RPCURL:        "http://127.0.0.1:26657",
 			ChainID:       "test5",
 			MasterAddress: "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 		},
@@ -36,7 +36,7 @@ func newReadOnlyTestServer(t *testing.T) *server.Server {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"testnet5": {
 			ChainType: "testnet",
-			RPCURL:    "x",
+			RPCURL:    "http://127.0.0.1:26657",
 			ChainID:   "test5",
 		},
 	}}
@@ -49,7 +49,7 @@ func newReadOnlyTestServer(t *testing.T) *server.Server {
 func newLocalTestServer(t *testing.T) *server.Server {
 	t.Helper()
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"local": {ChainType: profiles.ChainTypeLocal, RPCURL: "x", ChainID: "dev"},
+		"local": {ChainType: profiles.ChainTypeLocal, RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
 	}}
 	_, err := cfg.Validate()
 	require.NoError(t, err, "validate")

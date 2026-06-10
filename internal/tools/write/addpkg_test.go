@@ -104,6 +104,38 @@ func TestAddPkg_agentTestnet_insufficientFunds(t *testing.T) {
 	assert.Equal(t, agentAddr, te.Extra["address"])
 }
 
+// TestAddPkg_insufficientFundsDenialAuditsArgs verifies that the audit record
+// for an insufficient_funds denial carries the value-free args summary
+// (deploy path and post-injection file count), not an empty field.
+func TestAddPkg_insufficientFundsDenialAuditsArgs(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+
+	_, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	require.NoError(t, err, "GenerateForProfile")
+
+	fake := chain.NewFake() // balance 0 by default
+	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
+
+	_, pkgErr := s.Registry().Call(context.Background(), "gno_addpkg", map[string]any{
+		"profile":     "testnet9999",
+		"deploy_path": "gno.land/r/test/foo",
+		"files": []any{
+			map[string]any{"name": "foo.gno", "body": "package foo\n"},
+		},
+	})
+	require.Error(t, pkgErr, "expected insufficient_funds error")
+
+	entries := parseAuditEntries(t, &auditBuf)
+	require.Len(t, entries, 1, "a denied deploy must still produce exactly one audit record")
+	assert.Equal(t, "tool_err", entries[0].Result)
+	assert.Contains(t, entries[0].ArgsSummary, "deploy_path=gno.land/r/test/foo")
+	assert.Contains(t, entries[0].ArgsSummary, "files=2",
+		"file count includes the generated gnomod.toml")
+}
+
 // TestAddPkg_agentTestnet_funded verifies that a funded testnet agent account
 // proceeds past the balance check and broadcasts the AddPackage.
 func TestAddPkg_agentTestnet_funded(t *testing.T) {

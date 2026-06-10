@@ -1,22 +1,32 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
 
 	"github.com/gnoverse/gno-mcp/faucet"
+	"github.com/gnoverse/gno-mcp/internal/chain"
 )
 
 func main() {
 	rpcURL := flag.String("rpc-url", "", "gno node RPC URL (required)")
 	chainID := flag.String("chain-id", "", "chain-id of the target testnet (required)")
-	mnemonic := flag.String("mnemonic", os.Getenv("GNOMCP_FAUCET_MNEMONIC"), "BIP-39 mnemonic for the funding key (or GNOMCP_FAUCET_MNEMONIC)")
+	// The mnemonic is NOT a flag default: a non-empty string default is printed by
+	// -help and on any flag error, leaking the funding key to stderr/logs. The env
+	// var is read after parsing as a fallback when -mnemonic is unset; prefer the
+	// env var in practice, since argv is visible to ps and shell history.
+	mnemonic := flag.String("mnemonic", "", "BIP-39 mnemonic for the funding key (default: $GNOMCP_FAUCET_MNEMONIC)")
 	listen := flag.String("listen", "127.0.0.1:8590", "address to listen on")
 	grant := flag.Int64("grant", 1_000_000_000, "ugnot amount per drip")
 	perAddrCooldown := flag.Duration("per-addr-cooldown", 24*time.Hour, "cooldown window between grants to the same address")
@@ -25,6 +35,9 @@ func main() {
 	dailyCap := flag.Int64("daily-cap", 100_000_000_000, "hard daily ugnot outflow cap")
 	flag.Parse()
 
+	if *mnemonic == "" {
+		*mnemonic = os.Getenv("GNOMCP_FAUCET_MNEMONIC")
+	}
 	if *rpcURL == "" || *chainID == "" || *mnemonic == "" {
 		log.Fatal("agentfaucet: -rpc-url, -chain-id, and -mnemonic (or GNOMCP_FAUCET_MNEMONIC) are required")
 	}
@@ -49,7 +62,8 @@ func main() {
 
 	cli := &gnoclient.Client{RPCClient: rpc, Signer: signer}
 
-	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(), "10000000ugnot", 10_000_000)
+	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(),
+		fmt.Sprintf("%dugnot", chain.DefaultGasFeeUgnot), chain.DefaultGasWanted)
 	lim := faucet.NewLimiter(faucet.LimiterCfg{
 		PerAddrWindow: *perAddrCooldown,
 		PerAddrMax:    1,
@@ -68,5 +82,25 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	log.Fatal(srv.ListenAndServe())
+
+	serveErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- err
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	select {
+	case err := <-serveErr:
+		log.Fatalf("agentfaucet: serve: %v", err)
+	case sig := <-stop:
+		log.Printf("agentfaucet: %s received, shutting down", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("agentfaucet: graceful shutdown failed: %v", err)
+		}
+	}
 }

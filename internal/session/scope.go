@@ -3,10 +3,12 @@ package session
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 )
 
@@ -44,6 +46,12 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 		)
 	}
 
+	for _, p := range args.AllowPaths {
+		if err := validateAllowPath(p); err != nil {
+			return Scope{}, nil, err
+		}
+	}
+
 	profileSpendLimit, profileExpiresIn, err := profile.EffectiveDefaults()
 	if err != nil {
 		return Scope{}, nil, fmt.Errorf("session: profile effective defaults: %w", err)
@@ -52,6 +60,12 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 	spendLimit := profileSpendLimit
 	if args.SpendLimit != "" {
 		spendLimit = args.SpendLimit
+	}
+	// Validate unconditionally: clampCoin runs only when a hard cap is set and is
+	// skipped entirely on the BypassHardLimits path, so without this check a
+	// shell-metacharacter spend_limit reaches the pasted gnokey command.
+	if !profiles.SpendLimitValid(spendLimit) {
+		return Scope{}, nil, fmt.Errorf("session: spend_limit %q is invalid (want digits then a denom, e.g. 1000000ugnot)", spendLimit)
 	}
 
 	expiresIn := profileExpiresIn
@@ -110,6 +124,29 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 	}
 
 	return scope, warnings, nil
+}
+
+// allowPathUnsafe matches any character that must never appear in an allow_paths
+// entry. Realm paths use only lowercase letters, digits, '.', '/', '_', and '-';
+// anything else (whitespace, shell metacharacters) signals an injection attempt
+// into the gnokey command the user pastes into a terminal.
+var allowPathUnsafe = regexp.MustCompile(`[^a-z0-9./_-]`)
+
+// validateAllowPath rejects an allow_paths entry that is not a clean realm path.
+// The character allowlist closes shell-injection into the pasted gnokey command;
+// chain.IsRealmPath enforces that the entry is a callable realm (the vm/exec
+// target the entry is rendered as).
+func validateAllowPath(p string) error {
+	if p == "" {
+		return errors.New("session: allow_paths entry is empty")
+	}
+	if allowPathUnsafe.MatchString(p) {
+		return fmt.Errorf("session: allow_paths entry %q contains illegal characters (want a realm path like gno.land/r/org/name)", p)
+	}
+	if !chain.IsRealmPath(p) {
+		return fmt.Errorf("session: allow_paths entry %q is not a realm path (want gno.land/r/...)", p)
+	}
+	return nil
 }
 
 func clampCoin(a, cap string) (string, bool, error) {

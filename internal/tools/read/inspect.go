@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gnoverse/gno-mcp/internal/budget"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
@@ -16,7 +17,8 @@ func RegisterInspect(s *server.Server, resolve chain.Resolver) {
 		Description: "Returns the godoc summary of a Gno package (realm or pure): package description, " +
 			"exported types, function signatures, and per-symbol docstrings as plain text. " +
 			"Use when the user or agent needs to understand the API surface of a package without reading " +
-			"the full source. Returns OutputText (typed metadata, not package content). " +
+			"the full source. Returns OutputText, wrapped in an untrusted-content envelope (the godoc is " +
+			"realm-authored). " +
 			"For the raw source use gno_read; for rendered output use gno_render; for value inspection " +
 			"use gno_eval. Backed by vm/qdoc; HEAD-only.",
 		InputSchema: inspectInputSchema(s),
@@ -28,7 +30,7 @@ func RegisterInspect(s *server.Server, resolve chain.Resolver) {
 
 func inspectHandler(resolve chain.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
-		path, err := stringArg(args, "path")
+		path, err := server.StringArg(args, "path")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -39,7 +41,7 @@ func inspectHandler(resolve chain.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf(
 				"path must be a realm (gno.land/r/...) or pure package (gno.land/p/...); got %q", path)
 		}
-		profile, err := stringArg(args, "profile")
+		profile, err := server.StringArg(args, "profile")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -52,7 +54,7 @@ func inspectHandler(resolve chain.Resolver) server.Handler {
 		if err != nil {
 			return server.Result{}, fmt.Errorf("gno_inspect: %w", err)
 		}
-		text, _ := budgetBody(doc, "")
+		text, _ := budget.Wrapped(doc, "", "doc", path)
 		return server.Result{Text: text}, nil
 	}
 }

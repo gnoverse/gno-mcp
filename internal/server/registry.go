@@ -98,6 +98,10 @@ type Tool struct {
 	Capability  Capability
 	Annotations Annotations
 	Handler     Handler
+	// SelfAudited marks a tool that writes its own audit entries (with broadcast
+	// detail the generic adapter cannot see). The MCP adapter skips its generic
+	// audit line for such tools so one invocation produces exactly one record.
+	SelfAudited bool
 }
 
 // Registry holds the declared tools and dispatches Call.

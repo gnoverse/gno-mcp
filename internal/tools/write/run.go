@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
+	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	"github.com/gnoverse/gno-mcp/internal/audit"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/keystore"
-	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
+	"github.com/gnoverse/gno-mcp/internal/untrusted"
 )
 
 // RegisterRun registers the gno_run tool.
@@ -33,6 +34,7 @@ func RegisterRun(s *server.Server, ks *keystore.Keystore, sessionMgr *session.Ma
 		InputSchema: runInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
+		SelfAudited: true,
 		Annotations: server.Annotations{
 			ReadOnly:    false,
 			Destructive: true,
@@ -56,17 +58,35 @@ func runHandler(
 ) (server.Result, error) {
 	start := time.Now()
 
+	// One audit record per invocation, written on every return path — including the
+	// early validation and pre-check denials — because SelfAudited makes the MCP
+	// adapter skip its generic line. auditResult defaults to a denial; the dispatch
+	// paths overwrite it.
+	var (
+		profileName string
+		argsSummary string
+		sessionAddr string
+		auditResult = "tool_err"
+	)
+	defer func() {
+		alog.Record(audit.Entry{
+			Tool:           "gno_run",
+			Profile:        profileName,
+			ArgsSummary:    argsSummary,
+			Result:         auditResult,
+			Duration:       time.Since(start).Milliseconds(),
+			SessionAddress: sessionAddr,
+		})
+	}()
+
 	// ---- Validate args
 
-	profileName, err := stringArg(args, "profile")
+	profileName, profile, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
 	}
-	if profileName == "" {
-		return server.Result{}, fmt.Errorf("profile: required — pick one of the configured profiles")
-	}
 
-	code, err := stringArg(args, "code")
+	code, err := server.StringArg(args, "code")
 	if err != nil {
 		return server.Result{}, err
 	}
@@ -74,16 +94,9 @@ func runHandler(
 		return server.Result{}, fmt.Errorf("code: required")
 	}
 
-	simulate, err := boolArg(args, "simulate")
+	simulate, err := server.BoolArg(args, "simulate")
 	if err != nil {
 		return server.Result{}, err
-	}
-
-	// ---- Resolve profile + chain client
-
-	profile, ok := s.Config().Profiles[profileName]
-	if !ok {
-		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
 	}
 
 	// ---- Resolve chain client
@@ -93,104 +106,31 @@ func runHandler(
 		return server.Result{}, fmt.Errorf("profile %q: no chain client available", profileName)
 	}
 
-	// ---- Resolve identity (default by tier: local/testnet→agent, otherwise→session)
-
-	identity, _ := stringArg(args, "identity")
-	if identity == "" {
-		if profile.ChainType == profiles.ChainTypeLocal || profile.ChainType == profiles.ChainTypeTestnet {
-			identity = "agent"
-		} else {
-			identity = "session"
-		}
-	}
-
 	// ---- Build args summary for audit
 
-	argsSummary := fmt.Sprintf("code_len=%d", len(code))
+	argsSummary = fmt.Sprintf("code_len=%d", len(code))
 
 	// ---- Dispatch by identity
 
 	var rr chain.RunResult
-	var signerAddr string
-	var master string
-
-	switch identity {
-	case "agent":
-		// ---- Agent branch: sign with the agent's own key (local test1 or testnet generated key)
-
-		agentSigner, ksErr := ks.SignerForProfile(profileName, profile)
-		if ksErr != nil {
-			if errors.Is(ksErr, keystore.ErrNoAgentKey) {
-				return server.Result{}, &server.ToolError{
-					Code: "agent_identity_unavailable",
-					Message: fmt.Sprintf(
-						"no agent key for profile %q — run gno_key_generate (or pass identity=session to act as the user)",
-						profileName,
-					),
-					Extra: map[string]any{"profile": profileName},
-				}
-			}
-			return server.Result{}, fmt.Errorf("gno_run: signer: %w", ksErr)
-		}
-
-		info, infoErr := agentSigner.Info()
-		if infoErr != nil {
-			return server.Result{}, fmt.Errorf("gno_run: signer info: %w", infoErr)
-		}
-		signerAddr = info.GetAddress().String()
-
-		if profile.ChainType == profiles.ChainTypeTestnet && !simulate {
-			bal, balErr := c.Balance(ctx, signerAddr)
-			if balErr != nil {
-				return server.Result{}, fmt.Errorf("gno_run: balance check: %w", balErr)
-			}
-			if bal == 0 {
-				return server.Result{}, &server.ToolError{
-					Code:    "insufficient_funds",
-					Message: fmt.Sprintf("agent testnet account %s is unfunded — run gno_faucet_fund (or send it ugnot), then retry", signerAddr),
-					Extra:   map[string]any{"profile": profileName, "address": signerAddr},
-				}
-			}
-		}
-
-		rr, err = c.Run(ctx, agentSigner, code, simulate)
-		if err != nil {
-			result := "broadcast_err"
-			errPrefix := "gno_run broadcast"
-			if simulate {
-				result = "sim_err"
-				errPrefix = "gno_run simulate"
-			}
-			_ = alog.Append(audit.Entry{
-				Tool:        "gno_run",
-				Profile:     profileName,
-				ArgsSummary: argsSummary,
-				Result:      result,
-				Duration:    time.Since(start).Milliseconds(),
-			})
-			return server.Result{}, fmt.Errorf("%s: %w", errPrefix, err)
-		}
-
-		// Audit success (no UpdateSpend — agent pays from its own balance)
-		auditResult := "ok"
-		if simulate {
-			auditResult = "sim"
-		}
-		_ = alog.Append(audit.Entry{
-			Tool:        "gno_run",
-			Profile:     profileName,
-			ArgsSummary: argsSummary,
-			Result:      auditResult,
-			Duration:    time.Since(start).Milliseconds(),
-		})
-
-	case "session":
-		// ---- Session branch: existing flow preserved byte-for-byte (requires AllowRun=true)
-
-		signer, pickErr := sessionMgr.PickSessionForRun(ctx, resolver, profileName)
-		if pickErr != nil {
+	identityArg, _ := server.StringArg(args, "identity")
+	identity, signerAddr, master, err := dispatchWriteTx(ctx, identityArg, writeTxDispatch{
+		tool:        "gno_run",
+		noKeyHint:   "run gno_key_generate (or pass identity=session to act as the user)",
+		profileName: profileName,
+		profile:     profile,
+		simulate:    simulate,
+		c:           c,
+		ks:          ks,
+		sessionMgr:  sessionMgr,
+		// The session must carry allow_run=true; scope mismatch here means no
+		// session authorizes MsgRun at all.
+		pickSession: func(ctx context.Context) (chain.Signer, error) {
+			return sessionMgr.PickSessionForRun(ctx, resolver, profileName)
+		},
+		mapPickErr: func(pickErr error) error {
 			if errors.Is(pickErr, session.ErrNoActiveSession) {
-				return server.Result{}, &server.ToolError{
+				return &server.ToolError{
 					Code: "authentication_required",
 					Message: fmt.Sprintf(
 						"no active session with allow_run=true for profile %q — use gno_session_propose with allow_run=true",
@@ -200,7 +140,7 @@ func runHandler(
 				}
 			}
 			if _, ok := errors.AsType[*session.ErrScopeMismatch](pickErr); ok {
-				return server.Result{}, &server.ToolError{
+				return &server.ToolError{
 					Code: "authentication_required",
 					Message: fmt.Sprintf(
 						"active sessions for profile %q do not authorize MsgRun — use gno_session_propose with allow_run=true",
@@ -209,80 +149,34 @@ func runHandler(
 					Extra: map[string]any{"profile": profileName},
 				}
 			}
-			return server.Result{}, fmt.Errorf("gno_run: pick session: %w", pickErr)
-		}
-
-		sessionAddr := signer.Address()
-		signerAddr = sessionAddr
-		master = profile.MasterAddress
-
-		rr, err = c.RunAsUser(ctx, signer, profile.MasterAddress, code, simulate)
-		if err != nil {
-			if simulate && errors.Is(err, chain.ErrSimulateUnsupported) {
-				return server.Result{}, &server.ToolError{
-					Code:    "simulate_unsupported",
-					Message: "this chain client does not support simulate; retry without simulate=true",
-					Extra:   map[string]any{"profile": profileName},
-				}
-			}
-			result := "broadcast_err"
-			errPrefix := "gno_run broadcast"
-			if simulate {
-				result = "sim_err"
-				errPrefix = "gno_run simulate"
-			}
-			_ = alog.Append(audit.Entry{
-				Tool:           "gno_run",
-				Profile:        profileName,
-				ArgsSummary:    argsSummary,
-				Result:         result,
-				Duration:       time.Since(start).Milliseconds(),
-				SessionAddress: sessionAddr,
-			})
-			return server.Result{}, fmt.Errorf("%s: %w", errPrefix, err)
-		}
-
-		// Update spend + audit (simulate skips spend update).
-		// The chain bills the session the full GasFee per tx, not GasUsed, so deduct
-		// that to keep local SpendRemaining in sync with the chain (see chain.DefaultGasFeeUgnot).
-		if !simulate {
-			_ = sessionMgr.UpdateSpend(profileName, sessionAddr, chain.DefaultGasFeeUgnot)
-		}
-
-		auditResult := "ok"
-		if simulate {
-			auditResult = "sim"
-		}
-		_ = alog.Append(audit.Entry{
-			Tool:           "gno_run",
-			Profile:        profileName,
-			ArgsSummary:    argsSummary,
-			Result:         auditResult,
-			Duration:       time.Since(start).Milliseconds(),
-			SessionAddress: sessionAddr,
-		})
-
-	default:
-		return server.Result{}, fmt.Errorf("identity: must be \"agent\" or \"session\", got %q", identity)
+			return nil
+		},
+		agentOp: func(ctx context.Context, signer gnoclient.Signer) error {
+			var opErr error
+			rr, opErr = c.Run(ctx, signer, code, simulate)
+			return opErr
+		},
+		sessionOp: func(ctx context.Context, signer chain.Signer) error {
+			var opErr error
+			rr, opErr = c.RunAsUser(ctx, signer, profile.MasterAddress, code, simulate)
+			return opErr
+		},
+		auditResult: &auditResult,
+		sessionAddr: &sessionAddr,
+	})
+	if err != nil {
+		return server.Result{}, err
 	}
 
-	// ---- Build result with identity metadata
-
-	out := buildRunResult(rr)
-	out.Text = signedByLine(identity, signerAddr, master, profile.ChainType) + "\n\n" + out.Text
-	if out.StructuredContent == nil {
-		out.StructuredContent = map[string]any{}
-	}
-	out.StructuredContent["identity"] = identity
-	out.StructuredContent["signer_address"] = signerAddr
-	if identity == "session" {
-		out.StructuredContent["master_address"] = master
-	}
-	return out, nil
+	return decorateWriteResult(buildRunResult(rr, profileName), identity, signerAddr, master, profile.ChainType), nil
 }
 
-// buildRunResult constructs the server.Result from a chain.RunResult.
-func buildRunResult(rr chain.RunResult) server.Result {
+// buildRunResult constructs the server.Result from a chain.RunResult. MsgRun
+// stdout can echo realm-authored state, so the text rendering wraps it in the
+// untrusted envelope (source = the profile whose chain ran the code); the
+// structured "output" field stays raw (the machine-readable channel,
+// documented in docs/security.md §4).
+func buildRunResult(rr chain.RunResult, profileName string) server.Result {
 	var b strings.Builder
 	if rr.Simulated {
 		fmt.Fprintf(&b, "Simulated run result\n\n")
@@ -293,7 +187,7 @@ func buildRunResult(rr chain.RunResult) server.Result {
 	}
 	fmt.Fprintf(&b, "GasUsed: %d\n", rr.GasUsed)
 	if rr.Output != "" {
-		fmt.Fprintf(&b, "Output:  %s\n", rr.Output)
+		fmt.Fprintf(&b, "Output:\n%s\n", untrusted.Wrap(rr.Output, "run_output", profileName))
 	}
 
 	return server.Result{

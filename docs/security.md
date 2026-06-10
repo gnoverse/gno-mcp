@@ -34,36 +34,47 @@ gnomcp does hold its **own** agent key: the dev/test **test1** account on local 
 
 ## 4. Untrusted-content envelope
 
-Every tool that returns external bytes wraps the body in:
+The gno chain is open — any realm's content is attacker-influenceable — so all
+chain-returned bytes are untrusted. The control differs by delivery channel:
 
-```
-<untrusted_content kind="render" source="gno.land/r/demo/foo">
-…
-</untrusted_content>
-```
+- **Inline text tools** (`gno_render`, `gno_eval`, `gno_inspect`, `gno_packages`, `gno_activity`, `gno_history`, `gno_list`) wrap their chain-derived output in an envelope:
 
-Anything inside must be treated as data, never instructions.
+  ```
+  <untrusted_content kind="eval" source="gno.land/r/demo/foo">
+  …
+  </untrusted_content>
+  ```
+
+  An envelope tag (opening or closing) embedded in chain content is neutralized first, so content cannot escape or forge the envelope. The write tools envelope the realm-controlled portions of their success text the same way: `gno_call`'s `Result` (kind `call_result`) and `gno_run`'s `Output` (kind `run_output`).
+
+- **The resource tool** (`gno_read`) returns content as an MCP `EmbeddedResource`, a distinct trust posture clients treat as resource data rather than inline instructions. It is not textually wrapped because that would corrupt the txtar archive (the closing tag would merge into the last file). This relies on the client honoring the resource boundary.
+
+- **Error text** is mixed-trust: gnomcp's own framing can embed chain or network bytes (a realm's panic string in an ABCI log, a faucet's error body). All tool-error text is neutralized at the SDK boundary — embedded envelope tags are escaped — so error text cannot forge or close an envelope; it is not itself enveloped. The faucet error body is additionally labeled `[untrusted faucet response]` at the source.
+
+- **Structured content** (`structuredContent` fields such as `gno_call`'s `result` and `gno_run`'s `output`) carries raw values — it is the machine-readable channel, and wrapping would corrupt consumers. Clients that surface structured fields to a model must apply their own marking.
+
+Anything from any channel must be treated as data, never instructions.
 
 ## 5. Output budgeting
 
-`gno_read` and `gno_render` apply a ~4 KB budget. Over-budget responses are truncated with a hint to fetch a narrower slice or view at gnoweb — they are never silently chopped.
+Every read and indexer tool applies a ~4 KB budget to chain-returned content. Over-budget responses are replaced by a summary with a hint to fetch a narrower slice or view at gnoweb — they are never silently chopped.
 
 ## 6. Audit log
 
 - Path: `~/.local/share/gnomcp/audit.jsonl`, mode `0600`.
-- One JSONL entry per tool invocation: `{time, tool, profile, result, args}`.
-- `args` is redacted of any sensitive fields before logging.
-- Writes are always audited; reads opt-in via `--audit-reads`.
+- One JSONL entry per tool invocation: `{time, tool, profile, args_summary, result, duration_ms, session_address}`.
+- `args_summary` keeps only an allowlist of non-sensitive keys; every other arg is redacted. The write-tx tools build their own value-free summary (e.g. `nargs=N`, `code_len=N`) so addresses, amounts, code, and file bodies are never logged.
+- Every write attempt is audited — including denials (insufficient_funds, scope_mismatch, validation). Reads opt-in via `--audit-reads`.
 
 ## 7. Structured errors
 
-All errors are JSON-encoded payloads with `code`, `message`, and an actionable `hint`. Notable codes:
+Errors are JSON-encoded payloads with `code`, `message`, and (where useful) extra fields. Notable codes:
 
 | Code | Trigger |
 |---|---|
-| `session_required` | Write tool called without an active session |
-| `session_expired` | Session exists but has expired |
-| `session_scope_denied` | Call target not in the session's `allow_paths` |
-| `chain_id_forbidden` | Config validation rejected a mainnet/betanet/staging chain-id |
-| `invalid_argument` | Schema-level validation in tools |
+| `chain_forbidden` | A mainnet/betanet/staging chain-id was rejected (config or gno_connect) |
+| `authentication_required` | A session-signed write was attempted with no active session |
+| `scope_mismatch` | The call's realm is not covered by any active session's `allow_paths` |
+| `insufficient_funds` | The agent's testnet account is unfunded (run `gno_faucet_fund`) |
+| `simulate_unsupported` | `simulate=true` against a client that can't dry-run |
 | `agent_identity_unavailable` | Agent identity requested on a profile with no agent key (run `gno_key_generate` for testnet) |

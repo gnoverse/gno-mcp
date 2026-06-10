@@ -20,7 +20,8 @@ func TestInspect_returnsText(t *testing.T) {
 		"profile": "testnet5",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "package foo\n\nfunc Bar() string", res.Text)
+	assert.Contains(t, res.Text, "package foo\n\nfunc Bar() string")
+	assert.Contains(t, res.Text, `<untrusted_content kind="doc"`, "inspect output must be wrapped as untrusted")
 }
 
 func TestInspect_requiresPath(t *testing.T) {

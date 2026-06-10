@@ -2,7 +2,6 @@ package write
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/gnoverse/gno-mcp/internal/keystore"
@@ -41,30 +40,15 @@ func keyAddrHandler(
 	s *server.Server,
 	ks *keystore.Keystore,
 ) (server.Result, error) {
-	profileName, err := stringArg(args, "profile")
+	profileName, p, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
-	}
-	if profileName == "" {
-		return server.Result{}, fmt.Errorf("profile: required — pick one of the configured profiles")
-	}
-
-	p, ok := s.Config().Profiles[profileName]
-	if !ok {
-		return server.Result{}, fmt.Errorf("profile %q: not found", profileName)
 	}
 
 	addr, err := ks.AgentAddress(profileName, p)
 	if err != nil {
-		if errors.Is(err, keystore.ErrNoAgentKey) {
-			return server.Result{}, &server.ToolError{
-				Code: "agent_identity_unavailable",
-				Message: fmt.Sprintf(
-					"no agent key for profile %q — run gno_key_generate to create one",
-					profileName,
-				),
-				Extra: map[string]any{"profile": profileName},
-			}
+		if terr := agentKeyToolError(err, profileName, "run gno_key_generate to create one"); terr != nil {
+			return server.Result{}, terr
 		}
 		return server.Result{}, fmt.Errorf("gno_key_address: %w", err)
 	}

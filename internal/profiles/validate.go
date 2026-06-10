@@ -29,7 +29,35 @@ var (
 	// Admits "test11" and the hyphenated "test-13" form. Betanet ("gnoland1"),
 	// "staging", and arbitrary ids are rejected — they cannot enter the config.
 	chainIDRE = regexp.MustCompile(`^(dev|test-?\d+)$`)
+
+	// profileNameRE matches a safe profile identifier: lowercase alphanumeric,
+	// with internal '-'/'_'. It excludes whitespace and shell metacharacters so
+	// a name can be interpolated into the gnomcp command gno_connect prints.
+	profileNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+
+	// rpcURLRE matches an http(s) URL safe to paste into a shell command:
+	// scheme, host[:port], and an optional simple path, with no shell
+	// metacharacters or whitespace. A url.Parse alone is insufficient because it
+	// accepts a metacharacter-bearing path like "http://h/$(cmd)".
+	rpcURLRE = regexp.MustCompile(`^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._/-]*)?$`)
 )
+
+// SpendLimitValid reports whether s is a well-formed single-denomination coin
+// amount (digits then lowercase letters, e.g. "1000000ugnot").
+func SpendLimitValid(s string) bool {
+	return spendLimitRE.MatchString(s)
+}
+
+// ValidProfileName reports whether name is a safe profile identifier.
+func ValidProfileName(name string) bool {
+	return profileNameRE.MatchString(name)
+}
+
+// ValidRPCURL reports whether s is an http(s) URL containing only characters
+// safe to interpolate into a pasted shell command.
+func ValidRPCURL(s string) bool {
+	return rpcURLRE.MatchString(s)
+}
 
 // ChainIDAllowed reports whether a chain-id is permitted (local dev or a
 // numbered testnet). Betanet/mainnet/staging are rejected.
@@ -48,6 +76,9 @@ func (c *Config) Validate() (warn error, err error) {
 	for name, p := range c.Profiles {
 		if p.RPCURL == "" {
 			return nil, fmt.Errorf("profile %q: missing required rpc-url", name)
+		}
+		if !ValidRPCURL(p.RPCURL) {
+			return nil, fmt.Errorf("profile %q: invalid rpc-url %q (want an absolute http(s) URL with no spaces or shell metacharacters — it is interpolated into pasted gnokey commands)", name, p.RPCURL)
 		}
 		if p.ChainID == "" {
 			return nil, fmt.Errorf("profile %q: missing required chain-id", name)

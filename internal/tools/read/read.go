@@ -34,7 +34,7 @@ func RegisterRead(s *server.Server, resolve chain.Resolver) {
 
 func readHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
-		path, err := stringArg(args, "path")
+		path, err := server.StringArg(args, "path")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -45,11 +45,11 @@ func readHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 			return server.Result{}, fmt.Errorf(
 				"path must be a realm (gno.land/r/...) or pure package (gno.land/p/...); got %q", path)
 		}
-		file, err := stringArg(args, "file")
+		file, err := server.StringArg(args, "file")
 		if err != nil {
 			return server.Result{}, err
 		}
-		profile, err := stringArg(args, "profile")
+		profile, err := server.StringArg(args, "profile")
 		if err != nil {
 			return server.Result{}, err
 		}

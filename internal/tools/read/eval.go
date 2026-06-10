@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gnoverse/gno-mcp/internal/budget"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
@@ -16,8 +17,8 @@ func RegisterEval(s *server.Server, resolve chain.Resolver) {
 		Description: "Evaluates a Gno expression against a Gno package (realm or pure) and returns the typed " +
 			"result as plain text. Use when the user or agent needs to inspect a value, call an exported " +
 			"function, or read exported state without rendering content. Returns the vm/qeval typed result " +
-			"(e.g. '(42 int)', '(\"hello\" string)') as OutputText — not an MCP resource, because the " +
-			"value is gnomcp-typed metadata rather than untrusted realm content. " +
+			"(e.g. '(42 int)', '(\"hello\" string)') as OutputText, wrapped in an untrusted-content envelope " +
+			"because the inner value is realm-controlled. " +
 			"Does NOT return rendered markdown — use gno_render for that. " +
 			"Backed by vm/qeval; HEAD-only (no historical heights).",
 		InputSchema: evalInputSchema(s),
@@ -29,7 +30,7 @@ func RegisterEval(s *server.Server, resolve chain.Resolver) {
 
 func evalHandler(resolve chain.Resolver) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
-		path, err := stringArg(args, "path")
+		path, err := server.StringArg(args, "path")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -39,14 +40,14 @@ func evalHandler(resolve chain.Resolver) server.Handler {
 		if !chain.IsReadablePackagePath(path) {
 			return server.Result{}, fmt.Errorf("path must be a realm (gno.land/r/...) or pure package (gno.land/p/...); got %q", path)
 		}
-		expr, err := stringArg(args, "expr")
+		expr, err := server.StringArg(args, "expr")
 		if err != nil {
 			return server.Result{}, err
 		}
 		if expr == "" {
 			return server.Result{}, fmt.Errorf("expr is required (e.g. 'Counter()')")
 		}
-		profile, err := stringArg(args, "profile")
+		profile, err := server.StringArg(args, "profile")
 		if err != nil {
 			return server.Result{}, err
 		}
@@ -59,7 +60,7 @@ func evalHandler(resolve chain.Resolver) server.Handler {
 		if err != nil {
 			return server.Result{}, fmt.Errorf("gno_eval: %w", err)
 		}
-		text, _ := budgetBody(out, "")
+		text, _ := budget.Wrapped(out, "", "eval", path)
 		return server.Result{Text: text}, nil
 	}
 }
