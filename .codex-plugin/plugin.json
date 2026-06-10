@@ -1,10 +1,10 @@
 {
   "name": "gnomcp",
-  "version": "0.2.0",
-  "description": "Gno smart-contract skills + MCP server: interrealm semantics, security audit, idiomatic patterns, Render() authoring, on-chain payments, project setup.",
+  "version": "0.1.0",
+  "description": "Gno smart-contract skill + MCP server for gno.land: interrealm semantics, security auditing, Render() authoring, idiomatic patterns, and on-chain tools (read, deploy, call, sessions).",
   "author": {
-    "name": "gfanton",
-    "url": "https://github.com/gfanton"
+    "name": "gnoverse",
+    "url": "https://github.com/gnoverse"
   },
   "homepage": "https://github.com/gnoverse/gno-mcp",
   "repository": "https://github.com/gnoverse/gno-mcp",
@@ -23,8 +23,8 @@
   "interface": {
     "displayName": "Gno MCP",
     "shortDescription": "Write, audit, and ship Gno smart contracts with on-chain tools",
-    "longDescription": "Use gnomcp to author, test, audit, and reason about Gno realms — the smart-contract language for gno.land. Bundles the gno skill (interrealm spec, security taxonomy, idiomatic patterns, Render() conventions, build/test setup) with an MCP server that exposes on-chain tools (gno_read, gno_inspect, gno_render, gno_eval, gno_call, gno_run, gno_session_propose).",
-    "developerName": "gfanton",
+    "longDescription": "Author, audit, and reason about Gno realms — the smart-contract language for gno.land. Bundles the gno skill (interrealm spec, security taxonomy, idiomatic patterns, Render() conventions, project setup) with an MCP server exposing on-chain tools: chain reads (source, godoc, render, eval, accounts), discovery, testnet writes via an agent key, and user-authorized session signing.",
+    "developerName": "gnoverse",
     "category": "Coding",
     "capabilities": [
       "Interactive",

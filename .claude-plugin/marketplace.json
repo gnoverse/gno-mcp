@@ -1,19 +1,19 @@
 {
-  "name": "gnomcp-dev",
-  "description": "Development marketplace for the gnomcp skill + MCP server",
+  "name": "gnoverse",
+  "description": "Marketplace for the gnomcp plugin — the gno skill + MCP server for gno.land",
   "owner": {
-    "name": "gfanton",
-    "url": "https://github.com/gfanton"
+    "name": "gnoverse",
+    "url": "https://github.com/gnoverse"
   },
   "plugins": [
     {
       "name": "gnomcp",
-      "description": "Gno smart-contract skills + MCP server: realm semantics, security audit, Render() authoring, on-chain payments, project setup",
-      "version": "0.2.0",
+      "description": "Gno smart-contract skill + MCP server for gno.land: interrealm semantics, security auditing, Render() authoring, idiomatic patterns, and on-chain tools (read, deploy, call, sessions).",
+      "version": "0.1.0",
       "source": "./",
       "author": {
-        "name": "gfanton",
-        "url": "https://github.com/gfanton"
+        "name": "gnoverse",
+        "url": "https://github.com/gnoverse"
       }
     }
   ]

@@ -1,11 +1,11 @@
 {
   "name": "gnomcp",
   "displayName": "Gno MCP",
-  "description": "Gno smart-contract skills + MCP server: realm semantics, security audit, Render() authoring, on-chain payments, project setup",
-  "version": "0.2.0",
+  "description": "Gno smart-contract skill + MCP server for gno.land: interrealm semantics, security auditing, Render() authoring, idiomatic patterns, and on-chain tools (read, deploy, call, sessions).",
+  "version": "0.1.0",
   "author": {
-    "name": "gfanton",
-    "url": "https://github.com/gfanton"
+    "name": "gnoverse",
+    "url": "https://github.com/gnoverse"
   },
   "homepage": "https://github.com/gnoverse/gno-mcp",
   "repository": "https://github.com/gnoverse/gno-mcp",

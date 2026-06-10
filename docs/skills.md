@@ -1,6 +1,6 @@
 # Skills
 
-The `skills/` directory is a Claude plugin package. Each subdirectory is a single skill; `plugin.json` lists them. Skills are pure markdown — no Go code — and are designed to drive `gnomcp` tools through coherent workflows without dropping the security guardrails.
+The `skills/` directory is a Claude plugin package. Each subdirectory is a single skill, discovered automatically from `skills/` by the plugin harnesses (Claude Code; the Codex and Cursor manifests point at the directory). Skills are pure markdown — no Go code — and are designed to drive `gnomcp` tools through coherent workflows without dropping the security guardrails.
 
 **Source of truth:** skill content is currently hand-distilled from the [gnolang/gno](https://github.com/gnolang/gno) monorepo and can drift as the language evolves. The direction is to make the monorepo the sole reference and reduce skills to thin wrappers — routing, guidance, and best practice layered on monorepo knowledge, not a copy of it. When writing skill content, prefer pointing at monorepo sources over restating them.
 
@@ -19,8 +19,7 @@ The `skills/` directory is a Claude plugin package. Each subdirectory is a singl
 5. **Failure modes** appear as a closing `If anything fails` section.
 
 When you add a new skill, also:
-- list it under `skills` in [`skills/plugin.json`](../skills/plugin.json)
-- mention it in [the README](../README.md) and in this file
+- mention it in [the README](../README.md), in this file, and in `AGENTS.md` (housekeeping map) — no per-skill registration is needed; harnesses discover `skills/` automatically
 
 ## Using gnomcp tools from skills
 

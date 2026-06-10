@@ -56,7 +56,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 | Change write-auth / session / scope behavior | `docs/security.md` · README "Write authorization" · `docs/adr/session_authorization.md` |
 | Change profile fields or config semantics | README "Profiles" · `docs/adr/multichain_via_profiles.md` · `test/e2e/profiles.toml` if protocols use it |
 | Make or revise an architectural decision | `docs/adr/` — edit in place with an updated status line; keep records matching shipped state, not plans |
-| Add a skill or a reference file under `skills/` | `skills/plugin.json` · `docs/skills.md` · README skills section · **this file** (Map + this table) |
+| Add a skill or a reference file under `skills/` | `docs/skills.md` · README skills section · **this file** (Map + this table) — harnesses discover `skills/` automatically, no per-skill registration |
 | Add a make target or change the dev flow | this file (Commands) |
 | Bump the version | every plugin manifest must match the tag — `package.json`, `.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, `gemini-extension.json` (release CI enforces it) |
 | Touch skill content | monorepo (`gnolang/gno`) is the source of truth — point at it, don't restate it (`docs/skills.md` § source of truth) |
