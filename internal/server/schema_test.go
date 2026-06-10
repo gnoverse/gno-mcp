@@ -11,7 +11,7 @@ import (
 
 func TestProfileArgSchema_singleProfile_optionalDefault(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
+		"testnet5": {RPCURL: "x", ChainID: "test5"},
 	}}
 	s := ProfileArgSchema(cfg, "" /* discovered */)
 	assert.False(t, s.Required, "single profile: profile arg should be optional")
@@ -20,8 +20,8 @@ func TestProfileArgSchema_singleProfile_optionalDefault(t *testing.T) {
 
 func TestProfileArgSchema_multipleWithLocalDiscovered_optionalDefault(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"local":    {ChainType: "local", RPCURL: "x", ChainID: "dev"},
-		"testnet5": {ChainType: "testnet", RPCURL: "y", ChainID: "test5"},
+		"local":    {RPCURL: "x", ChainID: "dev"},
+		"testnet5": {RPCURL: "y", ChainID: "test5"},
 	}}
 	s := ProfileArgSchema(cfg, "local")
 	assert.False(t, s.Required, "local discovered: profile arg should be optional")
@@ -30,8 +30,8 @@ func TestProfileArgSchema_multipleWithLocalDiscovered_optionalDefault(t *testing
 
 func TestProfileArgSchema_staleDiscoveredLocalIgnored(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
-		"mainnet":  {ChainType: "mainnet", RPCURL: "y", ChainID: "portal-loop"},
+		"testnet5": {RPCURL: "x", ChainID: "test5"},
+		"mainnet":  {RPCURL: "y", ChainID: "portal-loop"},
 	}}
 	// Discovery returned a name that is not in the loaded config.
 	// Stale name must not become the Default; falls back to smart default instead.
@@ -43,8 +43,8 @@ func TestProfileArgSchema_staleDiscoveredLocalIgnored(t *testing.T) {
 
 func TestProfileArgSchema_multipleNoLocal_smartDefault(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"testnet5": {ChainType: "testnet", RPCURL: "x", ChainID: "test5"},
-		"mainnet":  {ChainType: "mainnet", RPCURL: "y", ChainID: "portal-loop"},
+		"testnet5": {RPCURL: "x", ChainID: "test5"},
+		"mainnet":  {RPCURL: "y", ChainID: "portal-loop"},
 	}}
 	// No local discovered and no "testnet" key — falls back to first alphabetical profile.
 	s := ProfileArgSchema(cfg, "")
@@ -54,8 +54,8 @@ func TestProfileArgSchema_multipleNoLocal_smartDefault(t *testing.T) {
 
 func TestProfileArgSchema_SmartDefault(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"local":   {ChainID: "dev", ChainType: profiles.ChainTypeLocal, RPCURL: "x"},
-		"testnet": {ChainID: "test11", ChainType: profiles.ChainTypeTestnet, RPCURL: "y"},
+		"local":   {ChainID: "dev", RPCURL: "x"},
+		"testnet": {ChainID: "test11", RPCURL: "y"},
 	}}
 	// local discovered → default local
 	got := ProfileArgSchema(cfg, "local")

@@ -22,4 +22,4 @@ When you add a new skill, also:
 
 ## Using gnomcp tools from skills
 
-Skills should use `gno_connect` to help users add a profile when they reference an unfamiliar gnoweb URL — it returns the exact `gnomcp profile add` command to run. Skills must never call write tools (`gno_call`, `gno_run`) without first confirming an active session exists via `gno_auth_status` and guiding the user through `gno_session_propose` if needed.
+Skills should use `gno_connect` to help users reach a chain they reference by gnoweb URL — then `gno_profile_add` to use it immediately (in-memory, dev/testnet only), or the printed `gnomcp profile add` command when the user wants it persisted. Skills must never call write tools (`gno_call`, `gno_run`) without first confirming an active session exists via `gno_auth_status` and guiding the user through `gno_session_propose` if needed.

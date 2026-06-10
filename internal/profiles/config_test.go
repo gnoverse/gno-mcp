@@ -11,12 +11,10 @@ import (
 func TestLoad_validProfiles(t *testing.T) {
 	src := `
 [local]
-chain-type = "local"
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 
 [testnet5]
-chain-type = "testnet"
 rpc-url = "https://rpc.test5.gno.land:443"
 chain-id = "test5"
 tx-indexer-url = "https://indexer.test5.gno.land/graphql/query"
@@ -27,7 +25,7 @@ tx-indexer-url = "https://indexer.test5.gno.land/graphql/query"
 
 	local, ok := cfg.Profiles["local"]
 	require.True(t, ok, "missing local profile")
-	assert.Equal(t, "local", local.ChainType, "local ChainType mis-parsed")
+	assert.True(t, local.IsLocal(), "dev profile must derive local")
 	assert.Equal(t, "dev", local.ChainID, "local ChainID mis-parsed")
 	assert.Equal(t, "http://127.0.0.1:26657", local.RPCURL, "local.RPCURL mis-parsed")
 
@@ -38,7 +36,7 @@ tx-indexer-url = "https://indexer.test5.gno.land/graphql/query"
 
 func TestLoad_malformedTOML(t *testing.T) {
 	src := `[local
-chain-type = "local"
+rpc-url = "http://127.0.0.1:26657"
 `
 	_, err := Load(strings.NewReader(src))
 	require.Error(t, err, "expected error for malformed TOML")
@@ -94,6 +92,30 @@ faucet-service-url = "http://127.0.0.1:8590"
 	p := cfg.Profiles["testnet5"]
 	assert.Equal(t, "https://faucet.test5.gno.land", p.FaucetURL)
 	assert.Equal(t, "http://127.0.0.1:8590", p.FaucetServiceURL)
+}
+
+func TestProfile_LocalityDerivedFromChainID(t *testing.T) {
+	local := Profile{ChainID: "dev"}
+	assert.True(t, local.IsLocal(), "chain-id dev must be local")
+	assert.False(t, local.IsTestnet())
+	assert.Equal(t, "local", local.Kind())
+
+	tn := Profile{ChainID: "test-13"}
+	assert.False(t, tn.IsLocal())
+	assert.True(t, tn.IsTestnet(), "chain-id test-13 must be testnet")
+	assert.Equal(t, "testnet", tn.Kind())
+}
+
+func TestLoad_rejectsChainTypeKey(t *testing.T) {
+	src := `
+[local]
+chain-type = "local"
+rpc-url = "http://127.0.0.1:26657"
+chain-id = "dev"
+`
+	_, err := Load(strings.NewReader(src))
+	require.Error(t, err, "chain-type is not a config field (locality derives from chain-id); unknown keys must fail loudly")
+	assert.Contains(t, err.Error(), "chain-type")
 }
 
 func TestMerge_LaterOverridesByName(t *testing.T) {

@@ -23,11 +23,10 @@ this is where they're verified.
   `test1` account is used only for funding steps — the agent operates under its own separate key.
 
 - [ ] **A `local-tnet` profile is configured** in `./profiles.toml` (project-local) or
-  `~/.config/gnomcp/profiles.toml` (global). The profile must carry `chain-type = "testnet"`,
-  the matching chain-id, and a `master-address` so write tools are enabled:
+  `~/.config/gnomcp/profiles.toml` (global). The profile must carry a testnet
+  chain-id (anything but `dev` is treated as testnet), and a `master-address` so write tools are enabled:
   ```toml
   [local-tnet]
-  chain-type     = "testnet"
   rpc-url        = "http://127.0.0.1:26657"
   chain-id       = "test9999"
   master-address = "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
@@ -43,7 +42,7 @@ this is where they're verified.
   `~/.local/share/gnomcp/agent-keys/local-tnet.key`) does not exist, so section A starts fresh.
   Remove it if a leftover from a previous run is present.
 
-- [ ] **gnomcp running on the `feat/agent-keystore-testnet` code:**
+- [ ] **gnomcp running on the current branch:**
   ```
   go run ./cmd/gnomcp
   ```
@@ -54,7 +53,7 @@ this is where they're verified.
     leave unset to store plaintext (acceptable for a dev/test hot key).
 
 - [ ] **`tools/list` includes** `gno_addpkg`, `gno_key_address`, and `gno_key_generate`
-  (confirms `AnyProfileAgentCapable()` sees at least one local or testnet profile).
+  (these agent tools always register).
 
 ---
 
@@ -259,7 +258,7 @@ plaintext (acceptable for a dev/test hot key) — skip D2 and note it in the run
 gno_key_generate(profile=local)
 ```
 
-(The built-in `local` profile has `chain-type = "local"` — key generation is not permitted.)
+(The built-in `local` profile has chain-id `dev`, which derives local — key generation is not permitted.)
 
 Pass:
 - [ ] `isError`, `code=key_generation_unsupported`.
@@ -319,7 +318,7 @@ Notes:
 - **Bug found + fixed during this run.** Every agent write rendered `Signed by: agent test1 (<addr>)`
   even on testnet, where the signer is a generated key (the address shown was the generated key's,
   not test1's) — a misleading identity line. Root cause: `internal/tools/write/identity.go`
-  hardcoded the `test1` name. Fix: `signedByLine` now takes the profile chain-type and names `test1`
+  hardcoded the `test1` name. Fix: `signedByLine` takes the profile locality (derived from chain-id) and names `test1`
   only on local; testnet renders `Signed by: agent (<addr>)`. Regression test added in
   `identity_test.go`. Re-verified live: testnet → `agent (g1ewz0…)`, local → `agent test1 (g1jg8…)`.
 - The unit tests exercise only the local/test1 agent path, so this label bug was invisible to them —

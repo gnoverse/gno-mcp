@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// HardLimits is the per-profile clamp ceiling derived from chain-type.
+// HardLimits is the per-profile clamp ceiling derived from the chain-id (local dev vs testnet).
 // Zero-valued fields signal "unlimited" (only set when BypassHardLimits=true).
 type HardLimits struct {
 	MaxSpendLimit      string        // e.g. "100000000ugnot"; "" = unlimited
@@ -45,23 +45,20 @@ func (p Profile) EffectiveDefaults() (spendLimit string, expiresIn time.Duration
 
 // HardLimits returns the clamp ceiling for the profile.
 // BypassHardLimits=true returns all-zero sentinel values (unlimited).
-// Unknown chain-types default to testnet limits (safe middle).
 func (p Profile) HardLimits() HardLimits {
 	if p.BypassHardLimits {
 		return HardLimits{}
 	}
-	switch p.ChainType {
-	case ChainTypeLocal:
+	if p.IsLocal() {
 		return HardLimits{
 			MaxSpendLimit:      "100000000ugnot",
 			MaxExpiresIn:       30 * 24 * time.Hour,
 			MaxAllowPathsCount: 20,
 		}
-	default:
-		return HardLimits{
-			MaxSpendLimit:      "100000000ugnot",
-			MaxExpiresIn:       7 * 24 * time.Hour,
-			MaxAllowPathsCount: 10,
-		}
+	}
+	return HardLimits{
+		MaxSpendLimit:      "100000000ugnot",
+		MaxExpiresIn:       7 * 24 * time.Hour,
+		MaxAllowPathsCount: 10,
 	}
 }

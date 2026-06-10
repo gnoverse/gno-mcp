@@ -4,7 +4,7 @@
 
 ## 1. Chain-id allowlist — betanet/mainnet/staging forbidden
 
-Config validation rejects any profile whose `chain-id` does not match `^(dev|test-?\d+)$`. Betanet (`gnoland1`), `staging`, and mainnet ids cannot enter the config at all. The check runs at startup and at `gnomcp profile add` time. A config that would admit mainnet fails loud; there is no override flag.
+Config validation rejects any profile whose `chain-id` does not match `^(dev|test-?\d+)$`. Betanet (`gnoland1`), `staging`, and mainnet ids cannot enter the config at all. The check runs at startup, at `gnomcp profile add` time, and at `gno_profile_add` time (which additionally dials the node and refuses the add unless it reports the declared chain-id). A config that would admit mainnet fails loud; there is no override flag.
 
 ## 2. Write authorization: agent identity (local/testnet) or chain-bound session
 
@@ -17,7 +17,7 @@ Writes sign with one of two identities — never with the user's key.
 
 Both tiers are confined to dev/test by the chain-id allowlist (`^(dev|test-?\d+)$`); no path creates an agent key for mainnet.
 
-**Session — opt-in or default on non-local/testnet profiles.** On profiles with a `master-address` the agent acts *as the user* via a chain-bound session:
+**Session — opt-in (`identity=session`).** On profiles with a `master-address` the agent acts *as the user* via a chain-bound session:
 
 1. **Profile has a `master-address` (g1...).** Without it the session write path is unavailable for that profile.
 2. **User-authorized session.** `gno_session_propose` generates an ephemeral ed25519 keypair and emits a paste-ready `gnokey maketx session create` command. The user runs it; their `gnokey` signs the authorization. gnomcp never sees the user's key or mnemonic.
@@ -72,7 +72,7 @@ Errors are JSON-encoded payloads with `code`, `message`, and (where useful) extr
 
 | Code | Trigger |
 |---|---|
-| `chain_forbidden` | A mainnet/betanet/staging chain-id was rejected (config or gno_connect) |
+| `chain_forbidden` | A mainnet/betanet/staging chain-id was rejected (config, gno_connect, or gno_profile_add) |
 | `authentication_required` | A session-signed write was attempted with no active session |
 | `scope_mismatch` | The call's realm is not covered by any active session's `allow_paths` |
 | `insufficient_funds` | The agent's testnet account is unfunded (run `gno_faucet_fund`) |

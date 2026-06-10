@@ -14,10 +14,10 @@ import (
 )
 
 func devProfile() profiles.Profile {
-	return profiles.Profile{ChainID: "dev", ChainType: profiles.ChainTypeLocal, RPCURL: "http://127.0.0.1:26657"}
+	return profiles.Profile{ChainID: "dev", RPCURL: "http://127.0.0.1:26657"}
 }
 func testnet9999Profile() profiles.Profile {
-	return profiles.Profile{ChainID: "test9999", ChainType: profiles.ChainTypeTestnet, RPCURL: "x"}
+	return profiles.Profile{ChainID: "test9999", RPCURL: "x"}
 }
 
 func TestAgentAddress_dev_isTest1(t *testing.T) {

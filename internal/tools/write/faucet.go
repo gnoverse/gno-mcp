@@ -26,7 +26,7 @@ func RegisterFaucetFund(s *server.Server, ks *keystore.Keystore, resolver chain.
 		Description: "Funds the agent's own testnet account for a profile so it can submit transactions. " +
 			"Uses whatever the profile configures: an automatic faucet service, an existing faucet page, " +
 			"or (if neither) reports the address to fund manually. Requires a generated agent key " +
-			"(run gno_key_generate first). Required arg: profile (testnet only). Reports the acting " +
+			"(run gno_key_generate first). Optional arg: profile (testnet profiles only; the server default applies when omitted). Reports the acting " +
 			"address and whether it is funded yet; if not, surfaces where to fund it.",
 		InputSchema: faucetFundInputSchema(s),
 		OutputKind:  server.OutputText,

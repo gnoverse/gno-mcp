@@ -20,8 +20,8 @@ This is a manual protocol (not run by `go test`, not in CI) — the `chain.Real`
   `gno_key_address`) and the `identity` arg are new — an MCP client connected to an older build
   won't expose them. Restart/reconnect the server (`go run ./cmd/gnomcp`, default config) so the
   built-in `local` profile is present and gnodev is auto-discovered.
-- [ ] **`tools/list` includes** `gno_addpkg`, `gno_key_address`, and `gno_key_generate` (proves `AnyProfileAgentCapable()` gated
-  them in — the built-in `local` profile satisfies the gate).
+- [ ] **`tools/list` includes** `gno_addpkg`, `gno_key_address`, and `gno_key_generate` (these
+  agent tools always register — every allowed chain has an agent-key path).
 
 ---
 
@@ -108,15 +108,15 @@ gno_key_address(profile=testnet)
 
 Pass: `isError`, `code=agent_identity_unavailable`.
 
-### B3 — session default preserved on testnet
+### B3 — agent default on testnet without a generated key
 
 ```
 gno_call(profile=testnet, realm="gno.land/r/test/counter", func="Increment")
 ```
 
-(No `identity` → defaults to **session** on a non-local profile.)
+(No `identity` → defaults to **agent** on every profile; no key was generated for `testnet`.)
 
-Pass: `isError`, `code=authentication_required` (the session path is unchanged — no agent fallback on testnet).
+Pass: `isError`, `code=agent_identity_unavailable` pointing at `gno_key_generate` (pass `identity=session` to exercise the session path instead).
 
 ### B4 — explicit identity=session on local still uses the session path
 

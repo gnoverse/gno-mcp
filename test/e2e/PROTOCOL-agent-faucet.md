@@ -15,7 +15,6 @@ the funded write).
 - A gnomcp profile pointing at it. Example `profiles.toml`:
   ```toml
   [testdev]
-  chain-type = "testnet"
   rpc-url    = "http://127.0.0.1:26657"
   chain-id   = "test5"
   ```

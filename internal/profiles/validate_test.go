@@ -29,7 +29,7 @@ rpc-url = "http://127.0.0.1:26657"
 	require.Error(t, err, "expected error for missing chain-id")
 }
 
-func TestValidate_chainTypeDefaultsToTestnet(t *testing.T) {
+func TestValidate_nonDevChainIDIsTestnet(t *testing.T) {
 	cfg, err := Load(strings.NewReader(`
 [mystery]
 rpc-url = "https://rpc.example/"
@@ -38,25 +38,13 @@ chain-id = "test5"
 	require.NoError(t, err)
 	_, err = cfg.Validate()
 	require.NoError(t, err)
-	assert.Equal(t, "testnet", cfg.Profiles["mystery"].ChainType, "expected chain-type=testnet default")
+	assert.True(t, cfg.Profiles["mystery"].IsTestnet(), "non-dev chain-id must derive as testnet")
 }
 
 func TestValidate_rejectsEmptyProfileSet(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{}}
 	_, err := cfg.Validate()
 	require.Error(t, err, "expected error for empty profile set")
-}
-
-func TestValidate_rejectsUnknownChainType(t *testing.T) {
-	cfg, err := Load(strings.NewReader(`
-[weird]
-chain-type = "moonchain"
-rpc-url = "http://x"
-chain-id = "x"
-`))
-	require.NoError(t, err)
-	_, err = cfg.Validate()
-	require.Error(t, err, "expected error for unknown chain-type")
 }
 
 func TestLoad_rejectsUnknownKey(t *testing.T) {
@@ -128,7 +116,6 @@ default-expires-in = %q
 func TestValidate_acceptsValidWriteFields(t *testing.T) {
 	cfg, err := Load(strings.NewReader(`
 [local]
-chain-type = "local"
 rpc-url = "http://127.0.0.1:26657"
 chain-id = "dev"
 master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
@@ -273,7 +260,7 @@ func TestValidate_acceptsMixedCaseRPCHost(t *testing.T) {
 
 func TestValidate_rejectsBadFaucetURL(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
-		"testnet5": {ChainType: "testnet", RPCURL: "https://rpc.example:443", ChainID: "test5", FaucetURL: "not a url"},
+		"testnet5": {RPCURL: "https://rpc.example:443", ChainID: "test5", FaucetURL: "not a url"},
 	}}
 	_, err := cfg.Validate()
 	require.Error(t, err)
@@ -282,20 +269,20 @@ func TestValidate_rejectsBadFaucetURL(t *testing.T) {
 
 func TestValidate_rejectsNonHTTPFaucetURL(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
-		"testnet5": {ChainType: "testnet", RPCURL: "https://rpc.example:443", ChainID: "test5", FaucetServiceURL: "ftp://host/x"},
+		"testnet5": {RPCURL: "https://rpc.example:443", ChainID: "test5", FaucetServiceURL: "ftp://host/x"},
 	}}
 	_, err := cfg.Validate()
 	require.Error(t, err, "non-http(s) scheme must be rejected")
 	assert.Contains(t, err.Error(), "faucet-service-url")
 }
 
-func TestValidate_DerivesChainType(t *testing.T) {
+func TestValidate_LocalityDerivation(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
 		"local":   {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
 		"testnet": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
 	}}
 	_, err := cfg.Validate()
 	require.NoError(t, err)
-	assert.Equal(t, ChainTypeLocal, cfg.Profiles["local"].ChainType, "local chain-type")
-	assert.Equal(t, ChainTypeTestnet, cfg.Profiles["testnet"].ChainType, "testnet chain-type")
+	assert.True(t, cfg.Profiles["local"].IsLocal(), "dev chain-id must derive local")
+	assert.True(t, cfg.Profiles["testnet"].IsTestnet(), "test11 chain-id must derive testnet")
 }

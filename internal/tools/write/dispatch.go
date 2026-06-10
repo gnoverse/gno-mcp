@@ -51,11 +51,10 @@ type writeTxDispatch struct {
 func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch) (identity, signerAddr, master string, err error) {
 	identity = identityArg
 	if identity == "" {
-		if d.profile.ChainType == profiles.ChainTypeLocal || d.profile.ChainType == profiles.ChainTypeTestnet {
-			identity = "agent"
-		} else {
-			identity = "session"
-		}
+		// Every allowed chain (local dev or testnet) has an agent key path, so
+		// the agent is the default acting identity; sessions are opt-in via
+		// identity=session.
+		identity = "agent"
 	}
 
 	switch identity {
@@ -131,8 +130,8 @@ func (d writeTxDispatch) txError(err error) error {
 
 // decorateWriteResult prefixes the signed-by line and attaches the identity
 // metadata every write result carries.
-func decorateWriteResult(out server.Result, identity, signerAddr, master, chainType string) server.Result {
-	out.Text = signedByLine(identity, signerAddr, master, chainType) + "\n\n" + out.Text
+func decorateWriteResult(out server.Result, identity, signerAddr, master string, local bool) server.Result {
+	out.Text = signedByLine(identity, signerAddr, master, local) + "\n\n" + out.Text
 	if out.StructuredContent == nil {
 		out.StructuredContent = map[string]any{}
 	}

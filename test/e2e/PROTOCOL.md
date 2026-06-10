@@ -1,5 +1,16 @@
 # gnomcp — E2E Protocol
 
+> **STALE — written for the initial read-only/session-write tool surface
+> (2026-05).** This protocol predates several merges and no
+> longer matches the current tools: `gno_eval`/`gno_read`/`gno_inspect` take
+> `path=` (not `realm=`), whole-package reads return txtar, read output is
+> wrapped in `<untrusted_content>` envelopes, and writes default to the agent
+> identity (test1 on local) — the `authentication_required` expectations in
+> Section B only hold with `identity=session`. Use the newer protocols
+> (`PROTOCOL-agent-local.md`, `PROTOCOL-agent-testnet.md`,
+> `PROTOCOL-agent-faucet.md`) for current behavior; refresh this file on its
+> next live run.
+
 Manual checklist. Run sequentially. Record every result in the runlog
 at `.mynote/v2-issues/YYYY-MM-DD-section-a-runlog.md` (Section A)
 and `.mynote/v2-issues/YYYY-MM-DD-section-b-runlog.md` (Section B).

@@ -18,28 +18,28 @@ func TestHardLimits(t *testing.T) {
 	}{
 		{
 			name:        "local",
-			profile:     Profile{ChainType: ChainTypeLocal},
+			profile:     Profile{ChainID: "dev"},
 			wantSpend:   "100000000ugnot",
 			wantExpires: 30 * 24 * time.Hour,
 			wantPaths:   20,
 		},
 		{
 			name:        "testnet",
-			profile:     Profile{ChainType: ChainTypeTestnet},
+			profile:     Profile{ChainID: "test5"},
 			wantSpend:   "100000000ugnot",
 			wantExpires: 7 * 24 * time.Hour,
 			wantPaths:   10,
 		},
 		{
-			name:        "unknown falls back to testnet",
-			profile:     Profile{ChainType: "foobar"},
+			name:        "empty chain-id derives testnet limits",
+			profile:     Profile{},
 			wantSpend:   "100000000ugnot",
 			wantExpires: 7 * 24 * time.Hour,
 			wantPaths:   10,
 		},
 		{
 			name:        "bypass returns unlimited sentinel",
-			profile:     Profile{ChainType: ChainTypeTestnet, BypassHardLimits: true},
+			profile:     Profile{ChainID: "test5", BypassHardLimits: true},
 			wantSpend:   "",
 			wantExpires: 0,
 			wantPaths:   0,
@@ -56,7 +56,7 @@ func TestHardLimits(t *testing.T) {
 }
 
 func TestHardLimits_NoMainnetType(t *testing.T) {
-	p := Profile{ChainType: ChainTypeTestnet}
+	p := Profile{ChainID: "test5"}
 	assert.Equal(t, "100000000ugnot", p.HardLimits().MaxSpendLimit)
 }
 

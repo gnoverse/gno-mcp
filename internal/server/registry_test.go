@@ -1,9 +1,11 @@
-// internal/server/registry_test.go
 package server
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -82,4 +84,74 @@ func TestRegistry_callRecoversHandlerPanic(t *testing.T) {
 	require.Error(t, err, "a handler panic must surface as an error, not crash the process")
 	assert.Contains(t, err.Error(), "panic")
 	assert.Contains(t, err.Error(), "boom", "error should name the offending tool")
+}
+
+// TestRegistry_handlerMayMutateRegistry pins the lock discipline Call must
+// follow: the handler runs OUTSIDE any registry lock, because dynamic-profile
+// re-registration calls Add/All from within a running handler. A Call that
+// holds the lock across the handler deadlocks here.
+func TestRegistry_handlerMayMutateRegistry(t *testing.T) {
+	r := NewRegistry()
+	r.Add(&Tool{
+		Name:       "self_modifying",
+		Capability: CapWritePrep,
+		Handler: func(_ context.Context, _ map[string]any) (Result, error) {
+			r.Add(&Tool{Name: "added_from_handler", Capability: CapBaseRead})
+			_ = r.All()
+			_, _ = r.Get("self_modifying")
+			return Result{Text: "ok"}, nil
+		},
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.Call(context.Background(), "self_modifying", nil)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Call deadlocked: handler must run outside the registry lock")
+	}
+	_, ok := r.Get("added_from_handler")
+	assert.True(t, ok, "tool added from inside a handler must be registered")
+}
+
+// TestRegistry_concurrentAddCallAll exercises every Registry method from
+// concurrent goroutines; run under -race this pins that the registry is safe
+// to mutate at runtime (dynamic-profile re-registration vs in-flight calls).
+func TestRegistry_concurrentAddCallAll(t *testing.T) {
+	r := NewRegistry()
+	r.Add(&Tool{
+		Name:       "seed",
+		Capability: CapBaseRead,
+		Handler: func(_ context.Context, _ map[string]any) (Result, error) {
+			return Result{Text: "hi"}, nil
+		},
+	})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(2)
+		go func(i int) {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				r.Add(&Tool{Name: fmt.Sprintf("tool%d", i), Capability: CapBaseRead})
+			}
+		}(i)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				_, _ = r.Call(context.Background(), "seed", nil)
+				_ = r.All()
+				_, _ = r.Get("seed")
+				_ = r.Count()
+				_ = r.WithCapability(CapBaseRead)
+			}
+		}()
+	}
+	wg.Wait()
+	_, ok := r.Get("seed")
+	assert.True(t, ok)
 }

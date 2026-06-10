@@ -27,7 +27,7 @@ func RegisterRun(s *server.Server, ks *keystore.Keystore, sessionMgr *session.Ma
 			"(package main with a main() entry point). " +
 			"On local and testnet profiles the agent key signs by default (local: the built-in test1 account; " +
 			"testnet: a key from gno_key_generate, funded via gno_faucet_fund). " +
-			"On other profiles, or when you pass identity=session, an active gnomcp session covering the target realm is required (use gno_session_propose). " +
+			"Pass identity=session to act as the user instead — that requires an active gnomcp session with allow_run=true (use gno_session_propose with allow_run=true). " +
 			"Pass simulate=true to dry-run without spending gas. Required args: " +
 			"profile, code. Optional: simulate (bool), identity (\"agent\" or \"session\"). " +
 			"The result reports which identity signed; always tell the user which account performed the write.",
@@ -168,7 +168,7 @@ func runHandler(
 		return server.Result{}, err
 	}
 
-	return decorateWriteResult(buildRunResult(rr, profileName), identity, signerAddr, master, profile.ChainType), nil
+	return decorateWriteResult(buildRunResult(rr, profileName), identity, signerAddr, master, profile.IsLocal()), nil
 }
 
 // buildRunResult constructs the server.Result from a chain.RunResult. MsgRun
@@ -210,13 +210,13 @@ func runInputSchema(s *server.Server) map[string]any {
 		},
 		"simulate": map[string]any{
 			"type":        "boolean",
-			"description": "When true, dry-run the execution without broadcasting or spending gas. On testnet/mainnet still requires an active session for the profile; on local the agent key signs.",
+			"description": "When true, dry-run the execution without broadcasting or spending gas. The acting identity still signs (agent key or session), but nothing is broadcast.",
 			"default":     false,
 		},
 		"identity": map[string]any{
 			"type":        "string",
 			"enum":        []string{"agent", "session"},
-			"description": "Who signs: agent (the agent's own key — local test1 or testnet generated key) or session (act as the user via a master-bound session). Default: agent on local and testnet, session otherwise.",
+			"description": "Who signs: agent (the agent's own key — local test1 or testnet generated key) or session (act as the user via a master-bound session). Default: agent; pass session to act as the user.",
 		},
 	}
 	required := []string{"code"}

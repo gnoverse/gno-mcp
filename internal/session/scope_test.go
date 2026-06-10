@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testProfile(chainType string) *profiles.Profile {
-	return &profiles.Profile{ChainType: chainType}
+func testProfile(chainID string) *profiles.Profile {
+	return &profiles.Profile{ChainID: chainID}
 }
 
 // ---- Layer 1: agent-explicit values win
@@ -23,7 +23,7 @@ func TestResolveScope_agentExplicitWins(t *testing.T) {
 		ExpiresIn:  "30m",
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 	}
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	scope, warns, err := ResolveScope(args, p)
 	require.NoError(t, err)
 	assert.Empty(t, warns)
@@ -37,7 +37,6 @@ func TestResolveScope_agentExplicitWins(t *testing.T) {
 
 func TestResolveScope_profileDefaultsApply(t *testing.T) {
 	p := &profiles.Profile{
-		ChainType:         profiles.ChainTypeTestnet,
 		DefaultSpendLimit: "200000ugnot",
 		DefaultExpiresIn:  "2h",
 	}
@@ -51,7 +50,7 @@ func TestResolveScope_profileDefaultsApply(t *testing.T) {
 // ---- Layer 3: hardcoded fallback when profile and agent both omit values
 
 func TestResolveScope_hardcodedFallback(t *testing.T) {
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	args := ScopeArgs{AllowPaths: []string{"gno.land/r/myorg/blog"}}
 	scope, _, err := ResolveScope(args, p)
 	require.NoError(t, err)
@@ -63,7 +62,7 @@ func TestResolveScope_hardcodedFallback(t *testing.T) {
 
 func TestResolveScope_clampsSpendLimit(t *testing.T) {
 	// testnet cap is 100000000ugnot; agent asks for 500000000ugnot
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	args := ScopeArgs{
 		SpendLimit: "500000000ugnot",
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
@@ -77,7 +76,7 @@ func TestResolveScope_clampsSpendLimit(t *testing.T) {
 
 func TestResolveScope_clampsExpiresIn(t *testing.T) {
 	// testnet cap is 7*24h; agent asks for 30*24h
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	args := ScopeArgs{
 		SpendLimit: "100ugnot",
 		ExpiresIn:  "720h",
@@ -93,7 +92,7 @@ func TestResolveScope_clampsExpiresIn(t *testing.T) {
 
 func TestResolveScope_clampsAllowPathsCount(t *testing.T) {
 	// testnet cap is 10; agent supplies 15
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	var paths []string
 	for i := 0; i < 15; i++ {
 		paths = append(paths, fmt.Sprintf("gno.land/r/myorg/p%d", i))
@@ -113,7 +112,6 @@ func TestResolveScope_clampsAllowPathsCount(t *testing.T) {
 
 func TestResolveScope_bypassSkipsClamps(t *testing.T) {
 	p := &profiles.Profile{
-		ChainType:        profiles.ChainTypeTestnet,
 		BypassHardLimits: true,
 	}
 	args := ScopeArgs{
@@ -132,7 +130,7 @@ func TestResolveScope_bypassSkipsClamps(t *testing.T) {
 // ---- Error: empty allow_paths and allow_run=false
 
 func TestResolveScope_emptyAllowPathsAndNoRunError(t *testing.T) {
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	args := ScopeArgs{}
 	_, _, err := ResolveScope(args, p)
 	require.Error(t, err, "expected error for empty allow_paths + allow_run=false")
@@ -143,7 +141,7 @@ func TestResolveScope_emptyAllowPathsAndNoRunError(t *testing.T) {
 // ---- AllowRun-only is accepted (empty allow_paths is fine)
 
 func TestResolveScope_allowRunOnlyOK(t *testing.T) {
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	args := ScopeArgs{AllowRun: true}
 	scope, _, err := ResolveScope(args, p)
 	require.NoError(t, err)
@@ -154,7 +152,7 @@ func TestResolveScope_allowRunOnlyOK(t *testing.T) {
 // ---- Both allow_paths and allow_run are accepted
 
 func TestResolveScope_allowPathsPlusAllowRun(t *testing.T) {
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	args := ScopeArgs{
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 		AllowRun:   true,
@@ -168,7 +166,7 @@ func TestResolveScope_allowPathsPlusAllowRun(t *testing.T) {
 // ---- AllowPaths-only with allow_run=false still works
 
 func TestResolveScope_allowPathsOnlyWorks(t *testing.T) {
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	args := ScopeArgs{
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 		AllowRun:   false,
@@ -182,7 +180,7 @@ func TestResolveScope_allowPathsOnlyWorks(t *testing.T) {
 // ---- Injection: allow_paths and spend_limit feed a pasted gnokey command
 
 func TestResolveScope_rejectsInjectionInAllowPaths(t *testing.T) {
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	for _, bad := range []string{
 		"gno.land/r/foo\n  --allow-paths vm/run",
 		"gno.land/r/foo; rm -rf /",
@@ -197,7 +195,7 @@ func TestResolveScope_rejectsInjectionInAllowPaths(t *testing.T) {
 }
 
 func TestResolveScope_rejectsNonRealmAllowPath(t *testing.T) {
-	p := testProfile(profiles.ChainTypeTestnet)
+	p := testProfile("test5")
 	for _, bad := range []string{
 		"gno.land/p/demo/avl", // pure package, not a realm
 		"not-a-path",
@@ -212,8 +210,8 @@ func TestResolveScope_rejectsMalformedSpendLimit(t *testing.T) {
 	// Covers both the hard-limit path and the BypassHardLimits early return,
 	// where clampCoin (the only prior parse) never runs.
 	profs := []*profiles.Profile{
-		testProfile(profiles.ChainTypeTestnet),
-		{ChainType: profiles.ChainTypeTestnet, BypassHardLimits: true},
+		testProfile("test5"),
+		{BypassHardLimits: true},
 	}
 	for _, prof := range profs {
 		_, _, err := ResolveScope(ScopeArgs{
@@ -224,9 +222,9 @@ func TestResolveScope_rejectsMalformedSpendLimit(t *testing.T) {
 	}
 }
 
-// ---- Unknown chain-type falls back to testnet limits
+// ---- Any non-dev chain-id derives testnet limits (the safe middle)
 
-func TestResolveScope_unknownChainTypeFallback(t *testing.T) {
+func TestResolveScope_nonDevChainIDGetsTestnetLimits(t *testing.T) {
 	p := testProfile("foobar")
 	// testnet cap: MaxAllowPathsCount=10; supply 15
 	var paths []string

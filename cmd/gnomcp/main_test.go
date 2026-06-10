@@ -84,7 +84,6 @@ func TestAuditGrep(t *testing.T) {
 func TestMain_writeToolsAbsent_whenAllReadOnly(t *testing.T) {
 	toml := `
 [testnet5]
-chain-type = "testnet"
 rpc-url = "https://rpc.test5.gno.land:443"
 chain-id = "test5"
 `
@@ -111,7 +110,6 @@ chain-id = "test5"
 func TestMain_writeToolsPresent_whenWritableProfile(t *testing.T) {
 	toml := `
 [testnet5]
-chain-type = "testnet"
 rpc-url = "https://rpc.test5.gno.land:443"
 chain-id = "test5"
 master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
@@ -190,7 +188,6 @@ func TestResolveSources_Defaults(t *testing.T) {
 func TestInitialize_instructions_mentionsSessions_whenWritable(t *testing.T) {
 	toml := `
 [testnet5]
-chain-type = "testnet"
 rpc-url = "https://rpc.test5.gno.land:443"
 chain-id = "test5"
 master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"

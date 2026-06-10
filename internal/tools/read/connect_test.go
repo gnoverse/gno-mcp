@@ -25,8 +25,9 @@ func TestConnect_EmitsAddCommand(t *testing.T) {
 		"gnoweb_url": srv.URL, "name": "mychain",
 	})
 	require.NoError(t, err)
-	assert.Contains(t, res.Text, "gnomcp profile add", "expected add command in output")
+	assert.Contains(t, res.Text, "gnomcp profile add", "expected persist command in output")
 	assert.Contains(t, res.Text, "test11", "expected chain-id in output")
+	assert.Contains(t, res.Text, "gno_profile_add", "expected the in-session (dynamic add) path in output")
 }
 
 func TestConnect_RejectsInjectionInName(t *testing.T) {

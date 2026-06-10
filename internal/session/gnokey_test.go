@@ -12,9 +12,8 @@ import (
 
 func testGnokeyProfile() *profiles.Profile {
 	return &profiles.Profile{
-		ChainType: "local",
-		RPCURL:    "http://127.0.0.1:26657",
-		ChainID:   "dev",
+		RPCURL:  "http://127.0.0.1:26657",
+		ChainID: "dev",
 	}
 }
 

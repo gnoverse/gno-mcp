@@ -160,11 +160,11 @@ func sessionProposeInputSchema(s *server.Server) map[string]any {
 		},
 		"spend_limit": map[string]any{
 			"type":        "string",
-			"description": "Maximum spend for this session (e.g. \"1000000ugnot\"). Optional; profile default used if omitted; clamped to chain-type hard limit.",
+			"description": "Maximum spend for this session (e.g. \"1000000ugnot\"). Optional; profile default used if omitted; clamped to the per-chain hard limit.",
 		},
 		"expires_in": map[string]any{
 			"type":        "string",
-			"description": "Session lifetime as a Go duration string (e.g. \"24h\"). Optional; profile default used if omitted; clamped to chain-type hard limit.",
+			"description": "Session lifetime as a Go duration string (e.g. \"24h\"). Optional; profile default used if omitted; clamped to the per-chain hard limit.",
 		},
 	}
 	var required []string

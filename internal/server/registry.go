@@ -8,19 +8,20 @@ import (
 	"log"
 	"runtime/debug"
 	"sort"
+	"sync"
 )
 
 // Capability tags a tool by class. It does NOT gate registration — the profile
-// guards in main.go (AnyProfileHasIndexer, AnyProfileAgentCapable) decide which
-// tools register. Its one functional use is audit logging: CapWrite and
-// CapWritePrep tools are recorded to the audit log.
+// guards in cmd/gnomcp/register.go (AnyProfileHasIndexer, AnyProfileTestnet)
+// decide which tools register. Its one functional use is audit logging:
+// CapWrite and CapWritePrep tools are recorded to the audit log.
 type Capability int
 
 const (
 	CapBaseRead    Capability = iota // read-only realm queries (render/read/eval/inspect/connect) + gno_key_address
 	CapIndexerRead                   // tx-indexer reads; registered only when a profile sets tx-indexer-url
 	CapWrite                         // chain writes: gno_call, gno_run, gno_addpkg, gno_key_generate (audited)
-	CapWritePrep                     // session lifecycle: gno_auth_status, gno_session_propose, gno_session_revoke (audited)
+	CapWritePrep                     // server-state/session prep: gno_profile_add, gno_auth_status, gno_session_propose, gno_session_revoke (audited)
 	CapSessionRead                   // reserved; no tools use this capability
 	CapA2A                           // reserved for a2a serve mode; no tools use this capability
 )
@@ -104,8 +105,12 @@ type Tool struct {
 	SelfAudited bool
 }
 
-// Registry holds the declared tools and dispatches Call.
+// Registry holds the declared tools and dispatches Call. It is safe for
+// concurrent use: dynamic-profile re-registration mutates the tool set while
+// calls are in flight. Registered *Tool values are treated as immutable —
+// re-registration replaces the map entry with a fresh Tool, never mutates one.
 type Registry struct {
+	mu    sync.RWMutex
 	tools map[string]*Tool
 }
 
@@ -114,19 +119,29 @@ func NewRegistry() *Registry {
 }
 
 func (r *Registry) Add(t *Tool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.tools[t.Name] = t
 }
 
 // Get returns the tool with the given name, ok=false if not registered.
 func (r *Registry) Get(name string) (*Tool, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	t, ok := r.tools[name]
 	return t, ok
 }
 
-func (r *Registry) Count() int { return len(r.tools) }
+func (r *Registry) Count() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.tools)
+}
 
 // WithCapability returns the tools matching c, sorted by Name for stable enumeration.
 func (r *Registry) WithCapability(c Capability) []*Tool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	var out []*Tool
 	for _, t := range r.tools {
 		if t.Capability == c {
@@ -139,6 +154,8 @@ func (r *Registry) WithCapability(c Capability) []*Tool {
 
 // All returns every registered tool, sorted by Name for stable enumeration.
 func (r *Registry) All() []*Tool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	out := make([]*Tool, 0, len(r.tools))
 	for _, t := range r.tools {
 		out = append(out, t)
@@ -148,7 +165,12 @@ func (r *Registry) All() []*Tool {
 }
 
 func (r *Registry) Call(ctx context.Context, name string, args map[string]any) (res Result, err error) {
+	// Look up under the read lock, then invoke OUTSIDE it: a handler may
+	// re-register tools (dynamic-profile re-publication calls Add from within
+	// a running handler), which needs the write lock.
+	r.mu.RLock()
 	t, ok := r.tools[name]
+	r.mu.RUnlock()
 	if !ok {
 		return Result{}, fmt.Errorf("unknown tool: %s", name)
 	}

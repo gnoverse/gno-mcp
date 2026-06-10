@@ -70,29 +70,25 @@ func (k *Keystore) SignerForProfile(profileName string, p profiles.Profile) (gno
 	if !profiles.ChainIDAllowed(p.ChainID) {
 		return nil, fmt.Errorf("keystore: chain-id %q not allowed", p.ChainID)
 	}
-	switch p.ChainType {
-	case profiles.ChainTypeLocal:
+	if p.IsLocal() {
 		signer, err := deriveSigner(Test1Mnemonic, p.ChainID)
 		if err != nil {
 			return nil, fmt.Errorf("keystore: derive test1 signer: %w", err)
 		}
 		return signer, nil
-	case profiles.ChainTypeTestnet:
-		mnemonic, err := k.loadMnemonic(profileName)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, ErrNoAgentKey
-		}
-		if err != nil {
-			return nil, fmt.Errorf("keystore: load testnet key %q: %w", profileName, err)
-		}
-		signer, err := deriveSigner(mnemonic, p.ChainID)
-		if err != nil {
-			return nil, fmt.Errorf("keystore: derive testnet signer: %w", err)
-		}
-		return signer, nil
-	default:
+	}
+	mnemonic, err := k.loadMnemonic(profileName)
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, ErrNoAgentKey
 	}
+	if err != nil {
+		return nil, fmt.Errorf("keystore: load testnet key %q: %w", profileName, err)
+	}
+	signer, err := deriveSigner(mnemonic, p.ChainID)
+	if err != nil {
+		return nil, fmt.Errorf("keystore: derive testnet signer: %w", err)
+	}
+	return signer, nil
 }
 
 // AgentAddress returns the bech32 address of the profile's agent identity.
@@ -116,7 +112,7 @@ func (k *Keystore) GenerateForProfile(profileName string, p profiles.Profile) (s
 	if !profiles.ChainIDAllowed(p.ChainID) {
 		return "", fmt.Errorf("keystore: chain-id %q not allowed", p.ChainID)
 	}
-	if p.ChainType != profiles.ChainTypeTestnet {
+	if !p.IsTestnet() {
 		return "", fmt.Errorf("keystore: profile %q: %w", profileName, ErrKeyGenTestnetOnly)
 	}
 	if k.rootDir == "" {

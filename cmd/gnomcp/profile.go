@@ -154,7 +154,7 @@ func runProfile(args []string) {
 	case "add":
 		name, o, err := parseProfileAddArgs(args[1:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "usage: gnomcp profile add <name> [--from-gnoweb URL | --rpc URL --chain-id ID] [--master g1...]")
+			fmt.Fprintln(os.Stderr, "usage: gnomcp profile add <name> [--from-gnoweb URL | --rpc URL --chain-id ID] [--master g1...] [--indexer-url URL]")
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}

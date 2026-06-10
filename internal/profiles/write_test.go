@@ -12,7 +12,7 @@ import (
 func TestWriteFile_AtomicAnd0600(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profiles.toml")
 	m := map[string]Profile{
-		"test11": {ChainType: ChainTypeTestnet, RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
+		"test11": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
 	}
 	err := WriteFile(path, m)
 	require.NoError(t, err, "write")

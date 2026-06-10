@@ -12,7 +12,7 @@ import (
 // Returns ok=true iff the endpoint is reachable AND its reported network/chain-id matches the profile's chain-id.
 // Non-local profiles always return ok=false without probing.
 func DiscoverLocal(ctx context.Context, p Profile, timeout time.Duration) (bool, error) {
-	if p.ChainType != ChainTypeLocal {
+	if !p.IsLocal() {
 		return false, nil
 	}
 	url := p.RPCURL + "/status"

@@ -19,9 +19,9 @@ import (
 // must return an untyped-nil interface so the guards work.
 func TestBuildChainResolver_unknownProfileReturnsUntypedNil(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"testnet": {ChainType: "testnet", RPCURL: "http://example", ChainID: "test11"},
+		"testnet": {RPCURL: "http://example", ChainID: "test11"},
 	}}
-	resolve := buildChainResolver(cfg)
+	resolve := buildChainResolver(server.NewServer(cfg, ""))
 
 	if c := resolve("ghost"); c != nil {
 		t.Fatalf("unknown profile must resolve to an untyped-nil interface; got typed-nil %T", c)
@@ -37,8 +37,8 @@ func TestBuildChainResolver_unknownProfileReturnsUntypedNil(t *testing.T) {
 // "" downstream (which resolves to nothing and used to crash).
 func TestApplyProfileDefault(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"testnet": {ChainType: "testnet", RPCURL: "http://x", ChainID: "test11"},
-		"local":   {ChainType: "local", RPCURL: "http://y", ChainID: "dev"},
+		"testnet": {RPCURL: "http://x", ChainID: "test11"},
+		"local":   {RPCURL: "http://y", ChainID: "dev"},
 	}}
 	s := server.NewServer(cfg, "") // no discovered-local -> default "testnet"
 

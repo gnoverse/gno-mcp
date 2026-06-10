@@ -15,7 +15,7 @@ gnomcp ships with two built-in profiles that require no configuration:
 | `local` | `dev` | `http://127.0.0.1:26657` (auto-discovered local node) |
 | `testnet` | `test11` | `https://rpc.test11.testnets.gno.land:443` |
 
-The five chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`, `gno_packages`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed. Both built-ins are also agent-capable, so the agent-identity write tools (see below) register out of the box.
+The five chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`, `gno_packages`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed. The write tools (see below) register out of the box as well — every allowed chain has an agent-key path.
 
 ## Quick start
 
@@ -109,7 +109,7 @@ Session key files are stored in `~/.local/share/gnomcp/sessions` (mode `0600`). 
 
 ## Tools
 
-See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (18 tools):
+See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (19 tools):
 
 | Tool | Category | Registered when |
 |------|----------|---------|
@@ -119,6 +119,7 @@ See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (18 tools):
 | `gno_inspect` | chain read | always |
 | `gno_packages` | chain read | always |
 | `gno_connect` | discovery | always |
+| `gno_profile_add` | admin | always (in-memory profile, gone on restart) |
 | `gno_list` | indexer read | a profile has `tx-indexer-url` |
 | `gno_history` | indexer read | a profile has `tx-indexer-url` |
 | `gno_activity` | indexer read | a profile has `tx-indexer-url` |
@@ -127,10 +128,15 @@ See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (18 tools):
 | `gno_session_propose` | session | always (needs `master-address` to succeed) |
 | `gno_session_revoke` | session | always (needs `master-address` to succeed) |
 | `gno_auth_status` | session | always |
-| `gno_addpkg` | write | a local or testnet profile exists |
-| `gno_key_address` | agent key | a local or testnet profile exists |
-| `gno_key_generate` | agent key | a local or testnet profile exists |
+| `gno_addpkg` | write | always |
+| `gno_key_address` | agent key | always |
+| `gno_key_generate` | agent key | always |
 | `gno_faucet_fund` | agent key | a testnet profile exists |
+
+Gated tools appear mid-session when `gno_profile_add` flips their gate (the
+server sends `tools/list_changed`). Dynamic profiles are in-memory, testnet/dev
+only, and carry no `master-address` — reads and agent-key writes work, sessions
+require a profile persisted in `profiles.toml`.
 
 ## Skill installation (for AI coding agents)
 
@@ -191,6 +197,7 @@ internal/
   tools/read/            # 6 chain/discovery read tool registrations
   tools/indexer/         # 3 indexer read tool registrations
   tools/write/           # 9 write/session/agent-key tool registrations
+  tools/admin/           # 1 admin tool registration (gno_profile_add)
 test/e2e/                # Manual e2e protocol (PROTOCOL.md)
 test/integration/        # Live smoke (build tag: integration)
 adr/                     # Architecture Decision Records

@@ -16,11 +16,11 @@ import (
 // signedByLine renders the acting-identity line for a write result. The agent
 // identity is the well-known test1 account on local (dev) chains and a
 // per-profile generated key on testnet, so the label is tier-dependent.
-func signedByLine(identity, signerAddr, master, chainType string) string {
+func signedByLine(identity, signerAddr, master string, local bool) string {
 	if identity == "session" {
 		return fmt.Sprintf("Signed by: session %s on behalf of master %s", signerAddr, master)
 	}
-	if chainType == profiles.ChainTypeLocal {
+	if local {
 		return fmt.Sprintf("Signed by: agent test1 (%s)", signerAddr)
 	}
 	return fmt.Sprintf("Signed by: agent (%s)", signerAddr)
@@ -66,7 +66,7 @@ func acquireAgentSigner(ctx context.Context, ks *keystore.Keystore, c chain.Clie
 	}
 	addr := info.GetAddress().String()
 
-	if profile.ChainType == profiles.ChainTypeTestnet && !simulate {
+	if profile.IsTestnet() && !simulate {
 		bal, err := c.Balance(ctx, addr)
 		if err != nil {
 			return nil, "", fmt.Errorf("%s: balance check: %w", tool, err)

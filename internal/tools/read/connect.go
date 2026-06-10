@@ -15,18 +15,21 @@ import (
 func RegisterConnect(s *server.Server, client *http.Client) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_connect",
-		Description: "Discovers how to connect to a gno chain from its gnoweb URL and returns a " +
-			"ready-to-run 'gnomcp profile add' command for the user. Use when the user wants to " +
-			"read a chain that is not in the current profile list. Reads the gnoconnect:rpc and " +
-			"gnoconnect:chainid meta-tags from the gnoweb page; validates the chain-id against the " +
-			"allowlist (only dev or testNN). Does NOT modify any config — it only tells the user " +
-			"the command to run. Required: gnoweb_url (e.g. 'https://test11.testnets.gno.land'). " +
+		Description: "Discovers how to connect to a gno chain from its gnoweb URL: reads the " +
+			"gnoconnect:rpc and gnoconnect:chainid meta-tags, validates the chain-id against the " +
+			"allowlist (only dev or testNN), and returns both follow-up paths — gno_profile_add " +
+			"to use the chain in this session (in-memory), and a ready-to-run 'gnomcp profile add' " +
+			"command for the user to persist it. Use to PREVIEW a chain's connection info without " +
+			"changing gnomcp state; to discover AND add in one step, call gno_profile_add with " +
+			"gnoweb_url directly instead. Does NOT modify any config itself. " +
+			"Required: gnoweb_url (e.g. 'https://test11.testnets.gno.land'). " +
 			"Optional: name (suggested profile name, default derived from chain-id).",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"gnoweb_url": map[string]any{
 					"type":        "string",
+					"format":      "uri",
 					"description": "Base gnoweb URL of the chain (e.g. 'https://test11.testnets.gno.land').",
 				},
 				"name": map[string]any{
@@ -77,9 +80,13 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 			}
 			cmd := fmt.Sprintf("gnomcp profile add %s --rpc %s --chain-id %s", name, conn.RPC, conn.ChainID)
 			text := fmt.Sprintf(
-				"Discovered chain %q at RPC %s.\n\nTo add it as a profile, run:\n\n```\n%s\n```\n\n"+
-					"Then pass profile=%q to the read tools. To enable writes, append --master <g1...>.",
-				conn.ChainID, conn.RPC, cmd, name)
+				"Discovered chain %q at RPC %s.\n\n"+
+					"To use it in this session (in-memory until restart), call gno_profile_add with "+
+					"name=%q, rpc_url=%q, chain_id=%q.\n\n"+
+					"To persist it, run:\n\n```\n%s\n```\n\n"+
+					"Then pass profile=%q to the read tools. For write-as-user sessions, persist the "+
+					"profile with --master <g1...> appended (dynamic profiles support agent-key writes only).",
+				conn.ChainID, conn.RPC, name, conn.RPC, conn.ChainID, cmd, name)
 			return server.Result{
 				Text: text,
 				StructuredContent: map[string]any{

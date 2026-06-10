@@ -9,18 +9,7 @@ import (
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 )
 
-// Valid chain types.
-const (
-	ChainTypeLocal   = "local"
-	ChainTypeTestnet = "testnet"
-)
-
 var (
-	validChainTypes = map[string]bool{
-		ChainTypeLocal:   true,
-		ChainTypeTestnet: true,
-	}
-
 	// spendLimitRE matches a single-denomination coin amount: digits followed by
 	// lowercase letters (e.g. "1000000ugnot", "10gnot"). Cross-denom mixes rejected.
 	spendLimitRE = regexp.MustCompile(`^[0-9]+[a-z]+$`)
@@ -65,7 +54,7 @@ func ChainIDAllowed(chainID string) bool {
 	return chainIDRE.MatchString(chainID)
 }
 
-// Validate checks required fields and applies defaults in place.
+// Validate checks required fields. It never mutates profiles.
 // The returned warning is non-nil when a valid but potentially dangerous
 // configuration is detected. The caller decides how to surface the warning
 // (log, stderr, ignore).
@@ -85,16 +74,6 @@ func (c *Config) Validate() (warn error, err error) {
 		}
 		if !ChainIDAllowed(p.ChainID) {
 			return nil, fmt.Errorf("profile %q: chain-id %q is not allowed (only dev or testNN are permitted; betanet/mainnet/staging are forbidden)", name, p.ChainID)
-		}
-		if p.ChainType == "" {
-			if p.ChainID == "dev" {
-				p.ChainType = ChainTypeLocal
-			} else {
-				p.ChainType = ChainTypeTestnet
-			}
-		}
-		if !validChainTypes[p.ChainType] {
-			return nil, fmt.Errorf("profile %q: unknown chain-type %q (must be local or testnet)", name, p.ChainType)
 		}
 
 		if p.DefaultExpiresIn != "" {
@@ -127,8 +106,6 @@ func (c *Config) Validate() (warn error, err error) {
 				return nil, fmt.Errorf("profile %q: invalid %s %q (want an absolute http(s) URL)", name, f.name, f.val)
 			}
 		}
-
-		c.Profiles[name] = p
 	}
 	return warn, nil
 }

@@ -15,7 +15,7 @@ import (
 func newBaseTestServer(t *testing.T) *server.Server {
 	t.Helper()
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"testnet5": {ChainType: "testnet", RPCURL: "http://127.0.0.1:26657", ChainID: "test5"},
+		"testnet5": {RPCURL: "http://127.0.0.1:26657", ChainID: "test5"},
 	}}
 	_, err := cfg.Validate()
 	require.NoError(t, err)

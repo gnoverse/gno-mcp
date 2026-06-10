@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,9 +30,6 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
-	idxtools "github.com/gnoverse/gno-mcp/internal/tools/indexer"
-	readtools "github.com/gnoverse/gno-mcp/internal/tools/read"
-	writetools "github.com/gnoverse/gno-mcp/internal/tools/write"
 	"github.com/gnoverse/gno-mcp/internal/untrusted"
 )
 
@@ -88,8 +86,8 @@ func main() {
 
 	// ---- build server + tool resolvers
 	s := server.NewServer(cfg, discoveredLocal)
-	chainResolver := buildChainResolver(cfg)
-	indexerResolver := buildIndexerResolver(cfg)
+	chainResolver := buildChainResolver(s)
+	indexerResolver := buildIndexerResolver(s)
 
 	// ---- session manager
 	passphrase := os.Getenv("GNOMCP_SESSION_PASSPHRASE")
@@ -101,42 +99,13 @@ func main() {
 	// ---- keystore (agent identity for local and testnet profiles)
 	ks := keystore.New(defaultAgentKeysPath(), passphrase)
 
-	// ---- register tools
-	readtools.RegisterRender(s, chainResolver)
-	readtools.RegisterEval(s, chainResolver)
-	readtools.RegisterRead(s, chainResolver)
-	readtools.RegisterInspect(s, chainResolver)
-	readtools.RegisterPackages(s, chainResolver)
-	readtools.RegisterConnect(s, &http.Client{Timeout: 10 * time.Second})
-
-	if s.AnyProfileHasIndexer() {
-		idxtools.RegisterList(s, indexerResolver)
-		idxtools.RegisterHistory(s, indexerResolver)
-		idxtools.RegisterActivity(s, indexerResolver)
-	}
-
-	writetools.RegisterCall(s, ks, sessionMgr, chainResolver, auditLog)
-	writetools.RegisterRun(s, ks, sessionMgr, chainResolver, auditLog)
-	writetools.RegisterAuthStatus(s, sessionMgr, chainResolver)
-	writetools.RegisterSessionPropose(s, sessionMgr)
-	writetools.RegisterSessionRevoke(s, sessionMgr)
-
-	if s.AnyProfileAgentCapable() { // agent-only tools — local (test1) or testnet (generated key)
-		writetools.RegisterAddPkg(s, ks, chainResolver, auditLog)
-		writetools.RegisterKeyAddress(s, ks)
-		writetools.RegisterKeyGenerate(s, ks)
-	}
-
-	if s.AnyProfileTestnet() {
-		writetools.RegisterFaucetFund(s, ks, chainResolver, &http.Client{Timeout: 30 * time.Second})
-	}
-
 	// ---- build MCP SDK server
-	instructions := "gnomcp exposes Gno chain operations over MCP. Tools register per-profile capability (see profiles.toml), so the available set varies by config. Typical flows:\n" +
+	instructions := "gnomcp exposes Gno chain operations over MCP. The indexer and faucet tools register only when a profile provides them (tx-indexer-url / a testnet); the rest are always available. Typical flows:\n" +
 		"- READ: gno_inspect (learn a realm's API) then gno_render / gno_eval / gno_read (read state or source).\n" +
 		"- WRITE on testnet: gno_key_generate (once) -> gno_faucet_fund (fund the agent key) -> gno_call / gno_run / gno_addpkg. An unfunded write returns insufficient_funds pointing at gno_faucet_fund.\n" +
 		"- WRITE as the user (any chain with a master-address): gno_session_propose -> the user runs the printed gnokey command to authorize -> retry the write with identity=session. gno_auth_status / gno_session_revoke inspect and revoke sessions.\n" +
-		"- New chain: gno_connect <gnoweb URL> -> run the printed `gnomcp profile add` command -> restart gnomcp.\n" +
+		"- New chain (this session): gno_profile_add with gnoweb_url discovers, verifies, and adds in one call (in-memory, gone on restart; dev/testnets only) — or gno_connect first to preview without adding. " +
+		"To persist: run the returned persist_command and restart gnomcp. Dynamic profiles support reads and agent-key writes; sessions need a persisted profile with master-address.\n" +
 		"Always report which identity signed a write (the agent key vs a session) so it is never ambiguous."
 	mcpServer := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "gnomcp",
@@ -145,17 +114,31 @@ func main() {
 		Instructions: instructions,
 	})
 
-	for _, t := range s.Registry().All() {
-		inputSchema, err := mapToSchema(t.InputSchema)
-		if err != nil {
-			log.Fatalf("build schema for tool %q: %v", t.Name, err)
-		}
-		mcpServer.AddTool(&mcpsdk.Tool{
-			Name:        t.Name,
-			Description: t.Description,
-			InputSchema: inputSchema,
-			Annotations: toSDKAnnotations(t.Annotations),
-		}, makeHandler(t, s, auditLog, *auditReads))
+	// ---- register + publish tools
+	deps := &toolDeps{
+		srv:             s,
+		chainResolver:   chainResolver,
+		indexerResolver: indexerResolver,
+		sessionMgr:      sessionMgr,
+		keystore:        ks,
+		auditLog:        auditLog,
+		connectClient:   &http.Client{Timeout: 10 * time.Second},
+		faucetClient:    &http.Client{Timeout: 30 * time.Second},
+		verifyChainID:   chain.QueryChainID,
+	}
+	// republishMu lives here, NOT inside the tool closure: re-registration
+	// replaces gno_profile_add itself, so a closure-local mutex would be
+	// swapped out on every add and serialize nothing.
+	var republishMu sync.Mutex
+	deps.onProfileAdded = func() error {
+		republishMu.Lock()
+		defer republishMu.Unlock()
+		registerAllTools(deps)
+		return publishTools(mcpServer, s, auditLog, *auditReads)
+	}
+	registerAllTools(deps)
+	if err := publishTools(mcpServer, s, auditLog, *auditReads); err != nil {
+		log.Fatalf("publish tools: %v", err)
 	}
 
 	// ---- run
@@ -166,38 +149,65 @@ func main() {
 
 // ---- resolver builders
 
-func buildChainResolver(cfg *profiles.Config) chain.Resolver {
-	clients := make(map[string]*chain.Real, len(cfg.Profiles))
-	for name, p := range cfg.Profiles {
+func buildChainResolver(s *server.Server) chain.Resolver {
+	type entry struct {
+		rpcURL  string
+		chainID string
+		client  *chain.Real
+	}
+	var mu sync.Mutex
+	cache := make(map[string]entry, len(s.Config().Profiles))
+	// Eager-seed the init profiles: NewReal does no network I/O (URL parsing
+	// only), so a malformed rpc-url in the loaded config still fails fast at
+	// startup. Dynamic profiles are dialed lazily on first use.
+	for name, p := range s.Config().Profiles {
 		c, err := chain.NewReal(p.RPCURL, p.ChainID)
 		if err != nil {
 			log.Fatalf("chain client for profile %q: %v", name, err)
 		}
-		clients[name] = c
+		cache[name] = entry{rpcURL: p.RPCURL, chainID: p.ChainID, client: c}
 	}
 	return func(profile string) chain.Client {
 		// Return an untyped-nil interface (not a typed-nil *chain.Real) for an
 		// unresolved profile, so callers' `if c == nil` guards actually fire.
-		c, ok := clients[profile]
+		p, ok := s.Config().Profiles[profile]
 		if !ok {
 			return nil
 		}
+		mu.Lock()
+		defer mu.Unlock()
+		if e, ok := cache[profile]; ok && e.rpcURL == p.RPCURL && e.chainID == p.ChainID {
+			return e.client
+		}
+		c, err := chain.NewReal(p.RPCURL, p.ChainID)
+		if err != nil {
+			log.Printf("chain client for profile %q: %v", profile, err)
+			return nil
+		}
+		cache[profile] = entry{rpcURL: p.RPCURL, chainID: p.ChainID, client: c}
 		return c
 	}
 }
 
-func buildIndexerResolver(cfg *profiles.Config) indexer.Resolver {
-	clients := make(map[string]*indexer.GraphQL, len(cfg.Profiles))
-	for name, p := range cfg.Profiles {
-		if p.TxIndexerURL != "" {
-			clients[name] = indexer.NewGraphQL(p.TxIndexerURL)
-		}
+func buildIndexerResolver(s *server.Server) indexer.Resolver {
+	type entry struct {
+		url    string
+		client *indexer.GraphQL
 	}
+	var mu sync.Mutex
+	cache := map[string]entry{}
 	return func(profile string) indexer.Client {
-		c, ok := clients[profile]
-		if !ok {
+		p, ok := s.Config().Profiles[profile]
+		if !ok || p.TxIndexerURL == "" {
 			return nil
 		}
+		mu.Lock()
+		defer mu.Unlock()
+		if e, ok := cache[profile]; ok && e.url == p.TxIndexerURL {
+			return e.client
+		}
+		c := indexer.NewGraphQL(p.TxIndexerURL)
+		cache[profile] = entry{url: p.TxIndexerURL, client: c}
 		return c
 	}
 }
@@ -531,6 +541,10 @@ var safeArgKeys = map[string]bool{
 	"deploy_path": true, "simulate": true, "identity": true, "limit": true,
 	"since": true, "until": true, "namespace": true, "tag": true, "category": true,
 	"allow_run": true, "expires_in": true, "gnoweb_url": true, "name": true, "address": true,
+	// gno_profile_add connection params: the audit line must show what chain
+	// was added, and none of these carry secrets.
+	"rpc_url": true, "chain_id": true, "tx_indexer_url": true,
+	"faucet_service_url": true, "faucet_url": true,
 }
 
 func argsSummary(args map[string]any) string {

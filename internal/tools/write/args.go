@@ -2,9 +2,8 @@
 // gno_run, gno_addpkg (transactions); gno_faucet_fund, gno_key_generate,
 // gno_key_address (agent key lifecycle); and gno_session_propose,
 // gno_auth_status, gno_session_revoke (session lifecycle). Each exposes a
-// Register* function. Registration is gated in cmd/gnomcp by profile
-// capability — an agent-capable local/testnet profile, or a master-address for
-// sessions — not unconditionally; see main.go.
+// Register* function. All register unconditionally except gno_faucet_fund,
+// which is gated on a testnet profile existing; see cmd/gnomcp/register.go.
 package write
 
 import (
@@ -33,12 +32,10 @@ func requireProfile(args map[string]any, s *server.Server) (string, profiles.Pro
 
 func profileWritableBySession(p profiles.Profile) bool { return p.MasterAddress != "" }
 
-// profileWritableByAgent reports whether the agent has or can have its own signing
-// key for p. Local profiles use the built-in test1 key; testnet profiles get a
-// generated key via gno_key_generate.
-func profileWritableByAgent(p profiles.Profile) bool {
-	return p.ChainType == profiles.ChainTypeLocal || p.ChainType == profiles.ChainTypeTestnet
-}
+// profileWritableByAgent reports whether the agent has or can have its own
+// signing key for p. The chain-id allowlist admits only local (test1 key) and
+// testnet (generated key) chains, so every profile qualifies.
+func profileWritableByAgent(profiles.Profile) bool { return true }
 
 // addProfileArgFiltered populates props["profile"] with an enum filtered by keep.
 // desc is the human-readable description for the arg.
@@ -76,7 +73,7 @@ func addAgentProfileArg(s *server.Server, props map[string]any, required *[]stri
 		"Profile to use. Local profiles use the built-in test1 key; testnet profiles require a generated agent key (gno_key_generate).")
 }
 
-func profileIsTestnet(p profiles.Profile) bool { return p.ChainType == profiles.ChainTypeTestnet }
+func profileIsTestnet(p profiles.Profile) bool { return p.IsTestnet() }
 
 // addTestnetProfileArg adds the `profile` arg filtered to testnet profiles,
 // where the agent can generate and persist its own key.

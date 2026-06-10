@@ -150,7 +150,7 @@ func addpkgHandler(
 	// ---- Build result text
 
 	var b strings.Builder
-	fmt.Fprintln(&b, signedByLine("agent", addr, "", p.ChainType))
+	fmt.Fprintln(&b, signedByLine("agent", addr, "", p.IsLocal()))
 	fmt.Fprintln(&b)
 	if res.Simulated {
 		fmt.Fprintln(&b, "AddPackage simulated (no broadcast)")

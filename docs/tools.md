@@ -1,6 +1,6 @@
 # Tools
 
-18 tools across read, discovery, indexer, and write categories. All tools except `gno_connect` accept a `profile` parameter that selects which profile (chain) to target; when only one profile is active it is omitted from the schema.
+19 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
 
 Chain-returned bytes are untrusted: the inline-text read/indexer tools (including `gno_render`) wrap their output in an `<untrusted_content>` envelope, and `gno_read` delivers content as an MCP resource (see `docs/security.md` §4).
 
@@ -40,8 +40,16 @@ These tools require no config — the built-in `local` and `testnet` profiles ar
 ### `gno_connect`
 
 - **Args:** `gnoweb_url` (required), `name?` (suggested profile name, default derived from chain-id)
-- **Returns:** the exact `gnomcp profile add` command the user must run to register this chain.
-- Reads gnoconnect meta-tags from the gnoweb page at `gnoweb_url` and derives the `--rpc` and `--chain-id` arguments. **Never mutates config.** Read-only; the user must run the printed command.
+- **Returns:** both follow-up paths — `gno_profile_add` arguments for in-session use, and the exact `gnomcp profile add` command the user runs to persist the chain.
+- Reads gnoconnect meta-tags from the gnoweb page at `gnoweb_url` and derives the `--rpc` and `--chain-id` arguments. **Never mutates config itself.**
+
+## Admin
+
+### `gno_profile_add`
+
+- **Args:** `name` (required), then exactly one form: `rpc_url` + `chain_id` (explicit), or `gnoweb_url` (discovery). Optional: `tx_indexer_url`, `faucet_service_url`, `faucet_url`.
+- **Returns:** confirmation plus the `gnomcp profile add` command to persist the profile.
+- Adds a profile **in-memory only** — it disappears on restart and never touches `profiles.toml`. Init-time profiles cannot be overridden; re-adding a dynamically added name replaces it. Only `dev`/`testNN` chain-ids are accepted, and the node is dialed to confirm it reports the declared chain-id (gnoweb meta-tags are a hint, not truth; a non-loopback gnoweb advertising a loopback RPC is rejected). No `master-address` field: dynamic profiles support reads and agent-key writes only — sessions require a persisted profile. After a successful add the tool set is re-published (`tools/list_changed`), which can summon gated tools (faucet, indexer) mid-session.
 
 ## Read-only (indexer)
 
@@ -67,11 +75,11 @@ These three tools are only registered when at least one profile has a `tx-indexe
 gnomcp signs writes with one of two identities, chosen per call via the `identity` arg (`"agent"` | `"session"`):
 
 - **Agent identity (default on local and testnet).** Local profiles sign with the built-in **test1** key directly — no session needed. Testnet profiles sign with a key generated and persisted by `gno_key_generate`; run that once and fund the address before making writes.
-- **Session (opt-in or default on non-local/testnet profiles).** The agent acts *as the user* through a chain-bound session; authorize one with `gno_session_propose` first. Pass `identity=session` to force this path on any profile.
+- **Session (opt-in).** The agent acts *as the user* through a chain-bound session; authorize one with `gno_session_propose` first. Pass `identity=session` to choose this path on any profile with a `master-address`.
 
 Every write result names the signer (`Signed by: agent test1 (g1…)` or `Signed by: session g1… on behalf of master g1…`) and the structured output carries `identity` + `signer_address`.
 
-Registration: `gno_call`/`gno_run` appear when a profile is writable — local/testnet (agent key) **or** has a `master-address` (session). `gno_addpkg`, `gno_key_address`, `gno_key_generate`, and `gno_faucet_fund` appear when any local or testnet profile exists.
+Registration: every allowed chain (local dev or testnet) has an agent key path, so `gno_call`, `gno_run`, `gno_addpkg`, `gno_key_address`, and `gno_key_generate` always register. `gno_faucet_fund` appears when a testnet profile exists (including one added mid-session via `gno_profile_add`).
 
 ### `gno_session_propose`
 
@@ -81,7 +89,7 @@ Registration: `gno_call`/`gno_run` appear when a profile is writable — local/t
 
 ### `gno_session_revoke`
 
-- **Args:** `profile` (required), `address` (required)
+- **Args:** `profile` (required), `session_address` (required)
 - **Returns:** a paste-ready `gnokey maketx session revoke` command the user runs to revoke a managed session. Use `gno_auth_status` to list session addresses.
 
 ### `gno_auth_status`
@@ -93,13 +101,13 @@ Registration: `gno_call`/`gno_run` appear when a profile is writable — local/t
 
 - **Args:** `profile` (required), `realm` (required), `func` (required), `args?[]`, `simulate?`, `identity?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
-- Default identity: **agent** on local (test1) and testnet (generated key); **session** otherwise. Pass `identity=session` to use a session on any profile.
+- Default identity: **agent** (test1 on local, generated key on testnet). Pass `identity=session` to act as the user instead.
 
 ### `gno_run`
 
 - **Args:** `profile` (required), `code` (required), `simulate?`, `identity?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
-- Default identity: **agent** on local and testnet; **session** otherwise.
+- Default identity: **agent**; pass `identity=session` to act as the user.
 
 ### `gno_addpkg`
 

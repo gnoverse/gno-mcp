@@ -100,7 +100,7 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 		if didClamp {
 			warnings = append(warnings, fmt.Sprintf(
 				"WARNING: requested spend_limit %s exceeds %s cap of %s; clamped to %s.",
-				scope.SpendLimit, profile.ChainType, limits.MaxSpendLimit, clamped,
+				scope.SpendLimit, profile.Kind(), limits.MaxSpendLimit, clamped,
 			))
 			scope.SpendLimit = clamped
 		}
@@ -109,7 +109,7 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 	if limits.MaxExpiresIn > 0 && scope.ExpiresIn > limits.MaxExpiresIn {
 		warnings = append(warnings, fmt.Sprintf(
 			"WARNING: requested expires_in %s exceeds %s cap of %s; clamped to %s.",
-			scope.ExpiresIn, profile.ChainType, limits.MaxExpiresIn, limits.MaxExpiresIn,
+			scope.ExpiresIn, profile.Kind(), limits.MaxExpiresIn, limits.MaxExpiresIn,
 		))
 		scope.ExpiresIn = limits.MaxExpiresIn
 		scope.SpendPeriod = limits.MaxExpiresIn
@@ -118,7 +118,7 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 	if limits.MaxAllowPathsCount > 0 && len(scope.AllowPaths) > limits.MaxAllowPathsCount {
 		warnings = append(warnings, fmt.Sprintf(
 			"WARNING: requested %d allow_paths exceeds %s cap of %d; clamped to first %d.",
-			len(scope.AllowPaths), profile.ChainType, limits.MaxAllowPathsCount, limits.MaxAllowPathsCount,
+			len(scope.AllowPaths), profile.Kind(), limits.MaxAllowPathsCount, limits.MaxAllowPathsCount,
 		))
 		scope.AllowPaths = scope.AllowPaths[:limits.MaxAllowPathsCount]
 	}

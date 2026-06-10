@@ -9,10 +9,11 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Profile is a single chain profile loaded from profiles.toml.
+// Profile is a single chain profile loaded from profiles.toml. Locality
+// (local vs testnet) is derived from ChainID via IsLocal/IsTestnet, never
+// configured.
 type Profile struct {
 	// Connection settings.
-	ChainType    string `toml:"chain-type"`
 	RPCURL       string `toml:"rpc-url"`
 	ChainID      string `toml:"chain-id"`
 	TxIndexerURL string `toml:"tx-indexer-url"`
@@ -28,6 +29,23 @@ type Profile struct {
 	DefaultSpendLimit string `toml:"default-spend-limit"` // optional; clamped at use
 	DefaultExpiresIn  string `toml:"default-expires-in"`  // optional; Go duration string
 	BypassHardLimits  bool   `toml:"bypass-hard-limits"`  // default false; disables per-chain clamps
+}
+
+// IsLocal reports whether the profile targets a local dev node. The chain-id
+// allowlist admits exactly two classes: "dev" (local) and "test*" (testnet),
+// so locality is derived — never configured.
+func (p Profile) IsLocal() bool { return p.ChainID == "dev" }
+
+// IsTestnet reports whether the profile targets a testnet.
+func (p Profile) IsTestnet() bool { return !p.IsLocal() }
+
+// Kind returns "local" or "testnet" for display (signed-by lines, clamp
+// warnings).
+func (p Profile) Kind() string {
+	if p.IsLocal() {
+		return "local"
+	}
+	return "testnet"
 }
 
 // Config is the root of profiles.toml.
@@ -65,14 +83,12 @@ const (
 func BuiltinProfiles() map[string]Profile {
 	return map[string]Profile{
 		"local": {
-			ChainType: ChainTypeLocal,
-			RPCURL:    builtinLocalRPC,
-			ChainID:   builtinLocalChain,
+			RPCURL:  builtinLocalRPC,
+			ChainID: builtinLocalChain,
 		},
 		"testnet": {
-			ChainType: ChainTypeTestnet,
-			RPCURL:    builtinTestnetRPC,
-			ChainID:   builtinTestnetChain,
+			RPCURL:  builtinTestnetRPC,
+			ChainID: builtinTestnetChain,
 		},
 	}
 }

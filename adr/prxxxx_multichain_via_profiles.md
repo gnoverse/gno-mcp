@@ -10,6 +10,11 @@ The threat model treats mainnet writes as materially more dangerous than testnet
 
 gnomcp runs as a single binary with a single instance, loading multiple chain profiles from `profiles.toml`. Every chain-bound tool takes a `profile` argument.
 
+> **Superseded detail (2026-06-10):** the `chain-type` key was removed — locality
+> derives from `chain-id` (`dev` = local, `test*` = testnet; the allowlist admits
+> nothing else), and `allow-dangerous-tools` was replaced by master-address
+> write-enablement. The snippet below is the original design record.
+
 **`profiles.toml`** lives at `~/.config/gnomcp/profiles.toml` (host) and is mounted read-only into the container at `/etc/gnomcp/profiles.toml`. Each profile declares:
 
 ```toml
