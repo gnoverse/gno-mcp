@@ -16,11 +16,17 @@ import (
 
 // statusServer serves a JSON-RPC envelope whose result is the amino encoding
 // of a ResultStatus reporting network — the wire shape tm2's Status() decodes.
-// The response echoes the request's id (the tm2 client rejects mismatches).
 func statusServer(t *testing.T, network string) *httptest.Server {
 	t.Helper()
 	var st ctypes.ResultStatus
 	st.NodeInfo.Network = network
+	return statusServerWith(t, st)
+}
+
+// statusServerWith serves the amino encoding of st as the /status result.
+// The response echoes the request's id (the tm2 client rejects mismatches).
+func statusServerWith(t *testing.T, st ctypes.ResultStatus) *httptest.Server {
+	t.Helper()
 	result, err := amino.MarshalJSON(&st)
 	require.NoError(t, err, "amino-marshal ResultStatus")
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,4 +72,45 @@ func TestQueryChainID_respectsContextTimeout(t *testing.T) {
 func TestQueryChainID_emptyURL(t *testing.T) {
 	_, err := QueryChainID(context.Background(), "")
 	require.Error(t, err)
+}
+
+func TestRealStatus_reportsChainIDHeightTime(t *testing.T) {
+	var st ctypes.ResultStatus
+	st.NodeInfo.Network = "test5"
+	st.SyncInfo.LatestBlockHeight = 4242
+	st.SyncInfo.LatestBlockTime = time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	srv := statusServerWith(t, st)
+	defer srv.Close()
+
+	r, err := NewReal(srv.URL, "test5")
+	require.NoError(t, err)
+
+	got, err := r.Status(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "test5", got.ChainID)
+	assert.Equal(t, int64(4242), got.Height)
+	assert.True(t, st.SyncInfo.LatestBlockTime.Equal(got.BlockTime))
+}
+
+func TestFakeStatus_returnsSeeded(t *testing.T) {
+	f := NewFake()
+	f.SetStatus(NodeStatus{ChainID: "dev", Height: 7})
+
+	got, err := f.Status(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "dev", got.ChainID)
+	assert.Equal(t, int64(7), got.Height)
+}
+
+func TestFakeStatus_unseededErrors(t *testing.T) {
+	f := NewFake()
+	_, err := f.Status(context.Background())
+	require.Error(t, err)
+}
+
+func TestFakeStatus_seededError(t *testing.T) {
+	f := NewFake()
+	f.SetStatusError(assert.AnError)
+	_, err := f.Status(context.Background())
+	require.ErrorIs(t, err, assert.AnError)
 }

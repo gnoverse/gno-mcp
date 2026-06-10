@@ -26,3 +26,16 @@ func QueryChainID(ctx context.Context, rpcURL string) (string, error) {
 	}
 	return st.NodeInfo.Network, nil
 }
+
+// Status returns the chain-id and sync tip reported by the connected node.
+func (r *Real) Status(ctx context.Context) (NodeStatus, error) {
+	st, err := r.cli.RPCClient.Status(ctx, nil)
+	if err != nil {
+		return NodeStatus{}, fmt.Errorf("status query: %w", err)
+	}
+	return NodeStatus{
+		ChainID:   st.NodeInfo.Network,
+		Height:    st.SyncInfo.LatestBlockHeight,
+		BlockTime: st.SyncInfo.LatestBlockTime,
+	}, nil
+}

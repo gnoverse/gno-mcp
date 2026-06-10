@@ -47,6 +47,8 @@ func registerAllTools(d *toolDeps) {
 	readtools.RegisterRead(s, d.chainResolver)
 	readtools.RegisterInspect(s, d.chainResolver)
 	readtools.RegisterPackages(s, d.chainResolver)
+	readtools.RegisterAccount(s, d.chainResolver)
+	readtools.RegisterStatus(s, d.chainResolver)
 	readtools.RegisterConnect(s, d.connectClient)
 
 	if s.AnyProfileHasIndexer() {

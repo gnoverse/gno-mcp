@@ -25,6 +25,11 @@ type Fake struct {
 	sessions      map[string]SessionStatus // key: master+"|"+sessionAddr
 	sessionErrors map[string]error         // key: master+"|"+sessionAddr; checked before sessions
 	balances      map[string]int64         // key: bech32 addr; absent = 0 (never-funded)
+	accounts      map[string]AccountInfo   // key: bech32 addr; absent = Exists=false
+	accountErrors map[string]error         // key: bech32 addr; checked before accounts
+	status        NodeStatus
+	statusSet     bool
+	statusErr     error // checked before status
 	// agent-identity (standard tx, no session) maps
 	agentCalls      map[string]CallResult
 	agentRuns       map[string]RunResult
@@ -47,6 +52,8 @@ func NewFake() *Fake {
 		sessions:        map[string]SessionStatus{},
 		sessionErrors:   map[string]error{},
 		balances:        map[string]int64{},
+		accounts:        map[string]AccountInfo{},
+		accountErrors:   map[string]error{},
 		agentCalls:      map[string]CallResult{},
 		agentRuns:       map[string]RunResult{},
 		addPkgs:         map[string]AddPackageResult{},
@@ -248,6 +255,40 @@ func (f *Fake) SetBalance(addr string, ugnot int64) { f.balances[addr] = ugnot }
 // Balance returns the seeded balance for addr; absent entries return 0 (never-funded).
 func (f *Fake) Balance(_ context.Context, addr string) (int64, error) {
 	return f.balances[addr], nil
+}
+
+// SetAccount seeds the AccountInfo returned by Account for addr.
+func (f *Fake) SetAccount(addr string, info AccountInfo) { f.accounts[addr] = info }
+
+// SetAccountError seeds an error returned by Account for addr (RPC-failure path).
+func (f *Fake) SetAccountError(addr string, err error) { f.accountErrors[addr] = err }
+
+// Account returns the seeded info for addr. An unseeded address returns the
+// zero value (Exists=false) without error — matching chain semantics where an
+// unknown address is "no record", not a failure.
+func (f *Fake) Account(_ context.Context, addr string) (AccountInfo, error) {
+	if err := f.accountErrors[addr]; err != nil {
+		return AccountInfo{}, err
+	}
+	return f.accounts[addr], nil
+}
+
+// SetStatus seeds the NodeStatus returned by Status.
+func (f *Fake) SetStatus(st NodeStatus) { f.status, f.statusSet = st, true }
+
+// SetStatusError seeds an error returned by Status (RPC-failure path).
+func (f *Fake) SetStatusError(err error) { f.statusErr = err }
+
+// Status returns the seeded NodeStatus. Unlike Account, there is no valid
+// "no status" answer from a live node, so an unseeded Fake errors.
+func (f *Fake) Status(_ context.Context) (NodeStatus, error) {
+	if f.statusErr != nil {
+		return NodeStatus{}, f.statusErr
+	}
+	if !f.statusSet {
+		return NodeStatus{}, fmt.Errorf("fake: no status seeded")
+	}
+	return f.status, nil
 }
 
 func callKey(realm, fn string, args []string) string {

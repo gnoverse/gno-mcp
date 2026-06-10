@@ -35,6 +35,16 @@ These tools require no config — the built-in `local` and `testnet` profiles ar
 - **Args:** `path` (required — a prefix like `gno.land/r/demo/`, or `@namespace`), `limit?`, `profile?`
 - **Returns:** newline-separated package paths deployed under the path (`vm/qpaths`, chain-native, no indexer required), wrapped in an `<untrusted_content>` envelope.
 
+### `gno_account`
+
+- **Args:** `address` (required — bech32 `g1…`), `profile?`
+- **Returns:** balance, sequence (nonce), and account number for any address (`auth/accounts`), wrapped in an `<untrusted_content>` envelope plus structured fields. An address with no on-chain record reports `exists:false` — a normal answer (never funded or used), not an error.
+
+### `gno_status`
+
+- **Args:** `profile?`
+- **Returns:** the profile's declared chain-id and RPC URL plus the node's live chain-id, latest block height, and block time (RPC `/status`). Flags a mismatch when the node reports a different chain-id than the profile declares. If the node is unreachable, config info is still returned with a `height_error` instead of a tool failure.
+
 ## Read-only (discovery)
 
 ### `gno_connect`

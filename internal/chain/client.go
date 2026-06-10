@@ -7,6 +7,7 @@ package chain
 import (
 	"context"
 	"errors"
+	"time"
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	"github.com/gnolang/gno/tm2/pkg/std"
@@ -58,6 +59,23 @@ type AddPackageResult struct {
 	Height    int64
 	GasUsed   int64
 	Simulated bool
+}
+
+// NodeStatus is the node-reported chain identity and sync tip.
+type NodeStatus struct {
+	ChainID   string
+	Height    int64
+	BlockTime time.Time
+}
+
+// AccountInfo is the on-chain account state for an address, as reported by
+// auth/accounts/<addr>. The endpoint answers at HEAD and carries no height
+// provenance (gno.land's auth query handler leaves the response height unset).
+type AccountInfo struct {
+	Coins         std.Coins
+	Sequence      uint64
+	AccountNumber uint64
+	Exists        bool
 }
 
 // SessionStatus is the chain-side state of a session keyed by pubkey.
@@ -136,6 +154,16 @@ type Client interface {
 	// pay gas" pre-check for agent testnet writes; it conflates funded-to-zero and
 	// unknown (both 0) and is not a general balance API.
 	Balance(ctx context.Context, addr string) (int64, error)
+
+	// Account returns the on-chain account state (balance, sequence, account
+	// number) for a bech32 address. An address unknown to the chain reports
+	// Exists=false with no error — a never-used address is a normal answer.
+	// Backed by auth/accounts/<addr>.
+	Account(ctx context.Context, addr string) (AccountInfo, error)
+
+	// Status returns the node-reported chain-id and latest block height/time.
+	// Backed by the RPC /status endpoint.
+	Status(ctx context.Context) (NodeStatus, error)
 }
 
 // Resolver returns the Client to use for a given profile name.

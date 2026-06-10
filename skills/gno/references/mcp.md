@@ -22,6 +22,8 @@ fallbacks below — never block on the MCP.
 | Understand the API surface without full source | `gno_inspect` | read the source |
 | See rendered `Render()` output | `gno_render` | gnoweb |
 | Read on-chain state / evaluate an expression | `gno_eval` | — |
+| Check an address's balance / sequence (nonce) | `gno_account` (`exists:false` = never funded, not an error) | gnoweb |
+| Verify which chain a profile points at / node freshness | `gno_status` (flags chain-id mismatch) | — |
 
 Both `/r/` realms and `/p/` pure packages are readable — don't assume realm-only.
 

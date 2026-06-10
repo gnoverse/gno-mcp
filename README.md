@@ -15,7 +15,7 @@ gnomcp ships with two built-in profiles that require no configuration:
 | `local` | `dev` | `http://127.0.0.1:26657` (auto-discovered local node) |
 | `testnet` | `test11` | `https://rpc.test11.testnets.gno.land:443` |
 
-The five chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`, `gno_packages`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed. The write tools (see below) register out of the box as well — every allowed chain has an agent-key path.
+The seven chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`, `gno_packages`, `gno_account`, `gno_status`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed. The write tools (see below) register out of the box as well — every allowed chain has an agent-key path.
 
 ## Quick start
 
@@ -109,7 +109,7 @@ Session key files are stored in `~/.local/share/gnomcp/sessions` (mode `0600`). 
 
 ## Tools
 
-See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (19 tools):
+See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (21 tools):
 
 | Tool | Category | Registered when |
 |------|----------|---------|
@@ -118,6 +118,8 @@ See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (19 tools):
 | `gno_read` | chain read | always |
 | `gno_inspect` | chain read | always |
 | `gno_packages` | chain read | always |
+| `gno_account` | chain read | always |
+| `gno_status` | chain read | always |
 | `gno_connect` | discovery | always |
 | `gno_profile_add` | admin | always (in-memory profile, gone on restart) |
 | `gno_list` | indexer read | a profile has `tx-indexer-url` |

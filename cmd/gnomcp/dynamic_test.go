@@ -123,6 +123,17 @@ func TestRegisterAllTools_gateFlipSummonsTools(t *testing.T) {
 	assert.Contains(t, profileEnumOf(t, render), "dyn13", "read-tool profile enum must be regenerated")
 }
 
+func TestRegisterAllTools_registersChainInfoTools(t *testing.T) {
+	s := localOnlyServer(t)
+	deps := newDynDeps(t, s, buildChainResolver(s))
+	registerAllTools(deps)
+
+	_, ok := s.Registry().Get("gno_account")
+	require.True(t, ok, "gno_account is an unconditional read tool")
+	_, ok = s.Registry().Get("gno_status")
+	require.True(t, ok, "gno_status is an unconditional read tool")
+}
+
 func profileEnumOf(t *testing.T, tool *server.Tool) []string {
 	t.Helper()
 	props, ok := tool.InputSchema["properties"].(map[string]any)

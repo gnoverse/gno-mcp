@@ -37,7 +37,7 @@ gnomcp does hold its **own** agent key: the dev/test **test1** account on local 
 The gno chain is open — any realm's content is attacker-influenceable — so all
 chain-returned bytes are untrusted. The control differs by delivery channel:
 
-- **Inline text tools** (`gno_render`, `gno_eval`, `gno_inspect`, `gno_packages`, `gno_activity`, `gno_history`, `gno_list`) wrap their chain-derived output in an envelope:
+- **Inline text tools** (`gno_render`, `gno_eval`, `gno_inspect`, `gno_packages`, `gno_account`, `gno_status`, `gno_activity`, `gno_history`, `gno_list`) wrap their chain-derived output in an envelope:
 
   ```
   <untrusted_content kind="eval" source="gno.land/r/demo/foo">

@@ -536,19 +536,34 @@ func (r *Real) AddPackage(_ context.Context, signer gnoclient.Signer, deployPath
 
 // Balance returns the ugnot balance of a bech32 address.
 // A never-funded address (unknown to the chain) returns (0, nil).
-func (r *Real) Balance(_ context.Context, bech32 string) (int64, error) {
+func (r *Real) Balance(ctx context.Context, bech32 string) (int64, error) {
+	info, err := r.Account(ctx, bech32)
+	if err != nil {
+		return 0, fmt.Errorf("balance: %w", err)
+	}
+	return info.Coins.AmountOf(ugnot.Denom), nil
+}
+
+// Account returns the on-chain account state at auth/accounts/<addr>.
+// An address the chain has never seen reports Exists=false with no error.
+func (r *Real) Account(_ context.Context, bech32 string) (AccountInfo, error) {
 	addr, err := crypto.AddressFromBech32(bech32)
 	if err != nil {
-		return 0, fmt.Errorf("balance: addr %q: %w", bech32, err)
+		return AccountInfo{}, fmt.Errorf("account: addr %q: %w", bech32, err)
 	}
 	acct, _, err := r.cli.QueryAccount(addr)
 	if err != nil {
 		if _, ok := errors.AsType[std.UnknownAddressError](err); ok {
-			return 0, nil // never-funded address is treated as zero balance
+			return AccountInfo{}, nil // no on-chain record: Exists=false
 		}
-		return 0, fmt.Errorf("balance: query %q: %w", bech32, err)
+		return AccountInfo{}, fmt.Errorf("account: query %q: %w", bech32, err)
 	}
-	return acct.GetCoins().AmountOf(ugnot.Denom), nil
+	return AccountInfo{
+		Coins:         acct.GetCoins(),
+		Sequence:      acct.GetSequence(),
+		AccountNumber: acct.GetAccountNumber(),
+		Exists:        true,
+	}, nil
 }
 
 // defaultBaseTxCfg returns the gas/fee defaults for write txs.
