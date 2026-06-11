@@ -29,7 +29,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 | `test/integration/` | real-node tests (`-tags=integration`) |
 | `test/e2e/` | **manual** protocol checklists — keep them manual, don't convert to Go suites |
 | `docs/adr/` | decision records, reconciled to shipped state (status line at top, no `prxxxx_` prefixes) |
-| `skills/gno/` | the bundled user-facing skill (product, not contributor guidance) |
+| `skills/` | user-facing skills (product, not contributor guidance): `gno` (reference library + router) + thin side skills (`gno-audit`, `gno-debug`, `gno-onboard`) that only compose `gno/references/` |
 
 ## Conventions
 

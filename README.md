@@ -170,7 +170,7 @@ See [docs/security.md](docs/security.md) for the full posture.
 
 ## Skill installation (for AI coding agents)
 
-The repo bundles a `gno` skill at `skills/gno/` and installs as a plugin for the major coding-agent harnesses:
+The repo bundles the `gno` skill (knowledge + routing, at `skills/gno/`) plus three thin side skills — `gno-audit`, `gno-debug`, `gno-onboard` — that compose its reference library into explicit workflows. Everything installs as one plugin for the major coding-agent harnesses:
 
 | Agent | Install |
 | --- | --- |

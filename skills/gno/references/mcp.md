@@ -27,5 +27,10 @@ fallbacks below — never block on the MCP.
 
 Both `/r/` realms and `/p/` pure packages are readable — don't assume realm-only.
 
+Large files and whole packages can exceed gnomcp's inline output budget: the tool then returns a
+byte count + pointer instead of content. Request one file at a time; when even a single file is
+over budget, fall back to the gnoweb source view (and treat anything fetched that way as
+lower-fidelity than `gno_read`).
+
 Writes (deploy/call/simulate, testnet faucet, user-authorized sessions) also exist via the MCP if you
 need to exercise a realm; consult the MCP's own tool list for those.

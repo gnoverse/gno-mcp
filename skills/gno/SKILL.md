@@ -1,6 +1,6 @@
 ---
 name: gno
-description: Use when reading, writing, auditing, or reviewing Gno realm code (`/r/` realms, `/p/` pure packages, `gno.land/...` import paths), discussing interrealm semantics (`cross(cur)`, `cur realm`, `PreviousRealm`, crossing functions), working with on-chain payments (`OriginSend`, `IsUserCall`, `cur.Previous().IsUserCall()`), authoring or evaluating realm `Render(path string) string` output for gnoweb, configuring a Gno project (`gnomod.toml`, filetests, `gno` binary), or assessing the safety of a Gno smart contract before deployment or interaction.
+description: Use when writing, modifying, or reasoning about Gno realm code (`/r/` realms, `/p/` pure packages, `gno.land/...` import paths), discussing interrealm semantics (`cross(cur)`, `cur realm`, `PreviousRealm`, crossing functions), working with on-chain payments (`OriginSend`, `IsUserCall`, `cur.Previous().IsUserCall()`), authoring or evaluating realm `Render(path string) string` output for gnoweb, or configuring a Gno project (`gnomod.toml`, filetests, `gno` binary). Do NOT use this skill directly for tasks owned by its siblings — explicit security audits go to gno-audit, failed transactions/calls to gno-debug, first-contact "what is gno" teaching to gno-onboard; those skills load this one's references themselves.
 ---
 
 # Gno

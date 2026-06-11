@@ -8,7 +8,14 @@ The `skills/` directory is a Claude plugin package. Each subdirectory is a singl
 
 | Skill | Trigger |
 |---|---|
-| [`gno`](../skills/gno/) | Gno realm development, auditing, interrealm semantics, security review, and on-chain interaction via gnomcp tools. |
+| [`gno`](../skills/gno/) | Gno development deep work: writing/modifying realm code, interrealm semantics, payments, `Render()` authoring, project setup. Also the reference library every side skill loads. Defers audits, tx debugging, and onboarding to its siblings. |
+| [`gno-audit`](../skills/gno-audit/) | Explicit security audit of a realm/package ("is this safe", pre-funding review). Thin wrapper over `audit.md` + `security.md`. |
+| [`gno-debug`](../skills/gno-debug/) | Failed transaction/call triage. Thin wrapper over `debug.md`. |
+| [`gno-onboard`](../skills/gno-onboard/) | First-contact teaching; interview-first, adapts to the user's actual background (no fixed tiers). |
+
+Side skills are thin entry points: each reads the main `gno` skill (source index) plus only
+the references it needs. Content lives in `skills/gno/references/` — side skills compose it,
+never duplicate it. The `agents/auditor.md` agent reuses the same bricks autonomously.
 
 ## Authoring conventions (so future skills stay coherent)
 
