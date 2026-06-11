@@ -1,6 +1,6 @@
 # Tool Surface
 
-**Status: implemented — 21 tools.**
+**Status: implemented — 20 tools.**
 
 ## Context
 
@@ -8,14 +8,13 @@ The v1 server exposed 16 tools mixing reads, open-ended writes, config mutation,
 
 ## Decision
 
-21 tools, registered conditionally and re-registered after dynamic profile adds (gates re-evaluate, profile enums regenerate, `tools/list_changed` notifies clients):
+20 tools, registered conditionally and re-registered after dynamic profile adds (gates re-evaluate, profile enums regenerate, `tools/list_changed` notifies clients):
 
 | Tool | Category | Backend | Registered when |
 |---|---|---|---|
 | `gno_render` | chain read | `vm/qrender` | always |
 | `gno_eval` | chain read | `vm/qeval` | always |
-| `gno_read` | chain read | `vm/qfile` (file or whole-package txtar) | always |
-| `gno_inspect` | chain read | `vm/qdoc` | always |
+| `gno_read` | chain read | `vm/qfile` + server-side AST views (outline / symbols / full) | always |
 | `gno_packages` | chain read | `vm/qpaths` | always |
 | `gno_account` | chain read | `auth/accounts` | always |
 | `gno_status` | chain read | RPC `/status` + profile config | always |
@@ -34,11 +33,13 @@ The v1 server exposed 16 tools mixing reads, open-ended writes, config mutation,
 | `gno_key_generate` | agent key | keystore (testnet only at call time) | always |
 | `gno_faucet_fund` | agent key | faucet service/link + balance poll | a testnet profile exists |
 
-Cold-start counts: built-in defaults register 18 (no indexer profile); a local-only custom config registers 17 (no faucet); an indexer-bearing profile brings the full 21.
+Cold-start counts: built-in defaults register 17 (no indexer profile); a local-only custom config registers 16 (no faucet); an indexer-bearing profile brings the full 20.
 
 **Identity dispatch.** `gno_call` and `gno_run` accept `identity` (`agent` default, `session` opt-in) and `simulate` as a flag — not a separate simulate tool. Call args are a stringified array (gnokey-compatible); type-to-wire encoding is delegated to gnoclient.
 
 **Output model.** Realm-authored byte streams (`gno_read`) emit as MCP resources; everything else is tool-result text plus `structuredContent` for typed fields (`identity`, `signer_address`, `tx_hash`, `gas_used`, …). All chain-derived text is wrapped in a `<untrusted_content>` envelope with embedded-tag neutralization and passes through a per-result output budget. Failures return structured codes with recovery hints (`insufficient_funds`, `authentication_required`, `scope_mismatch`, `simulate_unsupported`, …).
+
+**Read depths instead of a separate surface tool.** `gno_read` serves three depths — a structural outline by default (per-file signatures + docs, bodies elided, rendered server-side from the AST), verbatim extraction of named declarations (`symbols`, with a best-effort dependency header), and raw source (`full`). Whole-package raw keeps the default ~4 KB budget; the bounded/explicit modes (outline, `symbols`, `full`+`file`) get a ~64 KB tier. The outline and dep headers are navigation, not evidence — audit-grade review reads whole files. `gno_inspect` (`vm/qdoc`) was absorbed by the outline: two tools answering "what's the API surface" was a selection trap, and the per-file outline strictly dominates the flat godoc view for navigation.
 
 **Capability tags are audit metadata, not gates.** Registration gating is decided by the profile guards above; the `CapWrite`/`CapWritePrep` tags select which calls the audit log records with full detail.
 
@@ -68,6 +69,6 @@ Cold-start counts: built-in defaults register 18 (no indexer profile); a local-o
 ## Consequences
 
 - Every registered tool can succeed in the configuration that registered it; the model never sees dead tools.
-- The surface (21) exceeds the 5–15 guideline; the categories are disjoint enough that selection accuracy has held up in end-to-end use, and gating keeps most configurations below the full count. Splitting into toolsets remains an option if selection degrades.
+- The surface (20) exceeds the 5–15 guideline; the categories are disjoint enough that selection accuracy has held up in end-to-end use, and gating keeps most configurations below the full count. Splitting into toolsets remains an option if selection degrades.
 - Three v1 drops were reversed with better shapes (`gno_account`, `gno_status`, agent-key keygen/faucet) — "dropped" decisions are cheap to revisit when a concrete need appears.
 - Clients that ignore `tools/list_changed` see summoned tools only after reconnect.

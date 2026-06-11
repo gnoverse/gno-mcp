@@ -20,6 +20,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 |---|---|
 | `cmd/gnomcp/` | entry point, flags, tool registration (`register.go`), profile CLI, MCP server instructions |
 | `internal/chain/` | chain access seam: `Client` interface / `Real` (gnoclient+RPC) / `Fake` (tests) / `Resolver` |
+| `internal/gnosrc/` | syntactic source views for `gno_read`: outline, symbol extraction, dep analysis (go/parser, no type checking) |
 | `internal/server/` | tool `Registry`, `Tool`/`Result`/`ToolError` types, profile-arg schema |
 | `internal/tools/{read,write,indexer,admin}/` | one `Register*` func per tool |
 | `internal/session/`, `internal/keystore/` | session lifecycle/scope; per-profile agent keys |

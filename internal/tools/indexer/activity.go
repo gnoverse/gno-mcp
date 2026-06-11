@@ -15,7 +15,7 @@ import (
 //
 // gno_activity returns MsgCall and MsgRun transactions for a realm, optionally
 // filtered to a closed [since, until] time range. Use gno_history for the full
-// deploy+transaction log; use gno_inspect to explore function signatures.
+// deploy+transaction log; use gno_read (outline) to explore function signatures.
 func RegisterActivity(s *server.Server, resolve indexerpkg.Resolver) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_activity",
@@ -23,7 +23,7 @@ func RegisterActivity(s *server.Server, resolve indexerpkg.Resolver) {
 			"Unlike gno_history (which returns every transaction including deploys), " +
 			"gno_activity focuses on runtime activity and supports an optional time range " +
 			"via RFC3339 since/until bounds. " +
-			"Use gno_history for a full log including deploys; use gno_inspect to explore function signatures.",
+			"Use gno_history for a full log including deploys; use gno_read (outline) to explore function signatures.",
 		InputSchema: activityInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapIndexerRead,

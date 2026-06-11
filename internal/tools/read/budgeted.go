@@ -6,10 +6,10 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/budget"
 )
 
-// budgetBody applies the output budget to a resource body. Returns the
-// (possibly summarized) body and whether it was truncated. v2 has no
-// line/symbol slicing param, so the budget always applies — including to a
-// single large source file (the most common context-blowup payload).
+// budgetBody applies the output budget to a resource body at the given tier
+// (budget.DefaultBudget for whole-package raw, budget.ExplicitBudget for the
+// bounded/explicit modes: outline, symbols, full=true on a named file).
+// Returns the (possibly summarized) body and whether it was truncated.
 //
 // Unlike the OutputText tools, gno_read does NOT wrap the body in an
 // <untrusted_content> envelope: the body is delivered as an MCP
@@ -17,9 +17,10 @@ import (
 // wrapping would corrupt the txtar archive (the closing tag would merge into
 // the last file). This relies on the client honoring the resource boundary; a
 // client that flattens resources into the prompt as plain text would see this
-// content unwrapped.
-func budgetBody(full, gnowebURL string) (string, bool) {
-	r := budget.Apply(full, gnowebURL, false)
+// content unwrapped. (The outline path additionally neutralizes embedded
+// envelope tags — it is server-rendered, so fidelity is not a contract there.)
+func budgetBody(full, gnowebURL string, limit int) (string, bool) {
+	r := budget.Apply(full, gnowebURL, limit)
 	if r.Truncated {
 		return r.Summary, true
 	}

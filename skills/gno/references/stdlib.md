@@ -5,13 +5,13 @@
 
 ## Purpose
 
-Stdlib APIs change. A static reference goes stale; an agent that emits stale API names produces broken code. This reference is intentionally thin — package names, the security-relevant primitives, and the gotchas — then defers to `gno_inspect` for exact signatures.
+Stdlib APIs change. A static reference goes stale; an agent that emits stale API names produces broken code. This reference is intentionally thin — package names, the security-relevant primitives, and the gotchas — then defers to `gno_read`'s outline for exact signatures.
 
 ## How to use this reference
 
 For exact, up-to-date API surface, the gnomcp design exposes introspection tools that query the chain directly:
 
-- **`gno_inspect <pkgPath>`** — per-function godoc and function signatures via `vm/qdoc` against the current chain.
+- **`gno_read <pkgPath>`** — the default outline: per-file function signatures + docs against the current chain (add `symbols=[...]` for specific bodies).
 - **`gno_render <pkgPath>`** — rendered docs / examples if the package exposes `Render()`.
 - **`gno_eval <pkgPath> <expr>`** — evaluate an expression in the package context.
 
@@ -185,5 +185,5 @@ The packages below survived the test-13 quarantine (`examples/quarantined/` got 
 ## Source
 
 - `docs/resources/gno-stdlibs.md` in the gnolang/gno repo — full prose reference.
-- Live introspection via `gno_inspect` against the current chain.
+- Live introspection via `gno_read` (outline) against the current chain.
 - Master tree under `gnovm/stdlibs/` is the source of truth when offline.

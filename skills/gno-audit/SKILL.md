@@ -9,14 +9,15 @@ description: Run an explicit security audit of a Gno realm or pure package. Use 
    report format), `../gno/references/security.md` (taxonomy), and
    `../gno/references/interrealm.md` (audit.md treats it as always relevant). They own the
    method — this skill is only the entry point.
-2. Fetch the code with provenance: `gno_read` against the live chain (whole package) beats
-   pasted source. Say which one you audited, and for which chain/profile.
+2. Fetch the code with provenance: `gno_read` against the live chain beats pasted source.
+   Say which one you audited, and for which chain/profile. The default `gno_read` call is an
+   **outline** (signatures + docs, bodies elided) — navigation only, never evidence; audit
+   evidence is whole files, fetched per file with `full=true`.
    - If the named realm does not exist on the connected chain, never silently substitute:
      locate candidates with `gno_packages`, state explicitly which deployed realm you audited
      instead and why.
-   - Large packages can exceed the inline output budget (`gno_read` returns a byte count
-     instead of source). Fall back to single-file `gno_read` calls; if source can only be
-     obtained via gnoweb, mark every quoted line as fidelity-uncertain in the report.
+   - Only if a single file overflows even the `full=true` budget and source must come from
+     gnoweb instead, mark every quoted line as fidelity-uncertain in the report.
 3. Follow audit.md's evidence-gated procedure exactly: no finding without a quoted line.
 4. Emit the report in audit.md's format. State scope honestly — what you read, what you did
    not, and what remains unverified.

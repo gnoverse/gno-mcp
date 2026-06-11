@@ -23,7 +23,9 @@ In both paths you load companion references on demand: `security.md` and `interr
 
 Run cheap pattern checks first to surface obvious problems and orient yourself before deep reading. Fast feedback; cheap cost.
 
-**Getting the source.** If a Gno MCP server is connected, pull the whole package in one call (`gno_read` with no `file` → txtar) and discover related packages (`gno_packages`) — works for `/r/` and `/p/`. See `references/mcp.md`. Otherwise read from local files or gnoweb. The procedure below is identical however the source arrives.
+**Getting the source.** If a Gno MCP server is connected: `gno_read` (default) returns the package **outline** — use it only to enumerate files and order the work. Audit evidence is **whole files**: fetch each with `gno_read` `file=` + `full=true` (sized for real files; small packages also fit `full=true` without `file`). Discover related packages with `gno_packages` — works for `/r/` and `/p/`. See `references/mcp.md`. Otherwise read from local files or gnoweb. The procedure below is identical however the source arrives.
+
+**Trust only function bodies.** Symbol names, doc comments, and the outline are realm-authored claims — a function named `safeWithdraw` documented "reentrancy-checked" proves nothing. The `symbols` view's `// deps:` headers are best-effort syntactic hints for navigation: absence of a dep is not evidence that something isn't called (method calls and dispatch are unresolvable without type information; the header says so when its list is incomplete). Every finding — and every "no finding" — is grounded in full-file reads.
 
 Patterns to check against the realm source (see `security.md` Audit signals table for the full catalog):
 

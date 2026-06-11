@@ -25,7 +25,7 @@ LLMs are starting to drive real on-chain actions, and the bridge between an LLM 
 
 `gnomcp` is that bridge for gno.land, shipped as two coupled artifacts:
 
-1. **An MCP server** — 21 tools under a single security spine: untrusted-content envelopes on every chain-derived byte, a chain-id allowlist that keeps mainnet out entirely, output budgeting, an append-only audit log, and user keys that never leave `gnokey`.
+1. **An MCP server** — 20 tools under a single security spine: untrusted-content envelopes on every chain-derived byte, a chain-id allowlist that keeps mainnet out entirely, output budgeting, an append-only audit log, and user keys that never leave `gnokey`.
 2. **A `gno` skill** — the knowledge layer for coding agents: interrealm semantics, security taxonomy, idiomatic patterns, `Render()` conventions, stdlib surface, project setup. Skill and server are independent but complementary (skill = knowledge, server = on-chain tools).
 
 ## Zero-config testnet
@@ -37,7 +37,7 @@ gnomcp ships pointed at the public testnet — no configuration needed:
 | `testnet` | `test11` | `https://rpc.test11.testnets.gno.land:443` |
 | `local` | `dev` | `http://127.0.0.1:26657` (local gnodev node — see note) |
 
-The seven chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_inspect`, `gno_packages`, `gno_account`, `gno_status`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed. The write tools register out of the box as well: generate an agent key once (`gno_key_generate`), fund it (`gno_faucet_fund`), and the agent can write.
+The six chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_packages`, `gno_account`, `gno_status`) and the `gno_connect` discovery tool work immediately against these profiles — no config file needed. The write tools register out of the box as well: generate an agent key once (`gno_key_generate`), fund it (`gno_faucet_fund`), and the agent can write.
 
 > [!NOTE]
 > For local development with [gnodev](https://docs.gno.land/builders/local-dev-with-gnodev), the built-in `local` profile auto-discovers a node on `127.0.0.1:26657` and signs with the pre-funded `test1` key — zero setup, instant writes.
@@ -129,14 +129,13 @@ Session key files are stored in `~/.local/share/gnomcp/sessions` (mode `0600`). 
 
 ## Tools
 
-See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (21 tools):
+See [`docs/tools.md`](docs/tools.md) for the full catalog. Summary (20 tools):
 
 | Tool | Category | Registered when |
 |------|----------|---------|
 | `gno_render` | chain read | always |
 | `gno_eval` | chain read | always |
 | `gno_read` | chain read | always |
-| `gno_inspect` | chain read | always |
 | `gno_packages` | chain read | always |
 | `gno_account` | chain read | always |
 | `gno_status` | chain read | always |

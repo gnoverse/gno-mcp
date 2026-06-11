@@ -101,7 +101,7 @@ func main() {
 
 	// ---- build MCP SDK server
 	instructions := "gnomcp exposes Gno chain operations over MCP. The indexer and faucet tools register only when a profile provides them (tx-indexer-url / a testnet); the rest are always available. Typical flows:\n" +
-		"- READ: gno_inspect (learn a realm's API) then gno_render / gno_eval / gno_read (read state or source).\n" +
+		"- READ: gno_read (default = structural outline; symbols=[...] for specific declarations; full=true for raw source) plus gno_render / gno_eval (rendered output / on-chain values). The outline is navigation, not evidence — audit-grade review reads whole files.\n" +
 		"- WRITE on testnet: gno_key_generate (once) -> gno_faucet_fund (fund the agent key) -> gno_call / gno_run / gno_addpkg. An unfunded write returns insufficient_funds pointing at gno_faucet_fund.\n" +
 		"- WRITE as the user (any chain with a master-address): gno_session_propose -> the user runs the printed gnokey command to authorize -> retry the write with identity=session. gno_auth_status / gno_session_revoke inspect and revoke sessions. The session path is WIP — prefer tight allow_paths, a low spend_limit, and a short expires_in.\n" +
 		"- New chain (this session): gno_profile_add with gnoweb_url discovers, verifies, and adds in one call (in-memory, gone on restart; dev/testnets only) — or gno_connect first to preview without adding. " +

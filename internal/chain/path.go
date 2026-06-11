@@ -11,7 +11,7 @@ func IsRealmPath(pkgPath string) bool {
 }
 
 // IsReadablePackagePath reports whether pkgPath is a realm (/r/) or pure (/p/)
-// user package — the kinds gno_read and gno_inspect can fetch. Mirrors the
+// user package — the kinds gno_read can fetch. Mirrors the
 // chain's own predicates (single source of truth); returns false for stdlib,
 // ephemeral, run, and _test paths.
 func IsReadablePackagePath(pkgPath string) bool {

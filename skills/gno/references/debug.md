@@ -33,8 +33,8 @@ Structured codes (left column, exact) come from gnomcp; quoted strings come from
 | `no_master_address` | profile has no `master-address`; session path unavailable | persist the profile with `master-address` in profiles.toml, or use the agent identity |
 | `session_unmanaged` | revoking a session gnomcp does not manage | `gno_auth_status` to list managed sessions; unmanaged ones need a manual gnokey revoke |
 | session write rejected while `gno_auth_status` shows active | spend limit exhausted (chain reserves the full GasFee per tx) or expiry passed | `gno_auth_status` (spend remaining / expiry) → propose a fresh session |
-| wrong-argument / type-conversion errors from the VM | call args don't match the function signature | `gno_inspect` (signatures) → fix the stringified args |
-| `panic: …` in the result | realm-side logic panic | reproduce via `simulate=true` (crossing/write functions cannot be `gno_eval`'d) → `gno_read` the source at the panic site → fix or report upstream |
+| wrong-argument / type-conversion errors from the VM | call args don't match the function signature | `gno_read` (default outline = signatures) → fix the stringified args |
+| `panic: …` in the result | realm-side logic panic | reproduce via `simulate=true` (crossing/write functions cannot be `gno_eval`'d) → `gno_read` with `symbols=[the failing function]` (verbatim body + a `// deps:` list naming what to fetch next) → fix or report upstream |
 | `"out of gas"` (chain) | gas wanted below actual cost | `simulate=true` first and read `gas_used` from the structured result |
 | `chain_unreachable` / timeouts / stale answers | node down, or profile points at the wrong chain | `gno_status` — live height plus the **chain-id mismatch flag** |
 | package/path not found wording from the VM | wrong or undeployed package path | `gno_packages` (prefix or `@namespace`) — or `gno_list` when an indexer profile exists |

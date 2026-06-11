@@ -43,8 +43,9 @@ their answers, not on the initial label.
 ## Step 3 — Hands-on (see before do; one new concept per step; checkpoint after each)
 
 1. **Observe:** `gno_render` a live realm (e.g. `gno.land/r/gnoland/home`), then
-   `gno_inspect` it — "this is a contract, and you can read all of it". If the client elides
-   resource previews, hand over the gnoweb URL instead.
+   `gno_read` it (the default outline shows every file's API surface) — "this is a contract,
+   and you can read all of it". If the client elides resource previews, hand over the gnoweb
+   URL instead.
 2. **Identity:** `gno_key_address` → explain the agent key; `gno_key_generate` on testnet if
    none exists yet.
 3. **Fund:** `gno_faucet_fund` — testnet coins are free and worthless; that is the point.
@@ -53,7 +54,7 @@ their answers, not on the initial label.
    switch to a local gnodev (`test1` is pre-funded, the whole flow works in seconds) or
    continue in describe-only mode.
 4. **First write:** the smallest possible `gno_call` against a test realm (e.g.
-   `gno.land/r/demo/counter` — verify it exists with `gno_inspect` first) — `simulate=true`,
+   `gno.land/r/demo/counter` — verify it exists with `gno_read` first) — `simulate=true`,
    show the gas, then broadcast. Always say which identity signed.
 5. **Close:** match their goal — if it was deploying, close the loop with a `gno_addpkg`
    `simulate=true` of a ~10-line counter realm before pointing at docs; writing a realm →

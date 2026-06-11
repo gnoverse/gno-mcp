@@ -2,8 +2,10 @@
 
 > **STALE — written for the initial read-only/session-write tool surface
 > (2026-05).** This protocol predates several merges and no
-> longer matches the current tools: `gno_eval`/`gno_read`/`gno_inspect` take
-> `path=` (not `realm=`), whole-package reads return txtar, read output is
+> longer matches the current tools: `gno_eval`/`gno_read` take
+> `path=` (not `realm=`), `gno_inspect` no longer exists (its job moved to
+> `gno_read`'s default outline; raw source needs `full=true` or `symbols=[...]`),
+> whole-package reads return txtar, read output is
 > wrapped in `<untrusted_content>` envelopes, and writes default to the agent
 > identity (test1 on local) — the `authentication_required` expectations in
 > Section B only hold with `identity=session`. Use the newer protocols

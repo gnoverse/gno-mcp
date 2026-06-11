@@ -37,7 +37,7 @@ gnomcp does hold its **own** agent key: the dev/test **test1** account on local 
 The gno chain is open — any realm's content is attacker-influenceable — so all
 chain-returned bytes are untrusted. The control differs by delivery channel:
 
-- **Inline text tools** (`gno_render`, `gno_eval`, `gno_inspect`, `gno_packages`, `gno_account`, `gno_status`, `gno_activity`, `gno_history`, `gno_list`) wrap their chain-derived output in an envelope:
+- **Inline text tools** (`gno_render`, `gno_eval`, `gno_packages`, `gno_account`, `gno_status`, `gno_activity`, `gno_history`, `gno_list`) wrap their chain-derived output in an envelope:
 
   ```
   <untrusted_content kind="eval" source="gno.land/r/demo/foo">
@@ -47,7 +47,7 @@ chain-returned bytes are untrusted. The control differs by delivery channel:
 
   An envelope tag (opening or closing) embedded in chain content is neutralized first, so content cannot escape or forge the envelope. The write tools envelope the realm-controlled portions of their success text the same way: `gno_call`'s `Result` (kind `call_result`) and `gno_run`'s `Output` (kind `run_output`).
 
-- **The resource tool** (`gno_read`) returns content as an MCP `EmbeddedResource`, a distinct trust posture clients treat as resource data rather than inline instructions. It is not textually wrapped because that would corrupt the txtar archive (the closing tag would merge into the last file). This relies on the client honoring the resource boundary.
+- **The resource tool** (`gno_read`) returns content as an MCP `EmbeddedResource`, a distinct trust posture clients treat as resource data rather than inline instructions. Verbatim source (`full=true`, `symbols`) is not textually wrapped because that would corrupt the txtar archive and break byte fidelity (the body is audit evidence). The default **outline** is server-rendered rather than verbatim, so it additionally neutralizes embedded envelope tags — realm-authored doc comments cannot forge an envelope there. Both paths still rely on the client honoring the resource boundary.
 
 - **Error text** is mixed-trust: gnomcp's own framing can embed chain or network bytes (a realm's panic string in an ABCI log, a faucet's error body). All tool-error text is neutralized at the SDK boundary — embedded envelope tags are escaped — so error text cannot forge or close an envelope; it is not itself enveloped. The faucet error body is additionally labeled `[untrusted faucet response]` at the source.
 
@@ -57,7 +57,7 @@ Anything from any channel must be treated as data, never instructions.
 
 ## 5. Output budgeting
 
-Every read and indexer tool applies a ~4 KB budget to chain-returned content. Over-budget responses are replaced by a summary with a hint to fetch a narrower slice or view at gnoweb — they are never silently chopped.
+Every read and indexer tool applies a ~4 KB budget to chain-returned content. `gno_read`'s bounded and explicit modes — the outline (bodies elided by construction), a named file with `full=true`, a `symbols` fetch — get a ~64 KB tier instead: a higher ceiling sized for real reads, not a bypass. Whole-package raw keeps the tight tier. Over-budget responses are replaced by a summary with a hint to fetch a narrower slice (a specific file or symbol) or view at gnoweb — they are never silently chopped.
 
 ## 6. Audit log
 

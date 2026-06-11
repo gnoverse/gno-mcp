@@ -1,6 +1,7 @@
 // Package read holds the chain read MCP tools (gno_render, gno_eval,
-// gno_read, gno_inspect, gno_packages, gno_connect). Each tool exposes a
-// single Register* function that adds itself to a server.Server's Registry.
+// gno_read, gno_packages, gno_account, gno_status, gno_connect). Each tool
+// exposes a single Register* function that adds itself to a server.Server's
+// Registry.
 package read
 
 import (

@@ -15,14 +15,14 @@ import (
 //
 // gno_history returns the full deploy + transaction log for a realm in
 // chronological order. Use gno_activity to filter by time range, and
-// gno_inspect to explore function signatures.
+// gno_read (outline) to explore function signatures.
 func RegisterHistory(s *server.Server, resolve indexerpkg.Resolver) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_history",
 		Description: "Return the complete deploy and transaction log for a realm via the tx-indexer. " +
 			"Lists every transaction touching the realm in chronological order, including deploys " +
 			"(MsgAddPackage), calls (MsgCall), and script runs (MsgRun). " +
-			"Use gno_activity to filter by time range; use gno_inspect to explore function signatures.",
+			"Use gno_activity to filter by time range; use gno_read (outline) to explore function signatures.",
 		InputSchema: historyInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapIndexerRead,

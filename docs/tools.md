@@ -1,6 +1,6 @@
 # Tools
 
-21 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
+20 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
 
 Chain-returned bytes are untrusted: the inline-text read/indexer tools (including `gno_render`) wrap their output in an `<untrusted_content>` envelope, and `gno_read` delivers content as an MCP resource (see `docs/security.md` §4).
 
@@ -16,19 +16,18 @@ These tools require no config — the built-in `local` and `testnet` profiles ar
 
 ### `gno_read`
 
-- **Args:** `path` (required), `file?`, `profile?`
-- **Returns:** the whole package as a txtar archive (all files) or a single file's source, as an MCP resource (EmbeddedResource trust posture; not textually wrapped).
-- Output is truncated at ~4 KB with a hint to narrow the request.
+- **Args:** `path` (required), `file?`, `symbols?[]`, `full?`, `profile?`
+- **Returns:** package source at three depths, as an MCP resource (EmbeddedResource trust posture; not textually wrapped):
+  - **Default (no `symbols`/`full`):** a structural **outline** — per-file txtar with exported signatures + docs, unexported signatures, imports, and byte counts; bodies elided. Server-rendered from the AST, with embedded envelope tags neutralized.
+  - **`symbols` (e.g. `["Transfer", "Counter.Inc"]`):** the verbatim source of those declarations with docs, plus a best-effort `// deps:` header (same-package references and imports used; unresolved method calls are counted and flagged inline). Misses are reported with the available names.
+  - **`full=true`:** raw source — one whole file (with `file`) or the whole package as txtar.
+- Budget: whole-package raw (`full` without `file`) truncates at ~4 KB; everything else — the outline (bounded by construction: bodies elided), `symbols`, `full` + `file` — gets ~64 KB, a higher ceiling sized for real reads, not a bypass.
+- The outline and dep headers are **navigation, not evidence**: names and docs are realm-authored claims. Audit-grade review reads whole files.
 
 ### `gno_eval`
 
 - **Args:** `path` (required), `expr` (required), `profile?`
 - **Returns:** the typed result of evaluating a Gno expression within a package, wrapped in an `<untrusted_content>` envelope.
-
-### `gno_inspect`
-
-- **Args:** `path` (required), `profile?`
-- **Returns:** godoc summary of a package (description, exported types, functions, variables), wrapped in an `<untrusted_content>` envelope.
 
 ### `gno_packages`
 
