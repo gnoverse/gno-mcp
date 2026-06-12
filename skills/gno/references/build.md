@@ -78,6 +78,8 @@ Subcommands you actually use day-to-day:
 
 `gno tool transpile` and `gno tool repl` exist for advanced cases — transpile to Go for benchmarking, REPL for ad-hoc evaluation.
 
+Targeting a **live chain** (binary version-matched to the chain's release, deps fetched from that chain instead of the default remote): see `toolchain.md`.
+
 ## Testing — three flavors
 
 | Flavor | Filename | Use for |
