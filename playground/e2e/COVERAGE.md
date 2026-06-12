@@ -128,7 +128,7 @@ regression shows up here only after it ships.
 | Key | Feature | Scenarios | Status |
 |---|---|---|---|
 | install.binary-release | platform-matched release archive → working binary (`gnomcp version`) | 11 | covered |
-| install.plugin-marketplace | plugin marketplace add + install from GitHub | 11 | covered |
+| install.plugin-marketplace | plugin marketplace add + install from GitHub; skills land via the plugin, never hand-copied | 11 | covered |
 | install.mcp-register | `claude mcp add` (absolute path) → server connects | 11 | covered |
 | install.no-stray-server | install leaves no broken plugin-shipped MCP server (repo root must stay `.mcp.json`-free) | 11 | covered |
 | install.skills-live | next session exposes the gno skill family + connected gnomcp | 11 | covered |

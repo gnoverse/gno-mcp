@@ -48,7 +48,7 @@ gnomcp is two artifacts: the **binary** (the MCP server — [release archives](h
 
 **Claude Code — let the agent install it.** Paste this prompt into a session; it is short enough to audit first, and each step runs under your normal permission prompts:
 
-> Install gnomcp: download the right gno-mcp_<os>_<arch>.tar.gz for this machine from https://github.com/gnoverse/gno-mcp/releases/latest, extract the gnomcp binary to ~/.local/bin/gnomcp, and check that `gnomcp version` prints a version. Then add the Claude Code plugin: `claude plugin marketplace add gnoverse/gno-mcp` and `claude plugin install gnomcp@gnoverse`. Finally register the MCP server: `claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp`, and verify with `claude mcp list`.
+> Install gnomcp: download the gnomcp binary for this machine from github.com/gnoverse/gno-mcp/releases/latest into ~/.local/bin, install the gno skills plugin with `claude plugin marketplace add gnoverse/gno-mcp` and `claude plugin install gnomcp@gnoverse`, register the MCP server with `claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp`, and verify with `claude mcp list`.
 
 **Claude Code — by hand:**
 
