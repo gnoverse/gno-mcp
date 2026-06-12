@@ -30,7 +30,10 @@ set_field() {
   local tmp
   tmp="$(mktemp)"
   jq --argjson p "$(jq_path "$2")" --arg v "$3" 'setpath($p; $v)' "$1" >"$tmp"
-  mv "$tmp" "$1"
+  # Write through the existing file (not mv) so its permissions survive;
+  # mktemp creates 0600 files.
+  cat "$tmp" >"$1"
+  rm -f "$tmp"
 }
 
 # Verify every declared field carries the same version (and matches $1 if

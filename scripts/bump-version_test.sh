@@ -109,6 +109,15 @@ else
   fail "bump runs the audit and fails on undeclared mentions of the new version"
 fi
 
+sandbox
+chmod 644 a.json
+"$SCRIPT" 2.0.0 >/dev/null
+if [[ -n "$(find a.json -perm 644)" ]]; then
+  pass "bump preserves the manifest's file permissions"
+else
+  fail "bump preserves the manifest's file permissions"
+fi
+
 if [[ $fails -ne 0 ]]; then
   echo "$fails of $total tests failed" >&2
   exit 1
