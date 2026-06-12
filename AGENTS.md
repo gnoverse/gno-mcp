@@ -69,4 +69,4 @@ Stale docs are bugs: if a change makes any claim in README/docs wrong, fixing it
 ## Special files
 
 - `GEMINI.md` imports the gno skill **on purpose** — it's the Gemini extension's `contextFileName` (see `gemini-extension.json`), i.e. skill delivery to extension users, not contributor context. Leave it.
-- `.mcp.json` at the repo root is the dev-mode server config (`go run`); user-facing config lives in the README.
+- NEVER add a `.mcp.json` at the repo root: the Claude Code plugin's `source` is `./`, so any root `.mcp.json` ships to every plugin install as an auto-registered (and broken) MCP server. Dev-mode server: `claude mcp add gnomcp -- go run ./cmd/gnomcp`.

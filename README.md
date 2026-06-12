@@ -44,11 +44,31 @@ The six chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_packages`, 
 
 ## Install
 
+gnomcp is two artifacts: the **binary** (the MCP server — [release archives](https://github.com/gnoverse/gno-mcp/releases/latest) for linux/darwin × amd64/arm64) and the **plugin** (the skills + agent for coding harnesses — see [Skill installation](#skill-installation-for-ai-coding-agents)).
+
+**Claude Code — let the agent install it.** Paste this prompt into a session; it is short enough to audit first, and each step runs under your normal permission prompts:
+
+> Install gnomcp: download the right gno-mcp_<os>_<arch>.tar.gz for this machine from https://github.com/gnoverse/gno-mcp/releases/latest, extract the gnomcp binary to ~/.local/bin/gnomcp, and check that `gnomcp version` prints a version. Then add the Claude Code plugin: `claude plugin marketplace add gnoverse/gno-mcp` and `claude plugin install gnomcp@gnoverse`. Finally register the MCP server: `claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp`, and verify with `claude mcp list`.
+
+**Claude Code — by hand:**
+
 ```bash
-go install github.com/gnoverse/gno-mcp/cmd/gnomcp@latest
+# binary
+curl -fsSL "https://github.com/gnoverse/gno-mcp/releases/latest/download/gno-mcp_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar -xz -C /tmp
+mkdir -p ~/.local/bin && mv /tmp/gnomcp ~/.local/bin/
+~/.local/bin/gnomcp version
+# MCP registration (absolute path — no PATH assumption)
+claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp
 ```
 
-Then point your MCP client at the binary:
+then install the plugin from inside a session (slash commands, not shell):
+
+```
+/plugin marketplace add gnoverse/gno-mcp
+/plugin install gnomcp@gnoverse
+```
+
+**Other MCP clients** — install the binary as above (or from source: `go install github.com/gnoverse/gno-mcp/cmd/gnomcp@latest`) and point your client at it:
 
 ```json
 {
@@ -58,7 +78,7 @@ Then point your MCP client at the binary:
 }
 ```
 
-For in-repo development the `.mcp.json` at the repo root uses `go run ./cmd/gnomcp` instead.
+For in-repo development register a dev server once: `claude mcp add gnomcp -- go run ./cmd/gnomcp` (do **not** add a `.mcp.json` at the repo root — the Claude Code plugin is sourced from the whole repo, so a root `.mcp.json` would ship to every plugin user as a broken server definition).
 
 ## Profiles
 
