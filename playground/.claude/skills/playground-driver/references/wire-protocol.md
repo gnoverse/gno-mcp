@@ -14,10 +14,18 @@ All paths relative to `playground/`. Scripts: `e2e/scripts/`. Container default:
 - **Batch preflight: ALWAYS `up.sh` at sweep start.** A fresh conversation cannot know what a
   previous run left on the chain (keys, counter state, deployed packages), and scenarios may
   assume a fresh chain — recreating is the only verifiable clean state.
+- **Per-scenario image:** a scenario may declare `image:` in frontmatter (default `e2e`). The
+  container must run that target: when the next scenario's image differs from the running
+  container's layer (`docker exec gnomcp-e2e printenv PLAYGROUND_LAYER`), recreate with
+  `up.sh <image>`. In a sweep, group scenarios by image to minimize recreates. Non-e2e
+  layers run no simnet (the container idles) and ship no gnoquery/gnokey.
 - **Interactive preflight (judged reuse):** `docker inspect -f '{{.State.Running}}' gnomcp-e2e`.
-  Reuse iff running AND `gnoquery height` works AND no write-scenario ran in it this conversation
-  AND no selected scenario assumes state the chain no longer has (when in doubt, spot-check with
-  `gnoquery render` against the scenario's assumptions); else `up.sh` (always recreates).
+  Reuse iff running AND the layer matches the scenario's `image` AND (for `e2e`) `gnoquery
+  height` works AND no write-scenario ran in it this conversation AND no selected scenario
+  assumes state the chain no longer has (when in doubt, spot-check with `gnoquery render`
+  against the scenario's assumptions); else `up.sh <image>` (always recreates). Non-e2e
+  scenarios mutate the container itself (installs, config) — NEVER reuse a container another
+  scenario has already run in; recreate per scenario.
 - After a batch: green → `down.sh`. Any fail → LEAVE the container running; record in report:
   "container kept for postmortem — cleanup: `e2e/scripts/down.sh`".
 - Interactive: always leave it up.

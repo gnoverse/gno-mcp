@@ -1,8 +1,9 @@
 # Verify toolkit
 
 A scenario's `### Verify` states **binding facts**, not commands. You establish each fact
-however you like with the tools below. The fact binds; the method is yours. Two fact kinds:
-**chain ground truth** (use `gnoquery`) and **turn-log behavior** (use the transcript schema).
+however you like with the tools below. The fact binds; the method is yours. Three fact kinds:
+**chain ground truth** (use `gnoquery`), **turn-log behavior** (use the transcript schema),
+and **container state** (use `docker exec`).
 
 ## `gnoquery` — chain ground-truth oracle
 
@@ -55,3 +56,20 @@ jq -r 'select(.type=="assistant").message.content[]?|select(.type=="tool_use" an
 
 The AUT loads MCP tools lazily — a `ToolSearch`/deferred-tool load before the first gnomcp call
 is normal, never a finding.
+
+## Container state — `docker exec`
+
+Scenarios whose outcome lives in the container itself (installs, config changes, file
+state — typically non-e2e images, where there is no chain to ask) state facts about the
+container. Establish them from the host:
+
+```
+docker exec -w /home/dev/work "${E2E_CONTAINER:-gnomcp-e2e}" <command>
+```
+
+Examples: a file exists and is executable (`test -x`), a command exits 0 and prints an
+expected shape (`~/.local/bin/gnomcp version`), Claude Code config state (`claude mcp list`,
+`~/.claude/plugins/installed_plugins.json`). Always set a cwd outside any repo checkout
+(`-w /home/dev/work`) — project-scope config (e.g. a `.mcp.json` in a cloned repo) leaks
+into `claude` CLI output otherwise. These checks are YOUR actions; they never appear in the
+AUT transcript and never collide with the gnokey hard-fail rule.

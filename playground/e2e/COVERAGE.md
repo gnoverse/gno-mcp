@@ -118,9 +118,25 @@ Scenario 08 sits in `scenarios/deferred/` — blocked on an upstream gnodev fix
 | localdev.local-profile | built-in `local` profile auto-discovers :26657 (chain dev) | 08 (deferred) | deferred |
 | localdev.test1-signing | local writes sign with built-in test1 | 08 (deferred) | deferred |
 
+## Distribution (install from scratch)
+
+Scenario 11 runs the `l1-fresh` image (clean Claude Code, no gno tooling) and
+needs GitHub egress — external tier. It asserts the published artifacts
+(release archives + marketplace plugin on `main`), not the local tree: a
+regression shows up here only after it ships.
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| install.binary-release | platform-matched release archive → working binary (`gnomcp version`) | 11 | covered |
+| install.plugin-marketplace | plugin marketplace add + install from GitHub | 11 | covered |
+| install.mcp-register | `claude mcp add` (absolute path) → server connects | 11 | covered |
+| install.no-stray-server | install leaves no broken plugin-shipped MCP server (repo root must stay `.mcp.json`-free) | 11 | covered |
+| install.skills-live | next session exposes the gno skill family + connected gnomcp | 11 | covered |
+
 ## External tier (real testnet)
 
-No scenarios. Requires the canonical test13 endpoints (test11 is dead — never
+Only scenario 11 (fresh-install, GitHub egress — above). No real-testnet
+scenarios: they require the canonical test13 endpoints (test11 is dead — never
 reference it). The built-in `testnet` profile (`internal/profiles/config.go`)
 points at test11, so the zero-config testnet experience fails against the live
 network.
