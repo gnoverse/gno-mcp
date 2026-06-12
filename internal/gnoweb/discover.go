@@ -34,9 +34,7 @@ func Discover(client *http.Client, url string) (Conn, error) {
 		return Conn{}, fmt.Errorf("fetch gnoweb %q: %w", url, err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return Conn{}, fmt.Errorf("fetch gnoweb %q: status %d", url, resp.StatusCode)
-	}
+	status := resp.StatusCode
 
 	var conn Conn
 	z := html.NewTokenizer(io.LimitReader(resp.Body, 1<<20)) // 1 MiB cap
@@ -66,6 +64,11 @@ head:
 		}
 	}
 	if conn.RPC == "" || conn.ChainID == "" {
+		// Include the HTTP status when it was non-200: helps diagnose a
+		// misconfigured URL that returns a non-gnoweb error page.
+		if status != http.StatusOK {
+			return Conn{}, fmt.Errorf("gnoweb %q: status %d, no %s/%s meta-tags (is this a gnoweb host?)", url, status, metaNameRPC, metaNameChainID)
+		}
 		return Conn{}, fmt.Errorf("gnoweb %q: no %s/%s meta-tags (is this a gnoweb host?)", url, metaNameRPC, metaNameChainID)
 	}
 	return conn, nil

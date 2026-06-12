@@ -123,8 +123,11 @@ type Client interface {
 	// session was registered under; the broadcast MsgCall.Caller is set to
 	// master and the tx is signed by the session keypair (via signer) with
 	// Signature.SessionAddr pointing at signer.Address(). signer must be
-	// non-nil when simulate is false.
-	CallAsUser(ctx context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error)
+	// non-nil when simulate is false. send is the coins attached to the call
+	// (e.g. "1000000ugnot" for a payable function); "" attaches nothing. For a
+	// session, send is spent from the master account and counts against the
+	// session's chain-enforced SpendLimit.
+	CallAsUser(ctx context.Context, signer Signer, master, realm, fn string, args []string, send string, simulate bool) (CallResult, error)
 
 	// RunAsUser broadcasts (or simulates) a session-signed vm/MsgRun for
 	// ad-hoc gno code execution. master is the bech32 master address the
@@ -141,7 +144,8 @@ type Client interface {
 
 	// Call broadcasts (or simulates) a STANDARD vm/MsgCall signed by the agent key
 	// (Caller = signer's own address; no master, no SessionAddr). signer is a gnoclient.Signer.
-	Call(ctx context.Context, signer gnoclient.Signer, realm, fn string, args []string, simulate bool) (CallResult, error)
+	// send is the coins attached to the call (e.g. "1000000ugnot"); "" attaches nothing.
+	Call(ctx context.Context, signer gnoclient.Signer, realm, fn string, args []string, send string, simulate bool) (CallResult, error)
 
 	// Run broadcasts (or simulates) a STANDARD vm/MsgRun signed by the agent key.
 	Run(ctx context.Context, signer gnoclient.Signer, code string, simulate bool) (RunResult, error)

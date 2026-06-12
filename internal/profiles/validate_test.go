@@ -166,32 +166,82 @@ chain-id = "dev"
 	require.NoError(t, err, "read-only profile without master-address should validate")
 }
 
-func TestValidate_ChainIDAllowlist(t *testing.T) {
-	cases := []struct {
-		name    string
-		chainID string
-		wantErr bool
-	}{
-		{"dev-ok", "dev", false},
-		{"test11-ok", "test11", false},
-		{"test-13-hyphen-ok", "test-13", false},
-		{"betanet-rejected", "gnoland1", true},
-		{"staging-rejected", "staging", true},
-		{"arbitrary-rejected", "mychain", true},
+// ChainIDWritable separates write-capable chains (local dev, numbered testnets)
+// from everything else. Only these get an agent key path and writable tools.
+func TestChainIDWritable(t *testing.T) {
+	cases := map[string]bool{
+		"dev": true, "test5": true, "test11": true, "test-13": true,
+		"gnoland1": false, "staging": false, "mychain": false, "portal-loop": false,
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := &Config{Profiles: map[string]Profile{
-				"p": {RPCURL: "https://rpc.example:443", ChainID: tc.chainID},
-			}}
-			_, err := cfg.Validate()
-			if tc.wantErr {
-				require.Error(t, err, "chain-id %q: expected reject", tc.chainID)
-			} else {
-				require.NoError(t, err, "chain-id %q: expected ok", tc.chainID)
-			}
-		})
+	for id, want := range cases {
+		assert.Equal(t, want, ChainIDWritable(id), "ChainIDWritable(%q)", id)
 	}
+}
+
+// ChainIDValid is the format-safety gate: the chain-id is interpolated into the
+// `gnomcp profile add` / gnokey commands the user pastes, so shell metacharacters
+// and whitespace must be refused even though the WRITE allowlist is relaxed.
+func TestChainIDValid(t *testing.T) {
+	for _, id := range []string{"dev", "test-13", "gnoland1", "staging", "portal-loop", "a.b-c_1"} {
+		assert.True(t, ChainIDValid(id), "ChainIDValid(%q) should be true", id)
+	}
+	for _, id := range []string{"", "UP", "a b", "x;rm", "a$(b)", "`id`", "-lead", ".lead", "test-", "staging."} {
+		assert.False(t, ChainIDValid(id), "ChainIDValid(%q) should be false", id)
+	}
+}
+
+// A non-test chain-id (betanet/mainnet/staging) is admitted, but read-only:
+// auditing deployed source on gno.land requires reaching its chain.
+func TestValidate_admitsReadOnlyChains(t *testing.T) {
+	for _, id := range []string{"gnoland1", "staging", "mychain"} {
+		cfg := &Config{Profiles: map[string]Profile{
+			"p": {RPCURL: "https://rpc.example:443", ChainID: id},
+		}}
+		_, err := cfg.Validate()
+		require.NoError(t, err, "non-test chain-id %q must be admitted read-only", id)
+		assert.True(t, cfg.Profiles["p"].IsReadOnly(), "%q must classify read-only", id)
+		assert.Equal(t, "read-only", cfg.Profiles["p"].Kind())
+	}
+}
+
+// dev and numbered testnets stay write-capable.
+func TestValidate_writableChainsKeepKind(t *testing.T) {
+	cfg := &Config{Profiles: map[string]Profile{
+		"l": {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
+		"t": {RPCURL: "https://rpc.example:443", ChainID: "test5"},
+	}}
+	_, err := cfg.Validate()
+	require.NoError(t, err)
+	assert.False(t, cfg.Profiles["l"].IsReadOnly())
+	assert.False(t, cfg.Profiles["t"].IsReadOnly())
+}
+
+// Even with the write allowlist relaxed, a chain-id carrying shell
+// metacharacters or whitespace must be rejected outright.
+func TestValidate_rejectsMalformedChainID(t *testing.T) {
+	for _, id := range []string{"a b", "up;rm", "x$(id)", "UP"} {
+		cfg := &Config{Profiles: map[string]Profile{
+			"p": {RPCURL: "https://rpc.example:443", ChainID: id},
+		}}
+		_, err := cfg.Validate()
+		require.Error(t, err, "malformed chain-id %q must be rejected", id)
+		assert.Contains(t, err.Error(), "chain-id")
+	}
+}
+
+// master-address enables session writes; on a read-only chain that is a
+// contradiction, so it is refused rather than silently ignored.
+func TestValidate_rejectsMasterAddressOnReadOnlyChain(t *testing.T) {
+	cfg := &Config{Profiles: map[string]Profile{
+		"betanet": {
+			RPCURL:        "https://rpc.betanet.testnets.gno.land:443",
+			ChainID:       "gnoland1",
+			MasterAddress: "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
+		},
+	}}
+	_, err := cfg.Validate()
+	require.Error(t, err, "master-address on a read-only chain must be rejected")
+	assert.Contains(t, err.Error(), "read-only")
 }
 
 func TestValidate_MasterAddressOptional(t *testing.T) {

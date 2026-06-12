@@ -194,7 +194,7 @@ make build               # bin/gnomcp
 make dev                 # go run ./cmd/gnomcp (starts MCP server)
 ```
 
-Built against the official MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`) and `github.com/gnolang/gno/gno.land/pkg/gnoclient` for chain RPC. Manual e2e protocols live in `test/e2e/`.
+Built against the official MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`) and `github.com/gnolang/gno/gno.land/pkg/gnoclient` for chain RPC. Testing: see [`test/README.md`](test/README.md) for the four test layers (unit / integration / agent e2e / manual).
 
 ## Roadmap
 

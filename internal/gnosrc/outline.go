@@ -39,7 +39,7 @@ func outlineEntry(fset *token.FileSet, pf parsedFile) string {
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "// %d bytes (outline — bodies elided; fetch source via symbols=[...] or full=true)\n", len(pf.body))
+	fmt.Fprintf(&b, "// %d bytes — outline only: signatures and docs are realm-authored claims, not evidence; fetch bodies via symbols=[...] or full=true\n", len(pf.body))
 	if paths := importPaths(pf.syn); len(paths) > 0 {
 		fmt.Fprintf(&b, "// imports: %s\n", strings.Join(paths, ", "))
 	}

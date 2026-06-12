@@ -41,6 +41,25 @@ func TestRender_wrapsMarkdownInEnvelope(t *testing.T) {
 	assert.Empty(t, res.ResourceURI, "render no longer rides the resource channel")
 }
 
+// A normal gnoweb page exceeds the 4KB broad-sweep budget but is well under the
+// 64KB explicit ceiling. gno_render is an explicit, path-targeted request (like a
+// full-file read), so it must render in full rather than omit the preview.
+func TestRender_largePageRendersInFull(t *testing.T) {
+	body := "# Home\n" + strings.Repeat("content line\n", 512) // ~6.5KB
+	f := chain.NewFake()
+	f.SetRender("gno.land/r/foo", "", body)
+
+	s := newBaseTestServer(t)
+	RegisterRender(s, constResolver(f))
+	res, err := s.Registry().Call(context.Background(), "gno_render", map[string]any{
+		"realm":   "gno.land/r/foo",
+		"profile": "testnet5",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, res.Text, body, "a ~6.5KB page must render in full, not be omitted")
+	assert.NotContains(t, res.Text, "preview omitted")
+}
+
 func TestRender_passesPath(t *testing.T) {
 	f := chain.NewFake()
 	f.SetRender("gno.land/r/foo", "subpath/x", "subbody")

@@ -54,7 +54,17 @@ gno = "0.9"
 
 ## `gnowork.toml`
 
-Empty file at the workspace root. No configuration options yet — its presence is the signal. Resolves dependencies between packages in the workspace before consulting the remote cache.
+Empty file at the workspace root — its presence is the signal; no configuration options yet. The toolchain walks the workspace tree for every `gnomod.toml` and resolves imports by their declared `module` path (not by directory name), *before* consulting `$GNOHOME/pkg/mod/`.
+
+**Dependency resolution order** (`gno test`, `gno lint`): stdlib → workspace packages (when a `gnowork.toml` exists in the dir or an ancestor) → download cache `$GNOHOME/pkg/mod/`.
+
+**The standalone-directory trap.** A bare package directory with only a `gnomod.toml` and no `gnowork.toml` is in *single-package mode*: it resolves stdlib and its own files, but an import of a well-known `/p/` package (e.g. `gno.land/p/nt/testutils/v0`) fails unless that package is already in `$GNOHOME/pkg/mod/`. Recursive patterns (`./...`) are also rejected in this mode. Three ways out:
+
+| Fix | How | Caveat |
+|---|---|---|
+| Workspace | Put an empty `gnowork.toml` in a parent dir; place the dep's source anywhere under it with `module = "gno.land/p/..."` in its `gnomod.toml`. Match is by declared module path, not directory name. | Deps must be on disk under the workspace. |
+| Download cache | `gno mod download` fetches deps from a chain RPC into `$GNOHOME/pkg/mod/`; a standalone dir then resolves them. | Needs the dep deployed on the target chain + network. |
+| `replace` | A `[[replace]]` in `gnomod.toml` redirects an import to a local path. | **Blocks `addpkg`** — strip it before deploying. |
 
 ## The `gno` binary
 
@@ -73,6 +83,7 @@ Subcommands you actually use day-to-day:
 | `gno run -debug -expr "..."` | Start the GnoVM debugger |
 | `gno fmt` | Format `.gno` files (gofmt-compatible) |
 | `gno lint` | Lint (style + correctness) |
+| `gno fix` | Rewrite deprecated API (e.g. the `std` → `chain`/`testing` split) in place |
 | `gno doc <pkgpath>` | Show package documentation |
 | `gno clean -modcache` | Remove `$GNOHOME/pkg/mod/` |
 
@@ -90,23 +101,57 @@ Targeting a **live chain** (binary version-matched to the chain's release, deps 
 
 ### Unit tests
 
+A test that calls a **crossing function** must itself take `cur realm` as its first parameter and call through `cross(cur)`. A test touching only non-crossing code uses the plain `func TestX(t *testing.T)`. Both forms coexist in one file:
+
 ```go
 package counter
 
 import "testing"
 
-func TestIncrement(t *testing.T) {
-    if count != 0 {
-        t.Fatalf("Expected 0, got %d", count)
+// Crossing: needs `cur realm`; calls Increment via cross(cur).
+func TestIncrement(cur realm, t *testing.T) {
+    counter = 0
+    if val := Increment(cross(cur)); val != 1 {
+        t.Fatalf("Increment() = %d, want 1", val)
     }
-    value := Increment(cross(cur), 42)
-    if value != 42 {
-        t.Fatalf("Expected 42, got %d", value)
+}
+
+// Non-crossing: Render is a plain read — no cur.
+func TestRender(t *testing.T) {
+    counter = 1337
+    if got := Render(""); got != "1337" {
+        t.Fatalf("Render() = %q, want %q", got, "1337")
     }
 }
 ```
 
-Use the same `testing.T` API as Go. Helpers from the `testing` stdlib package let you fake EOAs, set inbound `OriginSend`, and install fake realms — see `stdlib.md` § `testing`.
+The test runner injects `cur`: in a `/r/` package it is the realm itself (so `cur.IsCurrent()` holds inside the crossing call); in a `/p/` package it is the EOA origin. Omit it and any `cross(cur)` fails to compile — `cur` is undefined.
+
+**Faking the caller, realm, and inbound coins.** Set the context *before* the crossing call with the `testing` helpers (API in `stdlib.md` § `testing`):
+
+```go
+import (
+    "chain"
+    "testing"
+
+    "gno.land/p/nt/testutils/v0"
+)
+
+func TestBid(cur realm, t *testing.T) {
+    alice := testutils.TestAddress("alice")
+    testing.SetRealm(testing.NewUserRealm(alice))        // alice is the EOA caller
+    testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: 1000}}) // coins for a payable call
+    Bid(cross(cur))
+}
+```
+
+`NewUserRealm(addr)` fakes an EOA; `NewCodeRealm(pkgPath)` fakes a *calling realm* (use it for the payment-guard regression test below); `IssueCoins(addr, coins)` seeds a balance. `t.Run` subtests do **not** reset package globals — reset them in a helper yourself.
+
+**`package std is not in std`.** The realm-facing `std` package was removed: coin/event/address types live in `chain`, runtime calls in `chain/runtime` (+ `chain/runtime/unsafe`), and the test helpers (`SetRealm`, `NewUserRealm`, `NewCodeRealm`, `SetOriginCaller`, `SetOriginSend`, `IssueCoins`) in `testing`. The error names a non-existent stdlib path instead of saying "removed" — `gno fix` rewrites most call sites mechanically.
+
+**Zeroing an `address`.** `addr = ""` is a type error (`address` is not `string`). Use `var zero address` (or `address("")`, which is also the invalid-address sentinel for negative tests).
+
+**Assertions.** `gno.land/p/nt/uassert/v0` (non-fatal) and `gno.land/p/nt/urequire/v0` (fatal): `uassert.Equal(t, want, got)`, `urequire.NoError(t, err)`, `uassert.ErrorContains(t, err, "...")`. A crossing call expected to panic: `uassert.AbortsWithMessage(t, cur, "msg", func() { F(cross(cur)) })` (`PanicsWithMessage` for non-crossing). These take a `realm`; a test that passes only `func()` callbacks declares a package-level `var cur realm` placeholder to forward.
 
 ### Filetests
 

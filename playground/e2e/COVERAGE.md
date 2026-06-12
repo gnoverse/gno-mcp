@@ -1,0 +1,135 @@
+# e2e feature coverage
+
+The contract between the product surface (gnomcp tools + `gno` skill + agents +
+playground flows) and the scenarios that assert it. Scenarios declare what they
+assert via `covers:` frontmatter using the keys below; this file is the ledger
+of what is covered, what is not, and why. The skill/MCP improvement loop runs
+against this: change a description or a reference → rerun the categories whose
+features it touches.
+
+Verdict semantics per feature: **covered** = a scenario's Expect makes it
+binding; **watch** = a scenario observes it and queues findings, but it can't
+fail a step; **gap** = no scenario exercises it (reason + unblock condition
+listed).
+
+## MCP read tools
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| read.render | gno_render realm output | 01, 03 | covered |
+| read.read-package | gno_read whole-package txtar (not file-by-file) | 01 | covered |
+| read.outline | gno_read default outline (API surface, bodies elided) | 01 | covered |
+| read.eval | gno_eval expression | 01 | covered |
+| read.packages | gno_packages namespace listing (vm/qpaths) | 04 | covered |
+| read.account | gno_account balance/sequence/exists:false-is-normal | 04 | covered (watch in 02 funding flow) |
+| read.status | gno_status declared vs live chain, tip freshness | 04 | covered |
+| read.connect-preview | gno_connect preview without adding a profile | 04 | covered |
+| read.error-quality | nonexistent realm → clean error, no hallucination | 04 | covered |
+
+## Indexer tools (tx-indexer required)
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| idx.list | gno_list catalog search | — | gap: simnet runs no tx-indexer; requires one in the e2e image |
+| idx.history | gno_history deploy/tx log | — | gap (same) |
+| idx.activity | gno_activity MsgCall/MsgRun log | — | gap (same) |
+
+## Write tools (agent identity)
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| write.key-generate | gno_key_generate per-profile agent key | 02 | covered |
+| write.key-address | gno_key_address | 02 | covered (alt path) |
+| write.faucet-fund | gno_faucet_fund tier-2 automatic funding | 02 | covered |
+| write.funds-recovery | insufficient_funds error → faucet → retry, unprompted | 02 | covered |
+| write.call | gno_call broadcast | 02 | covered |
+| write.simulate | gas estimate without broadcast | 02 | covered |
+| write.addpkg | gno_addpkg deploy | 02 | covered |
+| write.run | gno_run MsgRun script | 08 (deferred) | deferred with scenario 08 |
+| write.signer-reporting | answer names who signed (agent vs test1 vs session) | 02, 07 | covered |
+
+## Sessions (write-as-user)
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| session.no-master-error | read-only profile → no_master_address error with repair instructions | 07 | covered |
+| session.propose | gno_session_propose prints the gnokey authorize command, no broadcast | 07 | covered |
+| session.auth-status | gno_auth_status reflects session state | 07 | covered |
+| session.authorize | user authorizes via gnokey; write lands as session | 07 | covered (the driver authorizes as the user with gnokey; the AUT never touches gnokey) |
+| session.revoke | gno_session_revoke an active session | 07 | covered |
+| write.call-as-session | a write signed by the session lands, Caller = master | 07 | covered |
+
+## Profiles & connect
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| admin.profile-add-discovery | gno_profile_add from gnoweb_url (gnoconnect meta-tags) | 03 | covered |
+| admin.profile-add-verify | live chain-id cross-check on add | 03 | covered |
+| admin.profile-add-explicit | rpc_url + chain_id form | — | gap: needs a chain not already profiled; fits the external tier |
+| admin.persist-hint | result volunteers the CLI persist command | 03 | covered |
+| profile.selection | right profile chosen without prompting | 01 | covered |
+| profile.read-attribution | reads name the profile they used | 03 | covered |
+| misc.gnoweb-metadata | gnoconnect meta-tags drive discovery | 03 | covered |
+| misc.chain-allowlist | betanet/mainnet chain-ids refused | — | gap: needs a node reporting a mainnet id; not worth faking locally |
+| misc.output-budget | truncation is explicit, never silent | — | gap: needs a deterministic huge-output fixture realm |
+
+## gno skill family (routing + triggering)
+
+The gno skill is a family: `gno` (root references) + siblings `gno-build` (authoring),
+`gno-audit`, `gno-debug`, `gno-onboard`. Non-overlapping descriptions route each task to its
+owner; siblings load the gno references themselves.
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| skill.gno-build-trigger | gno-build engages before authoring/deploying a realm, unprompted | 02 | covered |
+| skill.auto-trigger-review | gno/gno-audit engages on "is this realm safe?", unprompted | 05 | covered |
+| skill.explicit-invoke | `/gno <question>` direct invocation | 05 | covered |
+| skill.ref-interrealm | interrealm.md loaded for caller-identity reasoning | 05 | covered |
+| skill.ref-security | security.md loaded for review/bug-class lookup | 05 | covered |
+| skill.ref-stdlib | stdlib.md loaded for chain API questions | 05 | covered |
+| skill.ref-patterns | patterns.md loaded for authoring idioms | 05 | covered |
+| skill.ref-audit | audit.md procedure behind formal audits | 06 | covered |
+| skill.anti-solidity | no msg.sender pattern-matching in answers | 05 | covered |
+| skill.ref-build | build.md loaded by gno-build for authoring/test/deploy | 02 | covered |
+| skill.ref-render | render.md for Render()/gnoweb authoring | — | gap: no render-authoring scenario |
+| skill.ref-memory | memory.md for data-structure/persistence guidance | 05 | covered |
+| skill.ref-mcp | mcp.md "fetch source via gnomcp" | all | covered indirectly by every tool-selection Expect |
+
+Reference-load Expects in scenario 05 are or-bindings per topic (interrealm|security,
+stdlib|interrealm, memory|patterns): the step binds on "a correct reference for the
+topic", since the skill's own routing table legitimately allows either.
+
+## Agents
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| agent.auditor-dispatch | formal audit → gno-auditor dispatched by name | 06 | covered |
+| agent.auditor-readonly | audit performs zero writes | 06 | covered |
+| agent.auditor-findings | planted Class 2 bugs found; structured verdict format | 06 | covered |
+
+## Playground local-dev (L3)
+
+Scenario 08 sits in `scenarios/deferred/` — blocked on an upstream gnodev fix
+(see `scenarios/deferred/README.md`). Its features are written but unasserted.
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| localdev.gnodev-start | agent starts gnodev itself when local testing is asked for | 08 (deferred) | deferred |
+| localdev.local-profile | built-in `local` profile auto-discovers :26657 (chain dev) | 08 (deferred) | deferred |
+| localdev.test1-signing | local writes sign with built-in test1 | 08 (deferred) | deferred |
+
+## External tier (real testnet)
+
+No scenarios. Requires the canonical test13 endpoints (test11 is dead — never
+reference it). The built-in `testnet` profile (`internal/profiles/config.go`)
+points at test11, so the zero-config testnet experience fails against the live
+network.
+
+## Known harness constraints (not feature gaps)
+
+- MCP in-memory state resets every headless turn (fresh gnomcp child per
+  turn) — flows needing cross-turn dynamic profiles must fit one turn
+  (scenario 03), or exploit the reset to pick up profiles.toml edits
+  (scenario 07).
+- Dynamic profiles (gno_profile_add) have no persistence mechanism; tracked
+  as a finding, not a scenario.

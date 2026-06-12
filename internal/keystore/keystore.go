@@ -65,10 +65,11 @@ func deriveSigner(mnemonic, chainID string) (gnoclient.Signer, error) {
 
 // SignerForProfile returns a gnoclient.Signer for the profile's agent identity.
 // Local (dev) → test1; testnet → persisted per-profile mnemonic (ErrNoAgentKey
-// if not yet generated). The chain-id allowlist is re-checked as defense in depth.
+// if not yet generated). Write-capability is re-checked as defense in depth:
+// read-only chains have no agent key.
 func (k *Keystore) SignerForProfile(profileName string, p profiles.Profile) (gnoclient.Signer, error) {
-	if !profiles.ChainIDAllowed(p.ChainID) {
-		return nil, fmt.Errorf("keystore: chain-id %q not allowed", p.ChainID)
+	if !profiles.ChainIDWritable(p.ChainID) {
+		return nil, fmt.Errorf("keystore: chain-id %q is read-only — read-only chains have no agent key", p.ChainID)
 	}
 	if p.IsLocal() {
 		signer, err := deriveSigner(Test1Mnemonic, p.ChainID)
@@ -109,8 +110,8 @@ func (k *Keystore) AgentAddress(profileName string, p profiles.Profile) (string,
 // key file. The key is written encrypted when a passphrase is configured,
 // otherwise as plaintext.
 func (k *Keystore) GenerateForProfile(profileName string, p profiles.Profile) (string, error) {
-	if !profiles.ChainIDAllowed(p.ChainID) {
-		return "", fmt.Errorf("keystore: chain-id %q not allowed", p.ChainID)
+	if !profiles.ChainIDWritable(p.ChainID) {
+		return "", fmt.Errorf("keystore: chain-id %q is read-only — read-only chains have no agent key", p.ChainID)
 	}
 	if !p.IsTestnet() {
 		return "", fmt.Errorf("keystore: profile %q: %w", profileName, ErrKeyGenTestnetOnly)

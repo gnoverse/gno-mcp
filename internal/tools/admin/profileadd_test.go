@@ -83,6 +83,22 @@ func TestProfileAdd_explicitForm(t *testing.T) {
 	assert.Contains(t, res.Text, "restart", "text must say the profile is in-memory until restart")
 }
 
+// A freshly added profile is usable by name immediately (the server validates
+// against config, not the schema enum). The result must say so and point at the
+// tool-list refresh, so a client with a cached profile enum doesn't waste a
+// round-trip assuming the profile is unavailable.
+func TestProfileAdd_resultNudgesImmediateUse(t *testing.T) {
+	s := newAdminServer(t)
+	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-13", nil), func() error { return nil })
+
+	res, err := callAdd(t, s, map[string]any{
+		"name": "test13", "rpc_url": "https://rpc.example", "chain_id": "test-13",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, res.Text, "profile=test13", "must show how to use it now")
+	assert.Contains(t, res.Text, "re-fetch", "must point at the tool-list refresh for a stale enum")
+}
+
 func TestProfileAdd_explicitForm_optionalURLs(t *testing.T) {
 	s := newAdminServer(t)
 	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-13", nil), func() error { return nil })
@@ -169,17 +185,33 @@ func TestProfileAdd_rejectsBadNames(t *testing.T) {
 
 // ---- profile validation
 
-func TestProfileAdd_rejectsForbiddenChainID(t *testing.T) {
+// A non-test chain-id (betanet/mainnet/staging) is admitted read-only: the
+// profile is added, flagged read-only, with no agent key/faucet/write path.
+func TestProfileAdd_admitsReadOnlyChain(t *testing.T) {
+	for _, chainID := range []string{"gnoland1", "staging", "mychain"} {
+		s := newAdminServer(t)
+		RegisterProfileAdd(s, http.DefaultClient, okVerifier(chainID, nil), func() error { return nil })
+
+		res, err := callAdd(t, s, map[string]any{"name": "ro", "rpc_url": "https://rpc.example", "chain_id": chainID})
+		require.NoError(t, err, "read-only chain-id %q must be admitted", chainID)
+		assert.Equal(t, true, res.StructuredContent["read_only"], "chain-id %q", chainID)
+		assert.True(t, s.Config().Profiles["ro"].IsReadOnly(), "chain-id %q must classify read-only", chainID)
+	}
+}
+
+// A malformed chain-id (shell metacharacters/whitespace) is refused before any
+// network verify — it would be interpolated into the pasted persist command.
+func TestProfileAdd_rejectsMalformedChainID(t *testing.T) {
 	s := newAdminServer(t)
 	calls := 0
-	RegisterProfileAdd(s, http.DefaultClient, okVerifier("gnoland1", &calls), func() error { return nil })
+	RegisterProfileAdd(s, http.DefaultClient, okVerifier("whatever", &calls), func() error { return nil })
 
-	for _, chainID := range []string{"gnoland1", "staging", "mychain"} {
+	for _, chainID := range []string{"up;rm", "a b", "evil$(id)"} {
 		_, err := callAdd(t, s, map[string]any{"name": "x5", "rpc_url": "https://rpc.example", "chain_id": chainID})
 		require.Error(t, err, "chain-id %q must be rejected", chainID)
-		assert.Equal(t, "chain_forbidden", toolErrCode(t, err), "chain-id %q", chainID)
+		assert.Equal(t, "chain_id_malformed", toolErrCode(t, err), "chain-id %q", chainID)
 	}
-	assert.Zero(t, calls, "verifier must not run for a forbidden chain-id")
+	assert.Zero(t, calls, "verifier must not run for a malformed chain-id")
 }
 
 func TestProfileAdd_rejectsBadRPCURL(t *testing.T) {

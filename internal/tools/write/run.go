@@ -125,7 +125,7 @@ func runHandler(
 		sessionMgr:  sessionMgr,
 		// The session must carry allow_run=true; scope mismatch here means no
 		// session authorizes MsgRun at all.
-		pickSession: func(ctx context.Context) (chain.Signer, error) {
+		pickSession: func(ctx context.Context) (chain.Signer, string, error) {
 			return sessionMgr.PickSessionForRun(ctx, resolver, profileName)
 		},
 		mapPickErr: func(pickErr error) error {
@@ -156,9 +156,9 @@ func runHandler(
 			rr, opErr = c.Run(ctx, signer, code, simulate)
 			return opErr
 		},
-		sessionOp: func(ctx context.Context, signer chain.Signer) error {
+		sessionOp: func(ctx context.Context, signer chain.Signer, master string) error {
 			var opErr error
-			rr, opErr = c.RunAsUser(ctx, signer, profile.MasterAddress, code, simulate)
+			rr, opErr = c.RunAsUser(ctx, signer, master, code, simulate)
 			return opErr
 		},
 		auditResult: &auditResult,

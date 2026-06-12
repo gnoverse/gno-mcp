@@ -14,10 +14,21 @@ var (
 	// lowercase letters (e.g. "1000000ugnot", "10gnot"). Cross-denom mixes rejected.
 	spendLimitRE = regexp.MustCompile(`^[0-9]+[a-z]+$`)
 
-	// chainIDRE is the allowlist: only local dev and numbered testnets.
-	// Admits "test11" and the hyphenated "test-13" form. Betanet ("gnoland1"),
-	// "staging", and arbitrary ids are rejected — they cannot enter the config.
-	chainIDRE = regexp.MustCompile(`^(dev|test-?\d+)$`)
+	// chainIDWritableRE marks the write-capable chains: local dev and numbered
+	// testnets. Admits "test11" and the hyphenated "test-13" form. Anything else
+	// (betanet "gnoland1", "staging", ...) is admitted read-only, not writable —
+	// it has no agent key path and is excluded from every write tool's profile enum.
+	chainIDWritableRE = regexp.MustCompile(`^(dev|test-?\d+)$`)
+
+	// chainIDFormatRE is the format-safety gate applied to every chain-id,
+	// writable or read-only: the chain-id is interpolated into the `gnomcp
+	// profile add` and gnokey commands the user pastes into a terminal, so
+	// whitespace and shell metacharacters must be refused. Lowercase to match
+	// gno chain-id convention (dev, test5, gnoland1, portal-loop). First and
+	// last char are anchored to [a-z0-9]: the leading anchor stops an id from
+	// beginning with '-' and being read as a flag in the pasted command; the
+	// trailing anchor rejects dangling separators ("test-", "staging.").
+	chainIDFormatRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$`)
 
 	// profileNameRE matches a safe profile identifier: lowercase alphanumeric,
 	// with internal '-'/'_'. It excludes whitespace and shell metacharacters so
@@ -48,10 +59,19 @@ func ValidRPCURL(s string) bool {
 	return rpcURLRE.MatchString(s)
 }
 
-// ChainIDAllowed reports whether a chain-id is permitted (local dev or a
-// numbered testnet). Betanet/mainnet/staging are rejected.
-func ChainIDAllowed(chainID string) bool {
-	return chainIDRE.MatchString(chainID)
+// ChainIDWritable reports whether a chain-id is write-capable: local dev or a
+// numbered testnet. These get an agent key path (test1 or a generated key) and
+// appear in the write tools' profile enums. Any other chain-id is read-only.
+func ChainIDWritable(chainID string) bool {
+	return chainIDWritableRE.MatchString(chainID)
+}
+
+// ChainIDValid reports whether a chain-id is safe to admit into config and to
+// interpolate into pasted shell commands: non-empty, ≤64 chars, lowercase
+// alphanumeric with internal '.', '-', '_'. This is the format gate applied to
+// read-only and writable chains alike.
+func ChainIDValid(chainID string) bool {
+	return len(chainID) <= 64 && chainIDFormatRE.MatchString(chainID)
 }
 
 // Validate checks required fields. It never mutates profiles.
@@ -72,8 +92,8 @@ func (c *Config) Validate() (warn error, err error) {
 		if p.ChainID == "" {
 			return nil, fmt.Errorf("profile %q: missing required chain-id", name)
 		}
-		if !ChainIDAllowed(p.ChainID) {
-			return nil, fmt.Errorf("profile %q: chain-id %q is not allowed (only dev or testNN are permitted; betanet/mainnet/staging are forbidden)", name, p.ChainID)
+		if !ChainIDValid(p.ChainID) {
+			return nil, fmt.Errorf("profile %q: chain-id %q is malformed (want lowercase alphanumeric with '.', '-', '_', ≤64 chars — it is interpolated into pasted commands)", name, p.ChainID)
 		}
 
 		if p.DefaultExpiresIn != "" {
@@ -90,6 +110,9 @@ func (c *Config) Validate() (warn error, err error) {
 			return nil, fmt.Errorf("profile %q: bypass-hard-limits requires master-address (bypass only affects write sessions)", name)
 		}
 		if p.MasterAddress != "" {
+			if !ChainIDWritable(p.ChainID) {
+				return nil, fmt.Errorf("profile %q: master-address is set but chain-id %q is read-only (mainnet/betanet) — read-only chains cannot perform writes; remove master-address or target a dev/testNN chain", name, p.ChainID)
+			}
 			if _, err := crypto.AddressFromBech32(p.MasterAddress); err != nil {
 				return nil, fmt.Errorf("profile %q: invalid master-address %q: %w", name, p.MasterAddress, err)
 			}

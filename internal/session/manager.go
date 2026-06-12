@@ -183,7 +183,7 @@ func (m *Manager) AddPending(profile string, kp *Keypair, scope Scope, master st
 //  4. Filter to those whose AllowPaths covers realm.
 //  5. If none cover realm but usable sessions exist: return *ErrScopeMismatch.
 //  6. Among matching sessions, return the one with the greatest CreatedAt (most recent).
-func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Resolver, profile, realm string) (chain.Signer, error) {
+func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Resolver, profile, realm string) (chain.Signer, string, error) {
 	match := func(ss *sessionState) bool {
 		return realm == "" || coversRealm(ss.meta.AllowPaths, realm)
 	}
@@ -196,7 +196,7 @@ func (m *Manager) PickSessionForProfile(ctx context.Context, resolver chain.Reso
 // promote pending → active, skip expired and spend-exhausted, return
 // ErrNoActiveSession when nothing usable exists. Returns *ErrScopeMismatch
 // when sessions exist but none have AllowRun=true.
-func (m *Manager) PickSessionForRun(ctx context.Context, resolver chain.Resolver, profile string) (chain.Signer, error) {
+func (m *Manager) PickSessionForRun(ctx context.Context, resolver chain.Resolver, profile string) (chain.Signer, string, error) {
 	return m.pickSession(ctx, resolver, profile, func(ss *sessionState) bool {
 		return ss.meta.AllowRun
 	})
@@ -204,7 +204,7 @@ func (m *Manager) PickSessionForRun(ctx context.Context, resolver chain.Resolver
 
 // pickSession is the shared body for the public pickers. match decides which
 // active, unexpired, non-zero-spend sessions are eligible.
-func (m *Manager) pickSession(ctx context.Context, resolver chain.Resolver, profile string, match func(*sessionState) bool) (chain.Signer, error) {
+func (m *Manager) pickSession(ctx context.Context, resolver chain.Resolver, profile string, match func(*sessionState) bool) (chain.Signer, string, error) {
 	// Step 1: snapshot pending sessions for promotion — no IO under lock.
 	type pending struct {
 		addr   string
@@ -249,7 +249,7 @@ func (m *Manager) pickSession(ctx context.Context, resolver chain.Resolver, prof
 
 	profileSessions := m.sessions[profile]
 	if len(profileSessions) == 0 {
-		return nil, ErrNoActiveSession
+		return nil, "", ErrNoActiveSession
 	}
 
 	now := time.Now().Unix()
@@ -275,10 +275,10 @@ func (m *Manager) pickSession(ctx context.Context, resolver chain.Resolver, prof
 	}
 
 	if len(candidates) == 0 && len(availablePaths) == 0 {
-		return nil, ErrNoActiveSession
+		return nil, "", ErrNoActiveSession
 	}
 	if len(candidates) == 0 {
-		return nil, &ErrScopeMismatch{AvailablePaths: dedup(availablePaths)}
+		return nil, "", &ErrScopeMismatch{AvailablePaths: dedup(availablePaths)}
 	}
 
 	// Pick most-recently created.
@@ -290,7 +290,7 @@ func (m *Manager) pickSession(ctx context.Context, resolver chain.Resolver, prof
 	return &signerAdapter{
 		addr: best.meta.SessionAddress,
 		priv: best.meta.Privkey,
-	}, nil
+	}, best.meta.MasterAddress, nil
 }
 
 // ---- UpdateSpend

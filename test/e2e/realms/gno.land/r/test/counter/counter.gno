@@ -17,7 +17,7 @@ func Total() int {
 }
 
 // Render returns a markdown summary of the current total.
-// Used by Section A1 of PROTOCOL.md to exercise gno_render end-to-end.
+// gno_render exercises it end-to-end in the e2e read-tool scenario.
 func Render(path string) string {
 	return "# Counter\n\nTotal: " + strconv.Itoa(total)
 }

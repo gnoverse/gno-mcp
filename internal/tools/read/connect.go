@@ -16,13 +16,14 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_connect",
 		Description: "Discovers how to connect to a gno chain from its gnoweb URL: reads the " +
-			"gnoconnect:rpc and gnoconnect:chainid meta-tags, validates the chain-id against the " +
-			"allowlist (only dev or testNN), and returns both follow-up paths — gno_profile_add " +
-			"to use the chain in this session (in-memory), and a ready-to-run 'gnomcp profile add' " +
-			"command for the user to persist it. Use to PREVIEW a chain's connection info without " +
-			"changing gnomcp state; to discover AND add in one step, call gno_profile_add with " +
-			"gnoweb_url directly instead. Does NOT modify any config itself. " +
-			"Required: gnoweb_url (e.g. 'https://test11.testnets.gno.land'). " +
+			"gnoconnect:rpc and gnoconnect:chainid meta-tags and returns both follow-up paths — " +
+			"gno_profile_add to use the chain in this session (in-memory), and a ready-to-run " +
+			"'gnomcp profile add' command for the user to persist it. dev and numbered testnets are " +
+			"write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is admitted read-only " +
+			"(read tools only) — which is exactly what auditing deployed source needs. Use to PREVIEW " +
+			"a chain's connection info without changing gnomcp state; to discover AND add in one step, " +
+			"call gno_profile_add with gnoweb_url directly instead. Does NOT modify any config itself. " +
+			"Required: gnoweb_url (e.g. 'https://gno.land/r/gnoland/blog' or 'https://test11.testnets.gno.land'). " +
 			"Optional: name (suggested profile name, default derived from chain-id).",
 		InputSchema: map[string]any{
 			"type": "object",
@@ -57,10 +58,10 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 			if err != nil {
 				return server.Result{}, fmt.Errorf("gno_connect: %w", err)
 			}
-			if !profiles.ChainIDAllowed(conn.ChainID) {
+			if !profiles.ChainIDValid(conn.ChainID) {
 				return server.Result{}, &server.ToolError{
-					Code:    "chain_forbidden",
-					Message: fmt.Sprintf("chain-id %q is not allowed (only dev or testNN); cannot create a profile for it", conn.ChainID),
+					Code:    "chain_id_malformed",
+					Message: fmt.Sprintf("discovered chain-id %q is malformed (want lowercase alphanumeric with '.', '-', '_', ≤64 chars); refusing to build a profile from it", conn.ChainID),
 					Extra:   map[string]any{"chain_id": conn.ChainID, "rpc": conn.RPC},
 				}
 			}
@@ -79,18 +80,25 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 				return server.Result{}, fmt.Errorf("gno_connect: profile name %q must be lowercase alphanumeric with '-' or '_' (e.g. %q)", name, conn.ChainID)
 			}
 			cmd := fmt.Sprintf("gnomcp profile add %s --rpc %s --chain-id %s", name, conn.RPC, conn.ChainID)
+			readOnly := !profiles.ChainIDWritable(conn.ChainID)
+			capability := "For write-as-user sessions, persist the profile with --master <g1...> appended " +
+				"(dynamic profiles support agent-key writes only)."
+			if readOnly {
+				capability = "This is a read-only chain (mainnet/betanet): read tools only — no agent key, " +
+					"no faucet, and --master is refused. That is all an audit needs."
+			}
 			text := fmt.Sprintf(
 				"Discovered chain %q at RPC %s.\n\n"+
 					"To use it in this session (in-memory until restart), call gno_profile_add with "+
 					"name=%q, rpc_url=%q, chain_id=%q.\n\n"+
 					"To persist it, run:\n\n```\n%s\n```\n\n"+
-					"Then pass profile=%q to the read tools. For write-as-user sessions, persist the "+
-					"profile with --master <g1...> appended (dynamic profiles support agent-key writes only).",
-				conn.ChainID, conn.RPC, name, conn.RPC, conn.ChainID, cmd, name)
+					"Then pass profile=%q to the read tools. %s",
+				conn.ChainID, conn.RPC, name, conn.RPC, conn.ChainID, cmd, name, capability)
 			return server.Result{
 				Text: text,
 				StructuredContent: map[string]any{
 					"rpc": conn.RPC, "chain_id": conn.ChainID, "name": name, "command": cmd,
+					"read_only": readOnly,
 				},
 			}, nil
 		},

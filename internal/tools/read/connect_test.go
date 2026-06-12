@@ -58,7 +58,9 @@ func TestConnect_RejectsInjectionInDiscoveredRPC(t *testing.T) {
 	require.Error(t, err, "expected a shell-unsafe discovered RPC to be rejected")
 }
 
-func TestConnect_RejectsForbiddenChain(t *testing.T) {
+// A non-test chain (betanet gnoland1) is admitted read-only — auditing deployed
+// source on gno.land requires reaching its chain. The result flags it read-only.
+func TestConnect_AdmitsReadOnlyChain(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.betanet.testnets.gno.land" />` +
 			`<meta name="gnoconnect:chainid" content="gnoland1" />`))
@@ -67,6 +69,23 @@ func TestConnect_RejectsForbiddenChain(t *testing.T) {
 
 	s := server.NewServer(&profiles.Config{Profiles: profiles.BuiltinProfiles()}, "")
 	RegisterConnect(s, srv.Client())
+	res, err := s.Registry().Call(context.Background(), "gno_connect", map[string]any{"gnoweb_url": srv.URL})
+	require.NoError(t, err, "betanet chain-id (gnoland1) must be admitted read-only")
+	assert.Equal(t, true, res.StructuredContent["read_only"])
+	assert.Contains(t, res.Text, "read-only")
+}
+
+// A discovered chain-id carrying shell metacharacters must still be refused —
+// it is interpolated into the pasted profile-add command.
+func TestConnect_RejectsMalformedChainID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.example" />` +
+			`<meta name="gnoconnect:chainid" content="evil$(id)" />`))
+	}))
+	defer srv.Close()
+
+	s := server.NewServer(&profiles.Config{Profiles: profiles.BuiltinProfiles()}, "")
+	RegisterConnect(s, srv.Client())
 	_, err := s.Registry().Call(context.Background(), "gno_connect", map[string]any{"gnoweb_url": srv.URL})
-	require.Error(t, err, "expected forbidden chain-id (gnoland1) to be rejected")
+	require.Error(t, err, "a shell-unsafe discovered chain-id must be rejected")
 }

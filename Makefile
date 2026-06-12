@@ -1,4 +1,6 @@
-.PHONY: build test test-integration lint fmt run test-e2e dev
+.PHONY: build test test-integration lint fmt run test-e2e dev \
+	playground-fresh playground-gnomcp playground-full playground-sim \
+	playground-e2e playground-e2e-external
 
 build:
 	go build -o bin/gnomcp ./cmd/gnomcp
@@ -26,8 +28,29 @@ dev:
 	claude --plugin-dir .
 
 test-e2e:
-	@echo "Manual e2e protocol — see test/e2e/PROTOCOL.md"
-	@echo "1. Run: ./test/e2e/setup.sh"
-	@echo "2. In another terminal: ./bin/gnomcp --config test/e2e/profiles.toml"
-	@echo "3. Walk through test/e2e/PROTOCOL.md by hand."
-	@echo "4. Tear down: ./test/e2e/teardown.sh"
+	@echo "There is no standalone manual e2e protocol — see test/README.md."
+	@echo "Automated agent e2e:   make playground-e2e"
+	@echo "Manual / exploratory:  make playground-sim  (then run claude)"
+
+# ---- Playground (Docker test harness — see playground/Makefile + playground/README.md)
+playground-fresh:
+	$(MAKE) -C playground fresh
+
+playground-gnomcp:
+	$(MAKE) -C playground gnomcp
+
+playground-full:
+	$(MAKE) -C playground full
+
+# Interactive shell + simulated testnet; gnoweb published to the host.
+# Port override propagates: `make playground-sim GNOWEB_PORT=9999`.
+playground-sim:
+	$(MAKE) -C playground sim
+
+# Scenario selection goes to the driver via ARGS, which propagates to the
+# sub-make as a command-line variable: `make playground-e2e ARGS="--scenario chain-overview"`.
+playground-e2e:
+	$(MAKE) -C playground e2e
+
+playground-e2e-external:
+	$(MAKE) -C playground e2e-external

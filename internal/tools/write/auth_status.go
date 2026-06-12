@@ -45,10 +45,11 @@ func authStatusHandler(
 	sessionMgr *session.Manager,
 	resolver chain.Resolver,
 ) (server.Result, error) {
-	profileName, _, err := requireProfile(args, s)
+	profileName, profile, err := requireProfile(args, s)
 	if err != nil {
 		return server.Result{}, err
 	}
+	masterSet := profile.MasterAddress != ""
 
 	metas := sessionMgr.ListForProfile(profileName)
 
@@ -112,13 +113,22 @@ func authStatusHandler(
 	var b strings.Builder
 	fmt.Fprintf(&b, "Auth status for profile %q\n\n", profileName)
 
-	if len(infos) == 0 {
+	switch {
+	case len(infos) == 0 && !masterSet:
+		fmt.Fprintf(&b,
+			"No sessions found — no active session for profile %q.\n\n"+
+				"This profile has no master-address, so write-as-user is unavailable and sessions "+
+				"cannot be proposed. Set master-address for the profile in profiles.toml to enable "+
+				"it (gnomcp reads the file at startup). Agent-key writes are unaffected.\n",
+			profileName,
+		)
+	case len(infos) == 0:
 		fmt.Fprintf(&b,
 			"No sessions found — no active session for profile %q.\n\n"+
 				"Use gno_session_propose to create one.\n",
 			profileName,
 		)
-	} else {
+	default:
 		for _, info := range infos {
 			fmt.Fprintf(&b, "%s %s\n", info.label, info.meta.SessionAddress)
 			fmt.Fprintf(&b, "  paths:   %s\n", strings.Join(info.meta.AllowPaths, ", "))
@@ -149,8 +159,9 @@ func authStatusHandler(
 	return server.Result{
 		Text: b.String(),
 		StructuredContent: map[string]any{
-			"profile":  profileName,
-			"sessions": sessions,
+			"profile":            profileName,
+			"master_address_set": masterSet,
+			"sessions":           sessions,
 		},
 	}, nil
 }

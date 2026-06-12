@@ -2,9 +2,14 @@
 
 `gnomcp` is the bridge between an LLM and a live blockchain. Every design decision below exists to limit blast radius.
 
-## 1. Chain-id allowlist — betanet/mainnet/staging forbidden
+## 1. Chain-id capability gate — writes confined to dev/testnet
 
-Config validation rejects any profile whose `chain-id` does not match `^(dev|test-?\d+)$`. Betanet (`gnoland1`), `staging`, and mainnet ids cannot enter the config at all. The check runs at startup, at `gnomcp profile add` time, and at `gno_profile_add` time (which additionally dials the node and refuses the add unless it reports the declared chain-id). A config that would admit mainnet fails loud; there is no override flag.
+A chain's `chain-id` determines what gnomcp may do with it:
+
+- **Write-capable** — `chain-id` matching `^(dev|test-?\d+)$` (local dev, numbered testnets). These get an agent key path and appear in the write tools' profile enums.
+- **Read-only** — any other format-safe `chain-id` (betanet `gnoland1`, `staging`, mainnet). Admitted so deployed source can be audited, but excluded from every write tool: no agent key, no faucet, no session, and `master-address` is refused at config time. Reads only.
+
+The classification is enforced at startup config validation, at `gnomcp profile add`, and at `gno_profile_add` (which additionally dials the node and refuses the add unless it reports the declared chain-id). No override turns a read-only chain writable — the write path for mainnet/betanet does not exist in code. A `chain-id` carrying shell metacharacters or whitespace is rejected outright, since it is interpolated into the commands the user pastes into a terminal.
 
 ## 2. Write authorization: agent identity (local/testnet) or chain-bound session
 
@@ -12,14 +17,14 @@ Writes sign with one of two identities — never with the user's key.
 
 **Agent identity — local and testnet.** The agent signs with its own key directly — no session required:
 
-- **Local profiles** use the built-in **test1** account (the well-known *public* test mnemonic). Structurally confined to dev chains by the chain-id allowlist.
+- **Local profiles** use the built-in **test1** account (the well-known *public* test mnemonic). Structurally confined to dev chains by the chain-id capability gate.
 - **Testnet profiles** use a key generated and persisted by `gno_key_generate`. The key is stored in `~/.local/share/gnomcp/agent-keys` (mode `0600`); when `GNOMCP_SESSION_PASSPHRASE` is set it is encrypted at rest with scrypt+AES-256-GCM.
 
-Both tiers are confined to dev/test by the chain-id allowlist (`^(dev|test-?\d+)$`); no path creates an agent key for mainnet.
+Both tiers are confined to dev/test by the chain-id capability gate (`^(dev|test-?\d+)$`); no path creates an agent key for a read-only chain (mainnet/betanet).
 
-**Session — opt-in (`identity=session`), WIP.** The session path is functional end-to-end but young and will be reworked — use with caution: keep `allow_paths` tight, `spend_limit` low, and `expires_in` short. On profiles with a `master-address` the agent acts *as the user* via a chain-bound session:
+**Session — opt-in (`identity=session`), WIP.** The session path is functional end-to-end but young and will be reworked — use with caution: keep `allow_paths` tight, `spend_limit` low, and `expires_in` short. On any writable chain the agent can act *as the user* via a chain-bound session:
 
-1. **Profile has a `master-address` (g1...).** Without it the session write path is unavailable for that profile.
+1. **Master account.** The session binds to the user's account. It comes from the profile's `master-address`, or — for a writable profile without one — from a `master_address` the user supplies at `gno_session_propose` time. That value is a **public** bech32 address (no key material); `gno_session_propose` validates it and **rejects seed-phrase-shaped input without echoing it**, so a mnemonic cannot be pasted by mistake. The master is stored on the session record, not persisted to `profiles.toml`. A wrong address cannot move funds — the user's gnokey is still the only authorization (step 2).
 2. **User-authorized session.** `gno_session_propose` generates an ephemeral ed25519 keypair and emits a paste-ready `gnokey maketx session create` command. The user runs it; their `gnokey` signs the authorization. gnomcp never sees the user's key or mnemonic.
 
 The session carries an explicit scope: `allow_paths`, `allow_run`, `spend_limit`, and `expires_in`, enforced on every call before broadcast.
@@ -72,7 +77,7 @@ Errors are JSON-encoded payloads with `code`, `message`, and (where useful) extr
 
 | Code | Trigger |
 |---|---|
-| `chain_forbidden` | A mainnet/betanet/staging chain-id was rejected (config, gno_connect, or gno_profile_add) |
+| `chain_id_malformed` | A chain-id carrying shell metacharacters/whitespace was rejected (gno_connect or gno_profile_add) |
 | `authentication_required` | A session-signed write was attempted with no active session |
 | `scope_mismatch` | The call's realm is not covered by any active session's `allow_paths` |
 | `insufficient_funds` | The agent's testnet account is unfunded (run `gno_faucet_fund`) |

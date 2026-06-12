@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -36,6 +37,52 @@ import (
 // version is overridden at release time via -ldflags "-X main.version=...";
 // dev builds report "dev".
 var version = "dev"
+
+// serverInstructions is the MCP initialize-time guidance: cross-tool flows the
+// per-tool descriptions can't express (tool descriptions cover one tool each).
+const serverInstructions = "gnomcp exposes Gno chain operations over MCP. The indexer and faucet tools register only when a profile provides them (tx-indexer-url / a testnet); the rest are always available. Typical flows:\n" +
+	"- IDENTITY: private keys and mnemonics never enter the conversation — that is the design. The agent key signs agent writes; writing AS the user goes through an authorization session the user approves with their own gnokey (gno_session_propose). If a task looks like it needs the user's key, check gno_auth_status and gno_session_propose first; never ask the user to share, paste, or import key material.\n" +
+	"- DISCOVER: when the user names an app or realm without its full path, enumerate the chain — gno_packages (path prefix or @namespace), or gno_list where an indexer is configured — instead of guessing package paths or asking the user for something the chain can answer.\n" +
+	"- READ: gno_read (default = structural outline; symbols=[...] for specific declarations; full=true for raw source) plus gno_render / gno_eval (rendered output / on-chain values). The outline is navigation, not evidence — audit-grade review reads whole files.\n" +
+	"- WRITE on testnet: gno_key_generate (once) -> gno_faucet_fund (fund the agent key) -> gno_call / gno_run / gno_addpkg. An unfunded write returns insufficient_funds pointing at gno_faucet_fund.\n" +
+	"- WRITE as the user (any WRITABLE chain): gno_session_propose -> the user runs the printed gnokey command to authorize -> retry the write with identity=session. The session needs the user's master account: if the profile has a master-address it is used; if it has none, gno_session_propose requires master_address — ASK the user for their PUBLIC address (g1..., the public one, NOT a key or seed phrase) and pass it. Do NOT tell the user to edit profiles.toml or restart — that friction is gone. gno_auth_status / gno_session_revoke inspect and revoke sessions. Sessions cover gno_call and gno_run ONLY — gno_addpkg (deploy) is not session-supported and always signs with the agent key; deploying under the USER's own address means the user runs `gnokey maketx addpkg` themselves. The session path is WIP — prefer tight allow_paths, a low spend_limit, and a short expires_in.\n" +
+	"- A GNOWEB URL NAMES A CHAIN: a gnoweb URL (e.g. https://gno.land/r/gnoland/blog) is authoritative for WHICH chain to use — resolve it from the URL with gno_profile_add (gnoweb_url=...) before reading, never on whatever profile is ambient. gno_profile_add discovers, verifies, and adds in one call (in-memory, gone on restart); gno_connect previews without adding. dev/testnets are write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is added READ-ONLY (read tools only), which is all an audit needs. " +
+	"To persist: run the returned persist_command and restart gnomcp. Writable dynamic profiles support reads and agent-key writes; sessions need a persisted profile with master-address.\n" +
+	"- RECOVER: tool errors carry their own repair instructions. When the user's request already authorizes the repair (e.g. they asked you to set up write access and the error says to add a master-address), perform it yourself — edit the config, fund the key, retry — and report what you changed; hand instructions back only for steps that genuinely need the user (running gnokey, restarting the MCP client).\n" +
+	"Always report which identity signed a write (the agent key vs a session) so it is never ambiguous."
+
+// buildServerInstructions appends the configured profiles to the static
+// guidance so the agent knows which chains it can target — and which are
+// write-as-user capable — without having to call a tool first. This lists what
+// EXISTS, not what is reachable; gno_status checks liveness. Profiles are
+// sorted by name so the instructions (and the prompt cache) are stable across
+// restarts.
+func buildServerInstructions(profs map[string]profiles.Profile) string {
+	var b strings.Builder
+	b.WriteString(serverInstructions)
+	b.WriteString("\nProfiles configured at startup (target one with the `profile` arg; this is what exists, not what is reachable — gno_status checks liveness):\n")
+
+	names := make([]string, 0, len(profs))
+	for name := range profs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		p := profs[name]
+		fmt.Fprintf(&b, "- %s: chain-id %s, rpc %s (%s)", name, p.ChainID, p.RPCURL, p.Kind())
+		if p.GnowebURL != "" {
+			fmt.Fprintf(&b, ", realms viewable at %s/<path>", p.GnowebURL)
+		}
+		if p.MasterAddress != "" {
+			b.WriteString(" — write-as-user enabled (master-address set)")
+		}
+		if p.IsReadOnly() {
+			b.WriteString(" — read-only (read tools only; no agent key, faucet, or writes)")
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
 
 func main() {
 	if len(os.Args) > 1 {
@@ -100,18 +147,11 @@ func main() {
 	ks := keystore.New(defaultAgentKeysPath(), passphrase)
 
 	// ---- build MCP SDK server
-	instructions := "gnomcp exposes Gno chain operations over MCP. The indexer and faucet tools register only when a profile provides them (tx-indexer-url / a testnet); the rest are always available. Typical flows:\n" +
-		"- READ: gno_read (default = structural outline; symbols=[...] for specific declarations; full=true for raw source) plus gno_render / gno_eval (rendered output / on-chain values). The outline is navigation, not evidence — audit-grade review reads whole files.\n" +
-		"- WRITE on testnet: gno_key_generate (once) -> gno_faucet_fund (fund the agent key) -> gno_call / gno_run / gno_addpkg. An unfunded write returns insufficient_funds pointing at gno_faucet_fund.\n" +
-		"- WRITE as the user (any chain with a master-address): gno_session_propose -> the user runs the printed gnokey command to authorize -> retry the write with identity=session. gno_auth_status / gno_session_revoke inspect and revoke sessions. The session path is WIP — prefer tight allow_paths, a low spend_limit, and a short expires_in.\n" +
-		"- New chain (this session): gno_profile_add with gnoweb_url discovers, verifies, and adds in one call (in-memory, gone on restart; dev/testnets only) — or gno_connect first to preview without adding. " +
-		"To persist: run the returned persist_command and restart gnomcp. Dynamic profiles support reads and agent-key writes; sessions need a persisted profile with master-address.\n" +
-		"Always report which identity signed a write (the agent key vs a session) so it is never ambiguous."
 	mcpServer := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "gnomcp",
 		Version: version,
 	}, &mcpsdk.ServerOptions{
-		Instructions: instructions,
+		Instructions: buildServerInstructions(cfg.Profiles),
 	})
 
 	// ---- register + publish tools

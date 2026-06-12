@@ -17,6 +17,7 @@ type Profile struct {
 	RPCURL       string `toml:"rpc-url"`
 	ChainID      string `toml:"chain-id"`
 	TxIndexerURL string `toml:"tx-indexer-url"`
+	GnowebURL    string `toml:"gnoweb-url"` // optional; the gnoweb frontend where this chain's realms are viewable (e.g. https://gno.land). Display only — gnomcp reads state via RPC, not gnoweb.
 
 	// Faucet settings (optional; testnet only). FaucetServiceURL points at an
 	// automatic agent-faucet service (tier 2); FaucetURL at a human faucet page
@@ -31,21 +32,32 @@ type Profile struct {
 	BypassHardLimits  bool   `toml:"bypass-hard-limits"`  // default false; disables per-chain clamps
 }
 
-// IsLocal reports whether the profile targets a local dev node. The chain-id
-// allowlist admits exactly two classes: "dev" (local) and "test*" (testnet),
-// so locality is derived — never configured.
+// IsLocal reports whether the profile targets a local dev node. Locality is
+// derived from chain-id, never configured.
 func (p Profile) IsLocal() bool { return p.ChainID == "dev" }
 
-// IsTestnet reports whether the profile targets a testnet.
-func (p Profile) IsTestnet() bool { return !p.IsLocal() }
+// IsTestnet reports whether the profile targets a write-capable testnet (a
+// numbered "testNN" chain). Read-only chains (mainnet/betanet) are NOT testnets:
+// they have no agent key path and no faucet.
+func (p Profile) IsTestnet() bool { return ChainIDWritable(p.ChainID) && !p.IsLocal() }
 
-// Kind returns "local" or "testnet" for display (signed-by lines, clamp
-// warnings).
+// IsReadOnly reports whether the profile targets a non-write-capable chain
+// (anything other than dev or a numbered testnet, e.g. betanet "gnoland1").
+// Read-only profiles are readable via the read tools but excluded from every
+// write tool's profile enum.
+func (p Profile) IsReadOnly() bool { return !ChainIDWritable(p.ChainID) }
+
+// Kind returns "local", "testnet", or "read-only" for display (signed-by lines,
+// clamp warnings, startup instructions).
 func (p Profile) Kind() string {
-	if p.IsLocal() {
+	switch {
+	case p.IsLocal():
 		return "local"
+	case p.IsReadOnly():
+		return "read-only"
+	default:
+		return "testnet"
 	}
-	return "testnet"
 }
 
 // Config is the root of profiles.toml.

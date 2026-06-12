@@ -1,7 +1,7 @@
 # r/test/other
 
-Minimal ping realm used by the gnomcp e2e protocol.
+Minimal ping realm used by the gnomcp e2e harness.
 
 Exports one function: `Ping() string` — returns `"pong"`.
-Used in Checks 8 and 9 (scope mismatch and multi-session coexistence).
-Deploy with setup.sh before running PROTOCOL.md.
+A second realm for scope-mismatch / multi-session checks. Seeded into the simnet
+(and the integration node) at genesis — no manual deploy.

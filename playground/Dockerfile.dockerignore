@@ -1,0 +1,9 @@
+.git
+bin/
+*.test
+*.out
+.DS_Store
+.mynote/
+.worktrees/
+playground/.env*
+**/node_modules/

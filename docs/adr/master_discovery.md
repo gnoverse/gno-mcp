@@ -1,6 +1,6 @@
 # Master Address Discovery
 
-**Status: deferred. Profiles carry an explicit `master-address`; automatic discovery is parked.**
+**Status: deferred (automatic on-chain discovery), but partially realized — a writable profile without a `master-address` now accepts a user-supplied PUBLIC `master_address` at `gno_session_propose` time, stored on the session record. See the note under Decision.**
 
 ## Context
 
@@ -17,6 +17,8 @@ What changed since the original design:
 - **The agent identity removed the zero-config pressure.** Writes work out of the box via the MCP-owned agent key (separate ADR); sessions are now the deliberate "act as the user" grant, where a one-time config edit is an acceptable ceremony.
 - **The chain emits no `MsgCreateSession` events** (verified 2026-05-21), ruling out the cleaner event-subscription variants and leaving only the Send-with-memo dance or indexer-dependent searches.
 - The Send-with-memo flow adds a second user action per session and a protocol-significant memo string — real complexity for a problem the config field already solves.
+
+> **Update — per-propose `master_address`.** A writable profile that has no `master-address` no longer dead-ends: `gno_session_propose` accepts a `master_address` parameter (the user's PUBLIC g1… address), stored on the session record and used as `MsgCall.Caller` for that session. This is distinct from the rejected **per-call** `master_address` below: it is supplied **once** at propose time (not on every write), the value is public (not key material), and the tool rejects seed-phrase-shaped input without echoing it. It removes the edit-`profiles.toml`-and-restart ceremony for first-time sessions while keeping the user's gnokey as the sole authorization. On-chain *automatic* discovery remains parked; the user still states their address explicitly.
 
 ## Alternatives considered
 

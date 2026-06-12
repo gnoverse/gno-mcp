@@ -120,7 +120,8 @@ func TestRegisterAllTools_gateFlipSummonsTools(t *testing.T) {
 
 	render, ok := s.Registry().Get("gno_render")
 	require.True(t, ok)
-	assert.Contains(t, profileEnumOf(t, render), "dyn13", "read-tool profile enum must be regenerated")
+	assert.True(t, profileIsFreeString(t, render),
+		"read-tool profile must be a free-form string (no enum) so a dynamically added profile is usable without a schema refetch")
 }
 
 func TestRegisterAllTools_registersChainInfoTools(t *testing.T) {
@@ -143,6 +144,21 @@ func profileEnumOf(t *testing.T, tool *server.Tool) []string {
 	enum, ok := prof["enum"].([]string)
 	require.True(t, ok, "tool %s: profile enum is %T", tool.Name, props["profile"])
 	return enum
+}
+
+// profileIsFreeString reports whether the tool's profile arg is a free-form
+// string: type "string" with no "enum" constraint. Read tools use this so any
+// configured profile — including one added at runtime via gno_profile_add — is
+// accepted without the client refetching a regenerated enum.
+func profileIsFreeString(t *testing.T, tool *server.Tool) bool {
+	t.Helper()
+	props, ok := tool.InputSchema["properties"].(map[string]any)
+	require.True(t, ok, "tool %s: schema has no properties", tool.Name)
+	prof, ok := props["profile"].(map[string]any)
+	require.True(t, ok, "tool %s: no profile property", tool.Name)
+	require.Equal(t, "string", prof["type"], "tool %s: profile must be type string", tool.Name)
+	_, hasEnum := prof["enum"]
+	return !hasEnum
 }
 
 // ---- in-process MCP end-to-end
@@ -190,7 +206,8 @@ func TestDynamicProfileAdd_endToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, wireToolNames(list1), "gno_faucet_fund", "faucet tool must be absent on a local-only config")
 	require.Contains(t, wireToolNames(list1), "gno_profile_add")
-	require.NotContains(t, wireProfileEnum(t, list1, "gno_render"), "dyn13")
+	require.False(t, wireProfileHasEnum(t, list1, "gno_render"), "read tools expose a free-form profile (no enum) over the wire")
+	require.NotContains(t, wireProfileEnum(t, list1, "gno_call"), "dyn13", "write-tool enum must not list the profile before it is added")
 
 	res, err := cs.CallTool(ctx, &mcpsdk.CallToolParams{Name: "gno_profile_add", Arguments: map[string]any{
 		"name": "dyn13", "rpc_url": "https://rpc.example", "chain_id": "test-13",
@@ -207,7 +224,8 @@ func TestDynamicProfileAdd_endToEnd(t *testing.T) {
 	list2, err := cs.ListTools(ctx, nil)
 	require.NoError(t, err)
 	assert.Contains(t, wireToolNames(list2), "gno_faucet_fund", "testnet gate must summon the faucet tool mid-session")
-	assert.Contains(t, wireProfileEnum(t, list2, "gno_render"), "dyn13", "published enum must include the dynamic profile")
+	assert.False(t, wireProfileHasEnum(t, list2, "gno_render"), "read tools stay free-form (no enum) after a dynamic add")
+	assert.Contains(t, wireProfileEnum(t, list2, "gno_call"), "dyn13", "write-tool enum must regenerate to include the dynamic profile")
 
 	rr, err := cs.CallTool(ctx, &mcpsdk.CallToolParams{Name: "gno_render", Arguments: map[string]any{
 		"realm": "gno.land/r/demo/home", "profile": "dyn13",
@@ -249,6 +267,30 @@ func wireProfileEnum(t *testing.T, l *mcpsdk.ListToolsResult, name string) []str
 	}
 	t.Fatalf("tool %q not in wire list", name)
 	return nil
+}
+
+// wireProfileHasEnum reports whether the named tool's profile arg carries an
+// "enum" constraint in its published (JSON-round-tripped) schema. Read tools
+// publish a free-form string (no enum); write tools publish a filtered enum.
+func wireProfileHasEnum(t *testing.T, l *mcpsdk.ListToolsResult, name string) bool {
+	t.Helper()
+	for _, tl := range l.Tools {
+		if tl.Name != name {
+			continue
+		}
+		b, err := json.Marshal(tl.InputSchema)
+		require.NoError(t, err)
+		var schema struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		}
+		require.NoError(t, json.Unmarshal(b, &schema))
+		var prof map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(schema.Properties["profile"], &prof))
+		_, has := prof["enum"]
+		return has
+	}
+	t.Fatalf("tool %q not in wire list", name)
+	return false
 }
 
 func wireText(res *mcpsdk.CallToolResult) string {

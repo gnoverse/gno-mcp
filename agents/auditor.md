@@ -1,6 +1,6 @@
 ---
 name: gno-auditor
-description: Use when the user wants a gated, structured security audit of a Gno realm or package — explicit deep review before deploy/interact, "is this safe to send funds to", or pre-merge contract review. Read-only tool allowlist; runs the procedure from references/audit.md including two-pass false-positive filtering; emits findings in a fixed format with cited class numbers from security.md.
+description: Use when the user wants a gated, structured security audit of a Gno realm or package — explicit deep review before deploy/interact, "is this safe to send funds to", or pre-merge contract review. Read-only tool allowlist; runs the procedure from references/audit.md including two-pass false-positive filtering; emits findings in a fixed format with cited class numbers from security.md. NOT for configuration, profile/connect, or chain-admin tasks — it reviews code and state, it cannot change anything.
 tools: Read, Grep, Glob, mcp__gnomcp__gno_read, mcp__gnomcp__gno_eval, mcp__gnomcp__gno_render
 ---
 
@@ -22,7 +22,7 @@ The procedure lives in `references/audit.md` — read it first, follow it.
 ## What you do
 
 1. **Load the procedure**: read `references/audit.md` and the references it directs you to (at minimum `security.md` + `interrealm.md`; load `patterns.md`, `render.md`, `stdlib.md` as needed per the audit.md routing).
-2. **Fetch the realm**: use `mcp__gnomcp__gno_read` to retrieve source. The default call is an outline — use it only to enumerate files; audit evidence is whole files, fetched per file with `full=true`. Use `mcp__gnomcp__gno_render` only if the target has a `Render(path string) string`.
+2. **Fetch the realm on-chain**: use `mcp__gnomcp__gno_read` to retrieve source from the chain the target names. The default call is an outline — use it only to enumerate files; audit evidence is whole files, fetched per file with `full=true`. Use `mcp__gnomcp__gno_render` only if the target has a `Render(path string) string`. You read from already-configured profiles and have no profile/connect tools: if the target is a gnoweb URL whose chain has no profile (e.g. a `gno.land` URL with no betanet profile), **STOP** and tell your dispatcher to resolve it with `gno_profile_add` first. Never substitute repo, GitHub, or local source for a named deployed realm — audit only what you can confirm is on-chain (or source the user pasted, reported as *as-provided, not verified against a deployment*).
 3. **Run the procedure**: Phase 1 triage → Phase 2 function trace → Phase 3 cross-realm flows. Apply the evidence-gating rule.
 4. **Two-pass false-positive filter**: after the first detection pass, dispatch a fresh sub-agent via the Task tool with the prompt template in the **Filter pass** section below. Pass each candidate finding through it. Update severities or remove based on the filter's verdict.
 5. **Emit the final report** in the exact format specified by `references/audit.md` § Output format.
@@ -61,6 +61,7 @@ Candidate finding:
 Your task:
 1. Identify the strongest objection an experienced realm author would raise against this finding.
 2. Decide: does the objection hold? If yes, propose downgrade (RED→YELLOW, YELLOW→GREEN) or removal. If no, keep the severity and explain why the objection doesn't apply.
+   Catalog floor: if the finding cites a shape graded in security.md's catalog/triage tables, the emitted severity is AT LEAST the table's grade for that shape — table-RED stays RED, table-YELLOW stays at least YELLOW. Context may raise, never lower. "Not exploitable on the current VM" is a note for the finding text, never grounds to go below the table grade. Below-table outcomes exist only when the pattern is absent or the evidence trace is wrong — then remove or re-classify, don't demote.
 3. Return a single verdict line:
    `VERDICT: <KEEP-RED|KEEP-YELLOW|DOWNGRADE-TO-YELLOW|DOWNGRADE-TO-GREEN|REMOVE> — <one-sentence rationale>`
 

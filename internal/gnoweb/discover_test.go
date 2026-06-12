@@ -64,3 +64,37 @@ func TestDiscover_AttributeOrderIndependent(t *testing.T) {
 	assert.NotEmpty(t, got.RPC, "reversed-order parse failed: %+v", got)
 	assert.Equal(t, "test11", got.ChainID, "reversed-order parse failed: %+v", got)
 }
+
+func TestDiscover_404WithMetaTags(t *testing.T) {
+	// gnoweb embeds gnoconnect meta-tags on every page it serves, including its
+	// 404 error page. A fresh chain's root URL returns 404 (gnoweb redirects /
+	// to /r/gnoland/home, which is undeployed on fresh chains). Discover must
+	// parse the body regardless of HTTP status and succeed when both tags are found.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`<html><head>
+<meta name="gnoconnect:rpc" content="https://rpc.test11.testnets.gno.land" />
+<meta name="gnoconnect:chainid" content="test11" />
+</head><body><h1>404 Not Found</h1></body></html>`))
+	}))
+	defer srv.Close()
+
+	got, err := Discover(srv.Client(), srv.URL)
+	require.NoError(t, err, "discover must succeed when gnoconnect tags are present even on a 404 page")
+	assert.Equal(t, "https://rpc.test11.testnets.gno.land", got.RPC)
+	assert.Equal(t, "test11", got.ChainID)
+}
+
+func TestDiscover_404WithoutMetaTags(t *testing.T) {
+	// A non-2xx response with no gnoconnect tags should still error, and the
+	// error message should include the HTTP status so the caller can diagnose.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`<html><head><title>not gnoweb</title></head></html>`))
+	}))
+	defer srv.Close()
+
+	_, err := Discover(srv.Client(), srv.URL)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "404", "error for a tagless non-2xx response must include the HTTP status")
+}

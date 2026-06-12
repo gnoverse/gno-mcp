@@ -15,3 +15,8 @@ go.work.sum
 profiles.toml
 audit.jsonl
 .worktrees/
+
+# playground/.claude ships the e2e driver skill + agent (dev tooling deliverables);
+# re-include it over machine-global ".claude" ignores, keeping local settings out.
+!playground/.claude/
+playground/.claude/settings.local.json

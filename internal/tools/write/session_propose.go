@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gnolang/gno/tm2/pkg/crypto"
+
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
 )
@@ -18,7 +20,10 @@ func RegisterSessionPropose(s *server.Server, sessionMgr *session.Manager) {
 		Description: "Proposes a new chain-bounded session for the given profile by generating " +
 			"an ephemeral session keypair locally and emitting the gnokey command the user must " +
 			"run to authorize it. Use when an agent needs to perform a write but no active session " +
-			"covers the target realm or MsgRun. Returns the proposed scope, the bech32 session " +
+			"covers the target realm or MsgRun. Scope covers gno_call (allow_paths) and gno_run " +
+			"(allow_run) ONLY — gno_addpkg/deploy is not session-authorizable and always signs with " +
+			"the agent key, so deploying under the user's own address means the user runs gnokey. " +
+			"Returns the proposed scope, the bech32 session " +
 			"address, and a copy-paste-ready gnokey command. Does NOT broadcast anything — the " +
 			"user's gnokey signs the MsgCreateSession from their own machine. Required: profile, " +
 			"plus at least one of allow_paths (non-empty array of realm paths) or allow_run=true. " +
@@ -68,12 +73,33 @@ func sessionProposeHandler(
 		return server.Result{}, err
 	}
 
-	if profile.MasterAddress == "" {
+	userMaster, err := server.StringArg(args, "master_address")
+	if err != nil {
+		return server.Result{}, err
+	}
+
+	// The session binds to a master account (the chain sets MsgCall.Caller to it).
+	// It comes from the profile's master-address, or — for a writable profile that
+	// has none — from a PUBLIC address the user supplies here (no file edit, no
+	// restart). The address is stored on the session record, so it persists with
+	// the session regardless of the profile.
+	master := profile.MasterAddress
+	if userMaster != "" {
+		if verr := validateUserMasterAddress(userMaster); verr != nil {
+			return server.Result{}, &server.ToolError{
+				Code:    "invalid_master_address",
+				Message: verr.Error(),
+				Extra:   map[string]any{"profile": profileName},
+			}
+		}
+		master = userMaster
+	}
+	if master == "" {
 		return server.Result{}, &server.ToolError{
 			Code: "no_master_address",
 			Message: fmt.Sprintf(
-				"profile %q has no master-address, so it is read-only — set master-address (g1...) for this profile to enable writes (edit profiles.toml or run: gnomcp profile add %s --rpc %s --chain-id %s --master <g1...>)",
-				profileName, profileName, profile.RPCURL, profile.ChainID,
+				"profile %q has no master-address — pass master_address (your PUBLIC g1... address, NOT a private key or seed phrase) so the session can act as you; or set master-address in profiles.toml",
+				profileName,
 			),
 			Extra: map[string]any{"profile": profileName},
 		}
@@ -95,7 +121,7 @@ func sessionProposeHandler(
 		return server.Result{}, fmt.Errorf("gno_session_propose: generate keypair: %w", err)
 	}
 
-	if _, err := sessionMgr.AddPending(profileName, kp, scope, profile.MasterAddress); err != nil {
+	if _, err := sessionMgr.AddPending(profileName, kp, scope, master); err != nil {
 		return server.Result{}, fmt.Errorf("gno_session_propose: persist pending session: %w", err)
 	}
 
@@ -145,6 +171,21 @@ func sessionProposeHandler(
 	}, nil
 }
 
+// validateUserMasterAddress guards a user-supplied master_address: it must be a
+// PUBLIC bech32 address, never key material. A seed phrase is whitespace-
+// separated words, so anything containing whitespace is rejected WITHOUT echoing
+// it back (a mnemonic must never re-enter the conversation or logs). The bech32
+// case likewise does not echo the value, which could be a malformed key.
+func validateUserMasterAddress(s string) error {
+	if strings.ContainsAny(s, " \t\r\n") {
+		return fmt.Errorf("that looks like a seed phrase, not an address — paste ONLY your PUBLIC g1... address (one token, no spaces); never a private key or seed phrase")
+	}
+	if _, err := crypto.AddressFromBech32(s); err != nil {
+		return fmt.Errorf("invalid master_address: want your PUBLIC bech32 address (starts with g1), not a private key or seed phrase")
+	}
+	return nil
+}
+
 func sessionProposeInputSchema(s *server.Server) map[string]any {
 	props := map[string]any{
 		"allow_paths": map[string]any{
@@ -165,6 +206,12 @@ func sessionProposeInputSchema(s *server.Server) map[string]any {
 		"expires_in": map[string]any{
 			"type":        "string",
 			"description": "Session lifetime as a Go duration string (e.g. \"24h\"). Optional; profile default used if omitted; clamped to the per-chain hard limit.",
+		},
+		"master_address": map[string]any{
+			"type": "string",
+			"description": "The user's PUBLIC account address — bech32, starts with g1 (e.g. \"g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5\"). " +
+				"Required when the target (writable testnet/local) profile has no master-address; the session binds to this account. " +
+				"It is PUBLIC and safe to share — NEVER a private key or seed phrase. Ask the user for it with that distinction made explicit; do not edit profiles.toml on their behalf.",
 		},
 	}
 	var required []string

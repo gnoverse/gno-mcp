@@ -63,7 +63,10 @@ func renderHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 		if path != "" {
 			source += "/" + path
 		}
-		text, _ := budget.Wrapped(body, gnowebURL, "render", source)
+		// A render is an explicit, path-targeted request; budget it like a named
+		// full-file read (ExplicitBudget), not a 4KB broad sweep — a normal gnoweb
+		// page is several KB and should not be omitted.
+		text, _ := budget.WrappedAt(body, gnowebURL, "render", source, budget.ExplicitBudget)
 		return server.Result{Text: text}, nil
 	}
 }

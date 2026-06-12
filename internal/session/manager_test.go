@@ -73,7 +73,7 @@ func TestManager_pickPicksMostRecentMatching(t *testing.T) {
 	m.insertStateLocked("p", unrelated, StateActive)
 	m.mu.Unlock()
 
-	signer, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
+	signer, _, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
 	require.NoError(t, err, "PickSessionForProfile")
 	assert.Equal(t, "g1newer", signer.Address(), "should pick most recent matching session")
 }
@@ -86,7 +86,7 @@ func TestManager_pickSkipsExpired(t *testing.T) {
 	m.insertStateLocked("p", expired, StateActive)
 	m.mu.Unlock()
 
-	_, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
+	_, _, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
 	require.Error(t, err, "expected error for expired session")
 	require.ErrorIs(t, err, ErrNoActiveSession)
 }
@@ -99,7 +99,7 @@ func TestManager_pickSkipsZeroSpend(t *testing.T) {
 	m.insertStateLocked("p", broke, StateActive)
 	m.mu.Unlock()
 
-	_, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
+	_, _, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
 	require.Error(t, err, "expected error for zero-spend session")
 }
 
@@ -110,7 +110,7 @@ func TestManager_pickReturnsErrScopeMismatch(t *testing.T) {
 	m.insertStateLocked("p", blog, StateActive)
 	m.mu.Unlock()
 
-	_, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/forum")
+	_, _, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/forum")
 	require.Error(t, err, "expected *ErrScopeMismatch")
 
 	var mismatch *ErrScopeMismatch
@@ -121,7 +121,7 @@ func TestManager_pickReturnsErrScopeMismatch(t *testing.T) {
 
 func TestManager_pickReturnsErrNoActiveSession(t *testing.T) {
 	m := newTestManager(t)
-	_, err := m.PickSessionForProfile(context.Background(), nullResolver(), "empty-profile", "gno.land/r/test/blog")
+	_, _, err := m.PickSessionForProfile(context.Background(), nullResolver(), "empty-profile", "gno.land/r/test/blog")
 	require.ErrorIs(t, err, ErrNoActiveSession)
 }
 
@@ -146,7 +146,7 @@ func TestManager_pickActivatesPendingFromChain(t *testing.T) {
 		SpendRemaining: "500000ugnot",
 		ExpiresAt:      time.Now().Add(time.Hour).Unix(),
 	})
-	signer, err := m.PickSessionForProfile(context.Background(), resolverFor(fake), "testnet", "gno.land/r/test/blog")
+	signer, _, err := m.PickSessionForProfile(context.Background(), resolverFor(fake), "testnet", "gno.land/r/test/blog")
 	require.NoError(t, err, "PickSessionForProfile after chain activation")
 	assert.Equal(t, meta.SessionAddress, signer.Address())
 }
@@ -231,7 +231,7 @@ func TestManager_concurrentAddPickNoRace(t *testing.T) {
 				AllowPaths: []string{"gno.land/r/test/blog"},
 			}
 			_, _ = m.AddPending("p", kp, scope, "g1master")
-			_, _ = m.PickSessionForProfile(context.Background(), resolver, "p", "gno.land/r/test/blog")
+			_, _, _ = m.PickSessionForProfile(context.Background(), resolver, "p", "gno.land/r/test/blog")
 		}()
 	}
 	wg.Wait()
@@ -244,7 +244,7 @@ func TestManager_pickAnyActiveSessionWithEmptyRealm(t *testing.T) {
 	m.insertStateLocked("p", s1, StateActive)
 	m.mu.Unlock()
 
-	signer, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "")
+	signer, _, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "")
 	require.NoError(t, err, "expected success with empty realm wildcard")
 	assert.Equal(t, "g1one", signer.Address())
 }
@@ -268,7 +268,7 @@ func TestManager_pickForRun_skipsSessionWithoutAllowRun(t *testing.T) {
 	m.insertStateLocked("p", noRun, StateActive)
 	m.mu.Unlock()
 
-	_, err := m.PickSessionForRun(context.Background(), nullResolver(), "p")
+	_, _, err := m.PickSessionForRun(context.Background(), nullResolver(), "p")
 	require.Error(t, err, "expected error when no session has AllowRun=true")
 
 	var mismatch *ErrScopeMismatch
@@ -284,14 +284,14 @@ func TestManager_pickForRun_returnsSessionWithAllowRun(t *testing.T) {
 	m.insertStateLocked("p", withRun, StateActive)
 	m.mu.Unlock()
 
-	signer, err := m.PickSessionForRun(context.Background(), nullResolver(), "p")
+	signer, _, err := m.PickSessionForRun(context.Background(), nullResolver(), "p")
 	require.NoError(t, err, "PickSessionForRun")
 	assert.Equal(t, "g1run", signer.Address())
 }
 
 func TestManager_pickForRun_emptyProfileReturnsNoActiveSession(t *testing.T) {
 	m := newTestManager(t)
-	_, err := m.PickSessionForRun(context.Background(), nullResolver(), "empty")
+	_, _, err := m.PickSessionForRun(context.Background(), nullResolver(), "empty")
 	require.ErrorIs(t, err, ErrNoActiveSession)
 }
 
@@ -304,12 +304,12 @@ func TestManager_sessionWithBothAllowPathsAndRun_pickedByEither(t *testing.T) {
 	m.mu.Unlock()
 
 	// Realm-based pick works.
-	signer, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
+	signer, _, err := m.PickSessionForProfile(context.Background(), nullResolver(), "p", "gno.land/r/test/blog")
 	require.NoError(t, err, "PickSessionForProfile")
 	assert.Equal(t, "g1both", signer.Address(), "PickSessionForProfile")
 
 	// Run pick works.
-	signer, err = m.PickSessionForRun(context.Background(), nullResolver(), "p")
+	signer, _, err = m.PickSessionForRun(context.Background(), nullResolver(), "p")
 	require.NoError(t, err, "PickSessionForRun")
 	assert.Equal(t, "g1both", signer.Address(), "PickSessionForRun")
 }
@@ -335,7 +335,7 @@ func TestManager_pickForRun_activatesPendingFromChainWithAllowRun(t *testing.T) 
 		SpendRemaining: "500000ugnot",
 		ExpiresAt:      time.Now().Add(time.Hour).Unix(),
 	})
-	signer, err := m.PickSessionForRun(context.Background(), resolverFor(fake), "testnet")
+	signer, _, err := m.PickSessionForRun(context.Background(), resolverFor(fake), "testnet")
 	require.NoError(t, err, "PickSessionForRun after chain activation")
 	assert.Equal(t, meta.SessionAddress, signer.Address())
 }

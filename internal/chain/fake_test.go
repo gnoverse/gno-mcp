@@ -86,14 +86,14 @@ func TestFake_Call_returnsSeededResult(t *testing.T) {
 	want := CallResult{TxHash: "0xabc", Result: "ok"}
 	f.SetCallAsUser("gno.land/r/x", "Foo", []string{"hi"}, want)
 
-	got, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, false)
+	got, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, "", false)
 	require.NoError(t, err, "CallAsUser")
 	assert.Equal(t, want, got)
 }
 
 func TestFake_Call_unseededReturnsError(t *testing.T) {
 	f := NewFake()
-	_, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Bar", nil, false)
+	_, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Bar", nil, "", false)
 	require.Error(t, err, "expected error for unseeded call")
 	assert.True(t, strings.Contains(err.Error(), "fake: no call"), "error should mention 'fake: no call', got: %v", err)
 }
@@ -102,7 +102,7 @@ func TestFake_Call_simulateReturnsSeededWithSimulatedTrue(t *testing.T) {
 	f := NewFake()
 	f.SetCallAsUser("gno.land/r/x", "Foo", []string{"hi"}, CallResult{TxHash: "0xabc", Result: "ok", Simulated: false})
 
-	got, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, true)
+	got, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, "", true)
 	require.NoError(t, err, "CallAsUser")
 	assert.True(t, got.Simulated, "expected Simulated=true when simulate=true")
 	assert.Equal(t, "0xabc", got.TxHash)
@@ -113,7 +113,7 @@ func TestFake_Call_setCallErrorTakesPriority(t *testing.T) {
 	f.SetCallAsUser("gno.land/r/x", "Foo", []string{}, CallResult{TxHash: "0xok"})
 	f.SetCallAsUserError("gno.land/r/x", "Foo", ErrSimulateUnsupported)
 
-	_, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{}, true)
+	_, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{}, "", true)
 	require.Error(t, err, "expected error from SetCallAsUserError")
 	assert.True(t, errors.Is(err, ErrSimulateUnsupported), "error = %v, want ErrSimulateUnsupported", err)
 }

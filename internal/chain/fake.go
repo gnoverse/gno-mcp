@@ -35,6 +35,8 @@ type Fake struct {
 	agentRuns       map[string]RunResult
 	addPkgs         map[string]AddPackageResult
 	lastAddPkgFiles map[string][]*std.MemFile // key: deployPath; set on every AddPackage call
+	lastSend        string                    // send arg of the most recent Call/CallAsUser
+	lastAsUserMstr  string                    // master arg of the most recent CallAsUser/RunAsUser
 }
 
 func NewFake() *Fake {
@@ -117,10 +119,11 @@ func (f *Fake) Doc(_ context.Context, realm string) (string, error) {
 	return v, nil
 }
 
-// CallAsUser ignores master; the in-memory map is keyed by (realm, fn, args) only.
-// Tools tests don't assert on master because Fake is meant for tool-layer
-// integration where master plumbing is exercised separately.
-func (f *Fake) CallAsUser(_ context.Context, _ Signer, _, realm, fn string, args []string, simulate bool) (CallResult, error) {
+// CallAsUser records the master (so tool tests can assert it is sourced from the
+// session, not the profile); the result map is keyed by (realm, fn, args) only.
+func (f *Fake) CallAsUser(_ context.Context, _ Signer, master, realm, fn string, args []string, send string, simulate bool) (CallResult, error) {
+	f.lastSend = send
+	f.lastAsUserMstr = master
 	if err, ok := f.callErrors[callKey(realm, fn, nil)]; ok {
 		return CallResult{}, err
 	}
@@ -134,8 +137,9 @@ func (f *Fake) CallAsUser(_ context.Context, _ Signer, _, realm, fn string, args
 	return r, nil
 }
 
-// RunAsUser ignores master; the in-memory map is keyed by code only.
-func (f *Fake) RunAsUser(_ context.Context, _ Signer, _, code string, simulate bool) (RunResult, error) {
+// RunAsUser records the master; the result map is keyed by code only.
+func (f *Fake) RunAsUser(_ context.Context, _ Signer, master, code string, simulate bool) (RunResult, error) {
+	f.lastAsUserMstr = master
 	if err, ok := f.runErrors[code]; ok {
 		return RunResult{}, err
 	}
@@ -194,7 +198,8 @@ func (f *Fake) SetSession(master, sessionAddr string, status SessionStatus) {
 }
 
 // Call returns the seeded result for (realm, fn, args), ignoring signer.
-func (f *Fake) Call(_ context.Context, _ gnoclient.Signer, realm, fn string, args []string, simulate bool) (CallResult, error) {
+func (f *Fake) Call(_ context.Context, _ gnoclient.Signer, realm, fn string, args []string, send string, simulate bool) (CallResult, error) {
+	f.lastSend = send
 	r, ok := f.agentCalls[callKey(realm, fn, args)]
 	if !ok {
 		return CallResult{}, fmt.Errorf("fake: no call for realm=%q fn=%q args=%v", realm, fn, args)
@@ -234,6 +239,14 @@ func (f *Fake) AddPackage(_ context.Context, _ gnoclient.Signer, deployPath stri
 func (f *Fake) SetCall(realm, fn string, args []string, result CallResult) {
 	f.agentCalls[callKey(realm, fn, args)] = result
 }
+
+// LastSend returns the send arg of the most recent Call/CallAsUser, for
+// asserting that the tool plumbed attached coins through to the chain.
+func (f *Fake) LastSend() string { return f.lastSend }
+
+// LastAsUserMaster returns the master arg of the most recent CallAsUser/RunAsUser,
+// for asserting it is sourced from the session record, not the profile.
+func (f *Fake) LastAsUserMaster() string { return f.lastAsUserMstr }
 
 func (f *Fake) SetRun(code string, result RunResult) {
 	f.agentRuns[code] = result

@@ -215,10 +215,15 @@ func (r *Real) asUserTx(signer Signer, master, errPrefix string, buildTx func(ma
 // gnoclient. MsgCall.Caller is the master address; the signature carries the
 // session's pubkey and SessionAddr so the chain's ante handler verifies against
 // the session record at auth/accounts/<master>/session/<sessionAddr>.
-func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn string, args []string, simulate bool) (CallResult, error) {
+func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn string, args []string, send string, simulate bool) (CallResult, error) {
+	sendCoins, err := parseSendCoins(send)
+	if err != nil {
+		return CallResult{}, err
+	}
 	out, err := r.asUserTx(signer, master, "call as user", func(masterAddr crypto.Address) (*std.Tx, error) {
 		msg := vm.MsgCall{
 			Caller:  masterAddr,
+			Send:    sendCoins,
 			PkgPath: realm,
 			Func:    fn,
 			Args:    args,
@@ -460,12 +465,16 @@ func agentSimulate(cli *gnoclient.Client, errPrefix string, buildTx func() (*std
 
 // Call broadcasts (or simulates) a STANDARD vm/MsgCall signed by the agent key.
 // Caller is the signer's own address; no session machinery is involved.
-func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string, args []string, simulate bool) (CallResult, error) {
+func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string, args []string, send string, simulate bool) (CallResult, error) {
 	caller, cli, err := r.agentTxSetup(signer, "call")
 	if err != nil {
 		return CallResult{}, err
 	}
-	msg := vm.MsgCall{Caller: caller, PkgPath: realm, Func: fn, Args: args}
+	sendCoins, err := parseSendCoins(send)
+	if err != nil {
+		return CallResult{}, err
+	}
+	msg := vm.MsgCall{Caller: caller, Send: sendCoins, PkgPath: realm, Func: fn, Args: args}
 	if simulate {
 		out, err := agentSimulate(cli, "call", func() (*std.Tx, error) {
 			return gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
@@ -572,6 +581,28 @@ func defaultBaseTxCfg() gnoclient.BaseTxCfg {
 		GasFee:    fmt.Sprintf("%dugnot", DefaultGasFeeUgnot),
 		GasWanted: DefaultGasWanted,
 	}
+}
+
+// ValidateSendCoins reports whether send is a coin amount Call/CallAsUser will
+// accept ("" attaches nothing, so it is valid). It lets the tool layer reject a
+// malformed amount with an actionable error before dispatch.
+func ValidateSendCoins(send string) error {
+	_, err := parseSendCoins(send)
+	return err
+}
+
+// parseSendCoins converts a tool-supplied send string (e.g. "1000000ugnot")
+// into the MsgCall.Send coins. An empty string attaches nothing; a malformed
+// amount is a hard error naming the offending value.
+func parseSendCoins(send string) (std.Coins, error) {
+	if send == "" {
+		return nil, nil
+	}
+	coins, err := std.ParseCoins(send)
+	if err != nil {
+		return nil, fmt.Errorf("parse send %q: %w", send, err)
+	}
+	return coins, nil
 }
 
 // spendRemaining returns limit - used, dropping any zero/negative denoms.

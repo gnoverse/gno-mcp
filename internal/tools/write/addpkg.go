@@ -23,6 +23,8 @@ func RegisterAddPkg(s *server.Server, ks *keystore.Keystore, resolver chain.Reso
 	s.Registry().Add(&server.Tool{
 		Name: "gno_addpkg",
 		Description: "Deploys a new Gno package or realm to the chain via vm/MsgAddPackage. " +
+			"Gno's semantics and API surface are its own, not Go's — when authoring the .gno source " +
+			"to deploy, study existing on-chain packages via gno_read rather than writing from Go intuition. " +
 			"The agent identity signs the transaction directly without requiring an active session: " +
 			"local profiles use the built-in test1 key; testnet profiles use a key generated via " +
 			"gno_key_generate (run that first if no key exists). " +

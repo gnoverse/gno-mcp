@@ -56,6 +56,9 @@ func Test_profileWritableByAgent_testnet(t *testing.T) {
 	assert.True(t, profileWritableByAgent(p), "profileWritableByAgent should be true for testnet profiles")
 }
 
+// The session profile enum lists writable chains (local + testnet) — a profile
+// without a master-address is session-eligible too, taking the master from
+// master_address at propose time.
 func Test_addProfileArg_filtersToSession(t *testing.T) {
 	s := newMixedTestServer(t)
 	props := map[string]any{}
@@ -63,7 +66,7 @@ func Test_addProfileArg_filtersToSession(t *testing.T) {
 	addProfileArg(s, props, &required)
 
 	enum := enumFromProps(t, props)
-	assert.Equal(t, []string{"testnet5"}, enum, "addProfileArg enum")
+	assert.Equal(t, []string{"local", "testnet5"}, enum, "addProfileArg enum (writable chains)")
 }
 
 func Test_addWritableProfileArg_listsBoth(t *testing.T) {

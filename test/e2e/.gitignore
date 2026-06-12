@@ -1,6 +1,3 @@
-# Un-ignore files that the root .gitignore blocks but are intentional here.
-!profiles.toml
-
-# Local-only: ephemeral test keyring populated by setup.sh from a public BIP-39
-# test mnemonic. Useful to run the e2e protocol; not useful in version control.
+# Local-only: an ephemeral gnokey keyring (public BIP-39 test mnemonic) that
+# local tooling may create here. Not useful in version control.
 .keyring/

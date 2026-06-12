@@ -9,15 +9,15 @@ description: Run an explicit security audit of a Gno realm or pure package. Use 
    report format), `../gno/references/security.md` (taxonomy), and
    `../gno/references/interrealm.md` (audit.md treats it as always relevant). They own the
    method — this skill is only the entry point.
-2. Fetch the code with provenance: `gno_read` against the live chain beats pasted source.
-   Say which one you audited, and for which chain/profile. The default `gno_read` call is an
-   **outline** (signatures + docs, bodies elided) — navigation only, never evidence; audit
-   evidence is whole files, fetched per file with `full=true`.
-   - If the named realm does not exist on the connected chain, never silently substitute:
-     locate candidates with `gno_packages`, state explicitly which deployed realm you audited
-     instead and why.
-   - Only if a single file overflows even the `full=true` budget and source must come from
-     gnoweb instead, mark every quoted line as fidelity-uncertain in the report.
+2. Fetch the code on-chain (audit.md "Getting the source" owns the rules). A gnoweb URL or
+   realm path names a **specific** chain — resolve it from the URL with
+   `gno_profile_add(gnoweb_url=…)` before reading, not on whatever profile is connected
+   (mainnet/betanet is admitted read-only, which is all an audit needs). The default `gno_read`
+   is an **outline** (bodies elided) — navigation only, never evidence; audit evidence is whole
+   files, fetched per file with `full=true`. Say which realm/chain you audited.
+   - If the named realm's chain cannot be reached or added, **STOP** — never substitute repo,
+     GitHub, or local source for a named deployed realm. Auditing user-pasted source is fine,
+     but report it as *as-provided, not verified against any deployment*.
 3. Follow audit.md's evidence-gated procedure exactly: no finding without a quoted line.
 4. Emit the report in audit.md's format. State scope honestly — what you read, what you did
    not, and what remains unverified.

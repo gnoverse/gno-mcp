@@ -1,0 +1,10 @@
+# Baked into the e2e image at ~/.config/gnomcp/profiles.toml.
+# Points gnomcp's default "testnet" profile at the in-container simnet.
+# No master-address: writes use the generated agent key + faucet (B1/B2 flow).
+[testnet]
+rpc-url            = "http://testnet.gnomcp.sim:26687"
+chain-id           = "test9999"
+faucet-service-url = "http://testnet.gnomcp.sim:8590"
+# Where the user (on the host) views realms: gnoweb is published to the host by
+# `make sim`. Default GNOWEB_PORT=8688; a non-default override makes this stale.
+gnoweb-url         = "http://localhost:8688"

@@ -24,6 +24,24 @@ func TestAuthStatus_noSessions_suggestsPropose(t *testing.T) {
 	require.NoError(t, err, "Call")
 	assert.Contains(t, res.Text, "no active session")
 	assert.Contains(t, res.Text, "gno_session_propose")
+	assert.Equal(t, true, res.StructuredContent["master_address_set"])
+}
+
+// A master-less profile must say so here: gno_auth_status is the natural first
+// status check, and an empty-sessions success with no read-only signal leaves
+// the caller planning a session flow that gno_session_propose will refuse.
+func TestAuthStatus_noMaster_signalsReadOnly(t *testing.T) {
+	s := newReadOnlyTestServer(t)
+	mgr := noSessionMgr(t)
+	RegisterAuthStatus(s, mgr, constChainResolver(chain.NewFake()))
+
+	res, err := s.Registry().Call(context.Background(), "gno_auth_status", map[string]any{
+		"profile": "testnet5",
+	})
+	require.NoError(t, err, "Call")
+	assert.Contains(t, res.Text, "no master-address")
+	assert.NotContains(t, res.Text, "gno_session_propose", "proposing would fail on a master-less profile — don't suggest it")
+	assert.Equal(t, false, res.StructuredContent["master_address_set"])
 }
 
 func TestAuthStatus_activeSession_narrative(t *testing.T) {

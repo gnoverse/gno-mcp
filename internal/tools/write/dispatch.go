@@ -29,14 +29,17 @@ type writeTxDispatch struct {
 	ks          *keystore.Keystore
 	sessionMgr  *session.Manager
 
-	// pickSession selects an active session authorizing the tool's operation.
-	pickSession func(ctx context.Context) (chain.Signer, error)
+	// pickSession selects an active session authorizing the tool's operation,
+	// returning the session's signer and the master address it was issued under
+	// (the master lives on the session record, not necessarily the profile).
+	pickSession func(ctx context.Context) (chain.Signer, string, error)
 	// mapPickErr converts a pickSession failure to the tool's structured
 	// ToolError; returning nil falls back to the generic wrap.
 	mapPickErr func(error) error
 	// agentOp / sessionOp perform the chain operation with the acquired signer.
+	// sessionOp receives the session's master so it signs as the right account.
 	agentOp   func(ctx context.Context, signer gnoclient.Signer) error
-	sessionOp func(ctx context.Context, signer chain.Signer) error
+	sessionOp func(ctx context.Context, signer chain.Signer, master string) error
 
 	// Audit fields owned by the handler's deferred audit record; the dispatcher
 	// mutates them so denials and outcomes are recorded on every return path.
@@ -75,7 +78,7 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 	case "session":
 		// ---- Session branch
 
-		signer, pickErr := d.pickSession(ctx)
+		signer, sessMaster, pickErr := d.pickSession(ctx)
 		if pickErr != nil {
 			if terr := d.mapPickErr(pickErr); terr != nil {
 				return identity, "", "", terr
@@ -85,9 +88,12 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 
 		*d.sessionAddr = signer.Address()
 		signerAddr = *d.sessionAddr
-		master = d.profile.MasterAddress
+		// The master is the account the session was issued under (stored on the
+		// session record), which may differ from profile.MasterAddress — e.g. a
+		// master-less profile whose user supplied an address at propose time.
+		master = sessMaster
 
-		if opErr := d.sessionOp(ctx, signer); opErr != nil {
+		if opErr := d.sessionOp(ctx, signer, master); opErr != nil {
 			if d.simulate && errors.Is(opErr, chain.ErrSimulateUnsupported) {
 				return identity, signerAddr, master, &server.ToolError{
 					Code:    "simulate_unsupported",

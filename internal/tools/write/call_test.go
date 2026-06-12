@@ -556,6 +556,29 @@ func TestCall_agentIdentity_local(t *testing.T) {
 	assert.False(t, hasMaster, "expected no master_address for agent identity")
 }
 
+// The master passed to CallAsUser must come from the SESSION record (where it was
+// stored at propose time), not the profile — so a master-less profile can still
+// drive a session once the user supplies their public address at propose time.
+func TestCall_sessionMasterFromSessionRecord(t *testing.T) {
+	s := newBaseTestServer(t) // profile master-address = g17erna...
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+
+	fake := chain.NewFake()
+	fake.SetCallAsUser("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{TxHash: "0xsess", Result: "ok"})
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		// seedActiveSession stores master "g1master" — deliberately != the profile's.
+		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
+	})
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet5", "realm": "gno.land/r/test/counter", "func": "Increment", "identity": "session",
+	})
+	require.NoError(t, err, "Call (session)")
+	assert.Equal(t, "g1master", fake.LastAsUserMaster(), "master must be sourced from the session record, not the profile")
+}
+
 // TestCall_sessionIdentity_explicit verifies that explicitly passing identity="session"
 // on a testnet profile uses c.CallAsUser and includes the signed-by session line.
 func TestCall_sessionIdentity_explicit(t *testing.T) {
@@ -746,6 +769,87 @@ func TestCall_agentTestnet_funded(t *testing.T) {
 	})
 	require.NoError(t, callErr, "expected success for funded account")
 	assert.Contains(t, res.Text, "0xfunded")
+}
+
+// A payable realm function (e.g. an auction Bid) needs coins sent with the call.
+// The `send` arg must reach the chain as MsgCall.Send.
+func TestCall_attachesSendCoins(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	require.NoError(t, err, "GenerateForProfile")
+
+	fake := chain.NewFake()
+	fake.SetBalance(agentAddr, 10_000_000)
+	fake.SetCall("gno.land/r/test/auction", "Bid", []string{}, chain.CallResult{
+		TxHash: "0xbid", Height: 1, GasUsed: 3000,
+	})
+
+	mgr := noSessionMgr(t)
+	RegisterCall(s, ks, mgr, constChainResolver(fake), alog)
+
+	_, callErr := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet9999",
+		"realm":   "gno.land/r/test/auction",
+		"func":    "Bid",
+		"send":    "5000000ugnot",
+	})
+	require.NoError(t, callErr, "Bid with send")
+	assert.Equal(t, "5000000ugnot", fake.LastSend(), "send coins must be plumbed to the chain Call")
+}
+
+// The session path (CallAsUser) must also forward attached coins — acting AS
+// the user with a Bid spends the user's coins, counted by the chain against the
+// session spend_limit.
+func TestCall_attachesSendCoins_session(t *testing.T) {
+	s := newBaseTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+
+	fake := chain.NewFake()
+	fake.SetCallAsUser("gno.land/r/test/auction", "Bid", []string{}, chain.CallResult{
+		TxHash: "0xbid", Height: 2, Result: "ok", GasUsed: 4000,
+	})
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/auction"}, "100000000ugnot")
+	})
+	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/auction",
+		"func":     "Bid",
+		"send":     "5000000ugnot",
+		"identity": "session",
+	})
+	require.NoError(t, err, "session Bid with send")
+	assert.Equal(t, "5000000ugnot", fake.LastSend(), "send coins must reach CallAsUser")
+}
+
+// A malformed send amount must be refused at the tool boundary with an
+// actionable ToolError, not a deep chain-layer parse error.
+func TestCall_rejectsMalformedSend(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "")
+	_, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	require.NoError(t, err, "GenerateForProfile")
+
+	RegisterCall(s, ks, noSessionMgr(t), constChainResolver(chain.NewFake()), alog)
+	_, err = s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet9999",
+		"realm":   "gno.land/r/test/auction",
+		"func":    "Bid",
+		"send":    "not-a-coin",
+	})
+	require.Error(t, err, "malformed send must be rejected")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "invalid_send", te.Code)
 }
 
 // TestCall_agentTestnet_simulate_skipsBalanceCheck verifies that simulate=true

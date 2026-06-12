@@ -37,9 +37,11 @@ func RegisterProfileAdd(s *server.Server, gnowebClient *http.Client, verify Chai
 			"profile list, e.g. after gno_connect discovers one. Two input forms (exactly one): " +
 			"rpc_url + chain_id (explicit), or gnoweb_url (discovers them from the page's gnoconnect " +
 			"meta-tags; treated as a hint — the node is dialed and must report the same chain-id either way). " +
-			"Only local dev and testnets are accepted (chain-id dev or testNN); betanet/mainnet are refused. " +
+			"dev and numbered testnets are write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is " +
+			"admitted READ-ONLY — readable via the read tools, but with no agent key, faucet, or write path, " +
+			"which is exactly what auditing deployed source on gno.land needs. " +
 			"Profiles loaded at startup cannot be overridden; re-adding a profile created by this tool replaces it. " +
-			"Dynamic profiles carry no master-address: they support reads and agent-key writes only — " +
+			"Dynamic profiles carry no master-address: writable ones support reads and agent-key writes only — " +
 			"write-as-user sessions need a profile the user persisted in profiles.toml. " +
 			"Note: an agent key generated for a dynamic testnet profile persists on disk across restarts " +
 			"even though the profile does not; re-adding the profile reattaches the key.",
@@ -73,7 +75,8 @@ func profileAddInputSchema() map[string]any {
 			},
 			"chain_id": map[string]any{
 				"type": "string",
-				"description": "Chain-id the node reports (e.g. 'test-13'; only dev or testNN allowed). " +
+				"description": "Chain-id the node reports (e.g. 'test-13', or 'gnoland1' for betanet — read-only). " +
+					"dev/testNN are write-capable; any other id is admitted read-only. " +
 					"Required together with rpc_url unless gnoweb_url is given. Cross-checked against the live node.",
 			},
 			"gnoweb_url": map[string]any{
@@ -177,10 +180,10 @@ func profileAddHandler(ctx context.Context, args map[string]any, s *server.Serve
 			Message: fmt.Sprintf("rpc_url %q must be an absolute http(s) URL with no spaces or shell metacharacters", p.RPCURL),
 		}
 	}
-	if !profiles.ChainIDAllowed(p.ChainID) {
+	if !profiles.ChainIDValid(p.ChainID) {
 		return server.Result{}, &server.ToolError{
-			Code:    "chain_forbidden",
-			Message: fmt.Sprintf("chain-id %q is not allowed (only dev or testNN); betanet/mainnet profiles cannot be created", p.ChainID),
+			Code:    "chain_id_malformed",
+			Message: fmt.Sprintf("chain-id %q is malformed (want lowercase alphanumeric with '.', '-', '_', ≤64 chars)", p.ChainID),
 			Extra:   map[string]any{"chain_id": p.ChainID},
 		}
 	}
@@ -237,9 +240,16 @@ func profileAddHandler(ctx context.Context, args map[string]any, s *server.Serve
 	if p.TxIndexerURL != "" {
 		persistCmd += " --indexer-url " + p.TxIndexerURL
 	}
+	readOnly := p.IsReadOnly()
 	text := fmt.Sprintf("Profile %q added (chain-id %s, RPC %s, via %s).\n"+
-		"It is in-memory only and disappears on restart. To persist it, run:\n\n```\n%s\n```",
-		name, p.ChainID, p.RPCURL, source, persistCmd)
+		"It is in-memory only and disappears on restart. To persist it, run:\n\n```\n%s\n```\n\n"+
+		"Use it now: pass profile=%s to the tools; the tool list was refreshed (tools/list_changed) — "+
+		"re-fetch tool schemas if your client cached the old profile list.",
+		name, p.ChainID, p.RPCURL, source, persistCmd, name)
+	if readOnly {
+		text += "\n\nThis is a read-only chain (mainnet/betanet): pass it to the read tools " +
+			"(gno_read, gno_packages, gno_render, gno_eval) — there is no agent key, faucet, or write path."
+	}
 	if p.FaucetServiceURL != "" || p.FaucetURL != "" {
 		text += "\n\n(faucet-url / faucet-service-url have no CLI flags — add them to profiles.toml by hand when persisting.)"
 	}
@@ -252,6 +262,7 @@ func profileAddHandler(ctx context.Context, args map[string]any, s *server.Serve
 			"source":          source,
 			"persisted":       false,
 			"persist_command": persistCmd,
+			"read_only":       readOnly,
 		},
 	}, nil
 }

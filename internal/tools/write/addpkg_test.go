@@ -15,6 +15,22 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
+// Authoring .gno source is where Go intuitions produce broken realms; the
+// description gives chain-native authoring advice (reference packages via
+// gno_read) and stays client-agnostic — skill routing belongs to the skill
+// layer, not to MCP tool descriptions.
+func TestAddPkg_descriptionRoutesAuthoringGuidance(t *testing.T) {
+	s := newLocalTestServer(t)
+	var auditBuf bytes.Buffer
+	RegisterAddPkg(s, keystore.New(t.TempDir(), ""), constChainResolver(chain.NewFake()), audit.NewLog(&auditBuf))
+
+	tool, ok := s.Registry().Get("gno_addpkg")
+	require.True(t, ok)
+	assert.Contains(t, tool.Description, "not Go's")
+	assert.Contains(t, tool.Description, "gno_read")
+	assert.NotContains(t, tool.Description, "skill", "MCP descriptions are client-agnostic — no plugin-layer references")
+}
+
 func TestAddPkg_happyPath(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer

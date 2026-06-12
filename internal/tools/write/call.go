@@ -28,7 +28,8 @@ func RegisterCall(s *server.Server, ks *keystore.Keystore, sessionMgr *session.M
 			"testnet: a key from gno_key_generate, funded via gno_faucet_fund). " +
 			"Pass identity=session to act as the user instead — that requires an active gnomcp session covering the target realm (use gno_session_propose). " +
 			"Pass simulate=true to dry-run without spending gas. Required args: profile, realm, func. " +
-			"Optional: args (array of strings), simulate (bool), identity (\"agent\" or \"session\"). " +
+			"Optional: args (array of strings), send (coins to attach for a payable function, e.g. \"5000000ugnot\"), " +
+			"simulate (bool), identity (\"agent\" or \"session\"). " +
 			"The result reports which identity signed; always tell the user which account performed the write.",
 		InputSchema: callInputSchema(s),
 		OutputKind:  server.OutputText,
@@ -114,6 +115,18 @@ func callHandler(
 		return server.Result{}, err
 	}
 
+	send, err := server.StringArg(args, "send")
+	if err != nil {
+		return server.Result{}, err
+	}
+	if err := chain.ValidateSendCoins(send); err != nil {
+		return server.Result{}, &server.ToolError{
+			Code:    "invalid_send",
+			Message: fmt.Sprintf("send %q is not a valid coin amount — use an amount like \"5000000ugnot\"", send),
+			Extra:   map[string]any{"send": send},
+		}
+	}
+
 	// ---- Resolve chain client
 
 	c := resolver(profileName)
@@ -125,6 +138,9 @@ func callHandler(
 	// carry addresses and amounts; only the count is recorded)
 
 	argsSummary = fmt.Sprintf("realm=%s func=%s nargs=%d", realm, fn, len(fnArgs))
+	if send != "" {
+		argsSummary += " send=" + send
+	}
 
 	// ---- Dispatch by identity
 
@@ -139,7 +155,7 @@ func callHandler(
 		c:           c,
 		ks:          ks,
 		sessionMgr:  sessionMgr,
-		pickSession: func(ctx context.Context) (chain.Signer, error) {
+		pickSession: func(ctx context.Context) (chain.Signer, string, error) {
 			return sessionMgr.PickSessionForProfile(ctx, resolver, profileName, realm)
 		},
 		mapPickErr: func(pickErr error) error {
@@ -172,12 +188,12 @@ func callHandler(
 		},
 		agentOp: func(ctx context.Context, signer gnoclient.Signer) error {
 			var opErr error
-			cr, opErr = c.Call(ctx, signer, realm, fn, fnArgs, simulate)
+			cr, opErr = c.Call(ctx, signer, realm, fn, fnArgs, send, simulate)
 			return opErr
 		},
-		sessionOp: func(ctx context.Context, signer chain.Signer) error {
+		sessionOp: func(ctx context.Context, signer chain.Signer, master string) error {
 			var opErr error
-			cr, opErr = c.CallAsUser(ctx, signer, profile.MasterAddress, realm, fn, fnArgs, simulate)
+			cr, opErr = c.CallAsUser(ctx, signer, master, realm, fn, fnArgs, send, simulate)
 			return opErr
 		},
 		auditResult: &auditResult,
@@ -235,6 +251,12 @@ func callInputSchema(s *server.Server) map[string]any {
 			"items": map[string]any{"type": "string"},
 			"description": "Positional string arguments for the function. Optional; omit or pass [] for zero-argument functions. " +
 				"e.g. [\"42\", \"g1abc...\"] — all arguments are passed as strings; numbers, addresses, and booleans are stringified.",
+		},
+		"send": map[string]any{
+			"type": "string",
+			"description": "Coins to attach to the call for a payable function (one that reads std.OriginSend() / banker coins, e.g. a Bid or Buy). " +
+				"Single-denomination amount, e.g. \"5000000ugnot\". Optional; omit or \"\" sends nothing. " +
+				"For identity=session the coins are spent from the user's master account and count against the session spend_limit.",
 		},
 		"simulate": map[string]any{
 			"type":        "boolean",

@@ -7,6 +7,7 @@ This file is for agents **contributing to gnomcp** (a Go MCP server for gno.land
 ```bash
 make test                # unit tests (no network)
 make test-integration    # in-process gno node (build tag: integration)
+make playground-e2e      # agent e2e — driver QAs a container (see test/README.md)
 make lint                # go vet + gofmt -l
 make build               # bin/gnomcp
 make dev                 # go run ./cmd/gnomcp (starts MCP server over stdio)
@@ -28,7 +29,8 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 | `internal/untrusted/`, `internal/budget/`, `internal/audit/` | envelope+neutralization, output budget, JSONL audit log |
 | `faucet/`, `cmd/agentfaucet/`, `internal/clientfaucet/` | faucet service + client tiers |
 | `test/integration/` | real-node tests (`-tags=integration`) |
-| `test/e2e/` | **manual** protocol checklists — keep them manual, don't convert to Go suites |
+| `test/e2e/realms/` | gno realm fixtures, baked into the playground e2e image + simnet genesis |
+| `playground/` | agent-e2e harness (driver QAs the containerized AUT); `test/README.md` maps the test layers |
 | `docs/adr/` | decision records, reconciled to shipped state (status line at top, no `prxxxx_` prefixes) |
 | `skills/` | user-facing skills (product, not contributor guidance): `gno` (reference library + router) + thin side skills (`gno-audit`, `gno-debug`, `gno-onboard`) that only compose `gno/references/` |
 
@@ -55,7 +57,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 |---|---|
 | Add / rename / remove a tool | `docs/tools.md` (catalog) · README tool table + counts (two places: "Why this exists", table header) · `skills/gno/references/mcp.md` task table · `docs/security.md` envelope list (if it's a text tool) · server `instructions` in `cmd/gnomcp/main.go` (if a flow changes) |
 | Change write-auth / session / scope behavior | `docs/security.md` · README "Write authorization" · `docs/adr/session_authorization.md` |
-| Change profile fields or config semantics | README "Profiles" · `docs/adr/multichain_via_profiles.md` · `test/e2e/profiles.toml` if protocols use it |
+| Change profile fields or config semantics | README "Profiles" · `docs/adr/multichain_via_profiles.md` · `playground/e2e/profiles.e2e.toml` (the e2e harness profile) |
 | Make or revise an architectural decision | `docs/adr/` — edit in place with an updated status line; keep records matching shipped state, not plans |
 | Add a skill or a reference file under `skills/` | `docs/skills.md` · README skills section · **this file** (Map + this table) — harnesses discover `skills/` automatically, no per-skill registration |
 | Add a make target or change the dev flow | this file (Commands) |

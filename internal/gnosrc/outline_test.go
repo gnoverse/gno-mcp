@@ -88,6 +88,14 @@ func TestOutline_packageDoc(t *testing.T) {
 	assert.Contains(t, out, "Package counter is a demo counter realm")
 }
 
+// The outline output itself must carry the evidence caveat, so a client that
+// never loads the gno skill still learns that names and docs are realm-authored
+// claims, not proof — the trap is easy to fall into mid-audit.
+func TestOutline_headerCarriesEvidenceCaveat(t *testing.T) {
+	out := Outline(fixtureFiles())
+	assert.Contains(t, out, "not evidence")
+}
+
 func TestOutline_exportedTypeWithFields(t *testing.T) {
 	out := Outline(fixtureFiles())
 	assert.Contains(t, out, "type Counter struct")

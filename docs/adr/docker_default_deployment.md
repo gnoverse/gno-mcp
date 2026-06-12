@@ -23,7 +23,7 @@ Until the image ships, distribution is the native binary (`go install` or gorele
 
 ## Alternatives considered
 
-**Standalone binary as the permanent default.** Rejected as the end state: it caps the master-key claim at policy strength. Acceptable as the interim because only dev/testnet chains are reachable (chain-id allowlist), bounding what a compromise can sign for.
+**Standalone binary as the permanent default.** Rejected as the end state: it caps the master-key claim at policy strength. Acceptable as the interim because only dev/testnet chains are writable (chain-id capability gate), bounding what a compromise can sign for.
 
 **Per-chain container.** Subsumed by multi-chain profiles: one container, many profiles.
 
@@ -33,6 +33,6 @@ Until the image ships, distribution is the native binary (`go install` or gorele
 
 ## Consequences
 
-- Until the image exists, "master key never touches gnomcp" is enforced by code review and the absence of key-reading code, not by isolation. The chain-id allowlist limits stakes in the meantime.
+- Until the image exists, "master key never touches gnomcp" is enforced by code review and the absence of key-reading code, not by isolation. The chain-id capability gate limits stakes in the meantime.
 - When implemented: releases become image tags, updates become `docker pull`, and the structural claim holds regardless of code-path bugs.
 - Docker becomes a documented prerequisite for the recommended path; the native binary stays supported for development.

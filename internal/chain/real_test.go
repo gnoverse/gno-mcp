@@ -19,7 +19,7 @@ import (
 func TestReal_Call_nilSignerSimulate(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
 	require.NoError(t, err, "NewReal")
-	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, true)
+	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, "", true)
 	require.Error(t, err, "expected error for nil signer (even with simulate=true)")
 	assert.True(t, strings.Contains(err.Error(), "signer"), "error should mention signer, got: %v", err)
 }
@@ -28,7 +28,7 @@ func TestReal_Call_nilSignerSimulate(t *testing.T) {
 func TestReal_Call_nilSignerBroadcast(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
 	require.NoError(t, err, "NewReal")
-	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, false)
+	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, "", false)
 	require.Error(t, err, "expected error for nil signer in broadcast mode")
 	assert.True(t, strings.Contains(err.Error(), "signer"), "error should mention signer, got: %v", err)
 }
@@ -38,7 +38,7 @@ func TestReal_Call_emptyMaster(t *testing.T) {
 	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
 	require.NoError(t, err, "NewReal")
 	stub := &minimalSigner{addr: "g1notreal"}
-	_, err = r.CallAsUser(context.Background(), stub, "", "gno.land/r/x", "Foo", nil, false)
+	_, err = r.CallAsUser(context.Background(), stub, "", "gno.land/r/x", "Foo", nil, "", false)
 	require.Error(t, err, "expected error for empty master")
 	assert.True(t, strings.Contains(err.Error(), "master"), "error should mention master, got: %v", err)
 }

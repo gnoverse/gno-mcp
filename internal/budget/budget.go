@@ -38,12 +38,20 @@ func Apply(full, gnowebURL string, limit int) Result {
 	return r
 }
 
-// Wrapped applies the budget to chain-derived content and wraps the surviving
-// content in an untrusted-content envelope tagged with kind/source. When the
-// content is over budget it is dropped for gnomcp's own truncation summary
-// (framing, not chain bytes), returned unwrapped; truncated reports which case.
+// Wrapped applies the DefaultBudget (broad-sweep tier) and wraps surviving
+// content in an untrusted-content envelope. See WrappedAt.
 func Wrapped(full, gnowebURL, kind, source string) (text string, truncated bool) {
-	r := Apply(full, gnowebURL, DefaultBudget)
+	return WrappedAt(full, gnowebURL, kind, source, DefaultBudget)
+}
+
+// WrappedAt applies the given budget limit to chain-derived content and wraps
+// the surviving content in an untrusted-content envelope tagged with kind/source.
+// When the content is over budget it is dropped for gnomcp's own truncation
+// summary (framing, not chain bytes), returned unwrapped; truncated reports
+// which case. Explicit, path-targeted tools (e.g. gno_render) pass
+// ExplicitBudget — the same ceiling as a named full-file read.
+func WrappedAt(full, gnowebURL, kind, source string, limit int) (text string, truncated bool) {
+	r := Apply(full, gnowebURL, limit)
 	if r.Truncated {
 		return r.Summary, true
 	}

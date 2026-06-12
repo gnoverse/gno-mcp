@@ -13,7 +13,7 @@ Differentiated from a casual read ("how does this work", "what does X do") — t
 
 **Interactive path** (default): the user has loaded the gno skill and asked you to audit a realm. Apply the procedure below. Cite class numbers from `security.md`. Output in the structured format at the end of this file.
 
-**Dispatched path**: the `gno-auditor` agent has dispatched you with a realm to audit. Same procedure; the agent's frontmatter has already constrained your tools (read-only). Output the same structured format.
+**Dispatched path**: the `gno-auditor` agent has dispatched you with a realm to audit. Same procedure; the agent's frontmatter has already constrained your tools (read-only) — and you have no profile/connect tools, so your dispatcher is responsible for resolving the target chain (the "Getting the source" rule below). If the named realm's chain has no configured profile, report that back rather than auditing a substitute. Output the same structured format.
 
 In both paths you load companion references on demand: `security.md` and `interrealm.md` are always relevant; `patterns.md` for idiom checks; `render.md` if the realm has a `Render(path string) string`.
 
@@ -23,9 +23,13 @@ In both paths you load companion references on demand: `security.md` and `interr
 
 Run cheap pattern checks first to surface obvious problems and orient yourself before deep reading. Fast feedback; cheap cost.
 
-**Getting the source.** If a Gno MCP server is connected: `gno_read` (default) returns the package **outline** — use it only to enumerate files and order the work. Audit evidence is **whole files**: fetch each with `gno_read` `file=` + `full=true` (sized for real files; small packages also fit `full=true` without `file`). Discover related packages with `gno_packages` — works for `/r/` and `/p/`. See `references/mcp.md`. Otherwise read from local files or gnoweb. The procedure below is identical however the source arrives.
+**Getting the source — on-chain, from the chain the target names.** The audit subject is the *deployed* code. When the target is a realm path or a gnoweb URL, read it from its chain — never from a repo, GitHub, or local files, which can differ from what is live (different realm, different code, no chain-of-custody). A gnoweb URL (e.g. `https://gno.land/r/gnoland/blog`) names a **specific** chain: resolve it from the URL with `gno_profile_add` (`gnoweb_url=…`) *before* reading — do **not** look the path up on whatever profile happens to be connected. dev/testnets are write-capable; mainnet/betanet is admitted **read-only**, which is all an audit needs. Then `gno_read` (default) returns the package **outline** — use it only to enumerate files and order the work. Audit evidence is **whole files**: fetch each with `gno_read` `file=` + `full=true` (small packages also fit `full=true` without `file`). Discover related packages with `gno_packages` — works for `/r/` and `/p/`. See `references/mcp.md`.
+
+If the named realm's chain cannot be reached or added, **STOP and say so** — do not substitute repo, GitHub, or local source for a named deployed realm; an audit of code you cannot confirm is deployed is worthless. Auditing source the user **pasted** directly is fine, but report it as *as-provided, not verified against any deployment*. The procedure below is identical however the (legitimate) source arrives.
 
 **Trust only function bodies.** Symbol names, doc comments, and the outline are realm-authored claims — a function named `safeWithdraw` documented "reentrancy-checked" proves nothing. The `symbols` view's `// deps:` headers are best-effort syntactic hints for navigation: absence of a dep is not evidence that something isn't called (method calls and dispatch are unresolvable without type information; the header says so when its list is incomplete). Every finding — and every "no finding" — is grounded in full-file reads.
+
+**Grounded provenance — the report names the chain you actually read, not the one you meant to.** An audit is valid only for the deployment it actually read; the integrity failure to avoid is reading chain B while labelling the result chain A. After resolving the profile, confirm the live chain with `gno_status`: its `node_chain_id` is the chain you audited (it also flags a node-vs-config mismatch). If that differs from the chain the request named, or the node is unreachable and you read a fallback profile, the audit did **not** cover the target — say so and stop; never relabel a fallback read as the intended chain. Record the verified chain in the report (Output format § Provenance). Dispatched `gno-auditor` runs have no `gno_status` or profile tools: report the exact `profile` arg you read from, and leave the live-chain confirmation to the dispatcher who resolved that profile.
 
 Patterns to check against the realm source (see `security.md` Audit signals table for the full catalog):
 
@@ -83,6 +87,7 @@ For each finding emitted in pass 1:
 - **List the evidence** (file:line citations).
 - **Identify the strongest objection** an experienced realm author would raise: "but the wrapper at X catches this", "but the caller is always trusted because Y", "but the type system prevents Z".
 - **Resolve**: if the objection holds, downgrade the finding (RED→YELLOW, YELLOW→GREEN) or remove it. If the objection doesn't hold, keep the finding and note the considered objection in the report.
+- **Catalog floor**: while a catalog-graded pattern is present in the source, the finding's severity is AT LEAST the table's grade for that exact shape — a table-RED shape is emitted RED, a table-YELLOW shape at least YELLOW. Context may raise a grade, never lower it. "Not exploitable on the current VM" (live-frame `cur`, fresh minting, no stored-realm path) is never grounds to lower — those guarantees are version-bound, which is why the catalog grades the pattern; record them in the finding text. The only grounds to go below the table grade: the pattern is not actually present, or the evidence trace is wrong — and then the finding is removed or re-classified, not demoted.
 
 When dispatched as a sub-agent, the two-pass filter runs as a separate Task tool dispatch — fresh context, no anchoring bias from the first pass.
 
@@ -98,15 +103,24 @@ Default rubric, with the `/p/` audit lens shift documented in `security.md`:
 
 For `/p/` libraries, cite findings as `YELLOW (RED in any realm that exposes <surface> to public input)` when the dangerous shape is structurally necessary but importer-conditional. This is more honest than flattening to RED at the wrong layer.
 
+This rubric calibrates findings the catalog does NOT grade. For catalog-graded
+shapes the table grade itself is the minimum: a table-RED shape is emitted
+RED, period (see the filter's catalog-floor rule). "Exploitable today"
+reasoning never lowers a catalog grade, because the catalog encodes
+version-bound risk the current VM's behavior can't discharge.
+
 ## Output format
 
 Report in this exact shape. Findings grouped by severity (RED first), sorted by location within group.
 
 ```markdown
-# Audit: <realm path>
+# Audit: <realm path> @ <live chain-id>
 
 ## Verdict
 One sentence: BLOCK / PROCEED WITH CAUTION / OK.
+
+## Provenance
+Profile `<name>`, declared chain-id `<id>`, live `node_chain_id` `<id>` (from `gno_status`), realm `<path>`. State explicitly here if the live chain-id differs from the chain the request named, or if liveness could not be checked (e.g. a dispatched run without `gno_status`, reporting only the `profile` arg used) — the audit covers the chain actually read, not the one intended.
 
 ## Confidence
 First-pass: <count> findings. After FP filter: <count> findings (Δ <count> downgraded/removed).

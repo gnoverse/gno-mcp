@@ -32,10 +32,17 @@ func requireProfile(args map[string]any, s *server.Server) (string, profiles.Pro
 
 func profileWritableBySession(p profiles.Profile) bool { return p.MasterAddress != "" }
 
+// profileSessionEligible reports whether a chain-bound session can exist for p:
+// any writable chain (local/testnet). The master account comes from the
+// profile's master-address, or from a master_address the user supplies at
+// propose time when the profile has none. Read-only chains can't write at all.
+func profileSessionEligible(p profiles.Profile) bool { return profiles.ChainIDWritable(p.ChainID) }
+
 // profileWritableByAgent reports whether the agent has or can have its own
-// signing key for p. The chain-id allowlist admits only local (test1 key) and
-// testnet (generated key) chains, so every profile qualifies.
-func profileWritableByAgent(profiles.Profile) bool { return true }
+// signing key for p: local (test1 key) and testnet (generated key) chains.
+// Read-only chains (mainnet/betanet) have no agent key path, so they are
+// excluded from every write tool's profile enum.
+func profileWritableByAgent(p profiles.Profile) bool { return profiles.ChainIDWritable(p.ChainID) }
 
 // addProfileArgFiltered populates props["profile"] with an enum filtered by keep.
 // desc is the human-readable description for the arg.
@@ -58,12 +65,13 @@ func addProfileArgFiltered(s *server.Server, props map[string]any, required *[]s
 	}
 }
 
-// addProfileArg adds the `profile` arg to props, filtered to profiles
-// with a master-address set (session-writable profiles). If no such profile
-// exists the enum is empty, so the agent has no writable target to pick.
+// addProfileArg adds the `profile` arg for the session tools, filtered to
+// writable chains (local/testnet). A profile with a master-address uses it; a
+// writable profile without one takes the master from master_address at propose
+// time, so both are session-eligible.
 func addProfileArg(s *server.Server, props map[string]any, required *[]string) {
-	addProfileArgFiltered(s, props, required, profileWritableBySession,
-		"Profile to use. Only profiles with a master-address (session-writable) are listed.")
+	addProfileArgFiltered(s, props, required, profileSessionEligible,
+		"Profile to use for a chain-bound session. Writable chains (local/testnet); a profile without a master-address needs master_address supplied at propose time.")
 }
 
 // addAgentProfileArg adds the `profile` arg filtered to profiles where the

@@ -1,7 +1,7 @@
 # r/test/echo
 
-Minimal echo realm used by the gnomcp e2e protocol.
+Minimal echo realm used by the gnomcp e2e harness.
 
 Exports one function: `Echo(msg string) string` — returns msg unchanged.
-Used in Check 7 (gno_call args encoding round-trip).
-Deploy with setup.sh before running PROTOCOL.md.
+Exercises gno_call args-encoding round-trip in the write-tools scenario. Seeded into
+the simnet (and the integration node) at genesis — no manual deploy.

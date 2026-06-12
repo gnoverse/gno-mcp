@@ -92,9 +92,10 @@ Registration: every allowed chain (local dev or testnet) has an agent key path, 
 
 ### `gno_session_propose`
 
-- **Args:** `profile` (required), `allow_paths?[]`, `allow_run?`, `spend_limit?`, `expires_in?`
+- **Args:** `profile` (required), `allow_paths?[]`, `allow_run?`, `spend_limit?`, `expires_in?`, `master_address?`
 - **Returns:** a paste-ready `gnokey maketx session create` command the user runs to authorize a chain-bound session.
 - Generates an ephemeral ed25519 keypair locally. The user's `gnokey` signs the session; gnomcp never sees the user's key. At least one of `allow_paths` (non-empty) or `allow_run=true` must be requested.
+- On a writable profile with no configured `master-address`, pass `master_address` — the user's PUBLIC g1… address — so the session can act as them, with no `profiles.toml` edit. It is public data, never a private key or seed phrase; seed-phrase-shaped input is rejected without being echoed.
 
 ### `gno_session_revoke`
 
@@ -108,9 +109,10 @@ Registration: every allowed chain (local dev or testnet) has an agent key path, 
 
 ### `gno_call`
 
-- **Args:** `profile` (required), `realm` (required), `func` (required), `args?[]`, `simulate?`, `identity?`
+- **Args:** `profile` (required), `realm` (required), `func` (required), `args?[]`, `send?`, `simulate?`, `identity?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
 - Default identity: **agent** (test1 on local, generated key on testnet). Pass `identity=session` to act as the user instead.
+- `send` attaches coins to the call (e.g. `"1000000ugnot"`) for payable functions that read `std.OriginSend()`; under a session, the chain enforces the session spend limit against it.
 
 ### `gno_run`
 
