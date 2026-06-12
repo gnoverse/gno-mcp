@@ -120,10 +120,11 @@ Scenario 08 sits in `scenarios/deferred/` — blocked on an upstream gnodev fix
 
 ## Distribution (install from scratch)
 
-Scenario 11 runs the `l1-fresh` image (clean Claude Code, no gno tooling) and
-needs GitHub egress — external tier. It asserts the published artifacts
-(release archives + marketplace plugin on `main`), not the local tree: a
-regression shows up here only after it ships.
+Scenarios 11 (the README's copy-paste prompt) and 12 (the README's curl|sh
+install script) run the `l1-fresh` image (clean Claude Code, no gno tooling)
+and need GitHub egress — external tier. They assert the published artifacts
+(release archives + marketplace plugin + script on `main`), not the local
+tree: a regression shows up here only after it ships.
 
 | Key | Feature | Scenarios | Status |
 |---|---|---|---|
@@ -132,10 +133,12 @@ regression shows up here only after it ships.
 | install.mcp-register | `claude mcp add` (absolute path) → server connects | 11 | covered |
 | install.no-stray-server | install leaves no broken plugin-shipped MCP server (repo root must stay `.mcp.json`-free) | 11 | covered |
 | install.skills-live | next session exposes the gno skill family + connected gnomcp | 11 | covered |
+| install.script-oneliner | scripts/install.sh via curl\|sh: checksum-verified binary + Claude wiring end-to-end | 12 | covered |
+| install.script-idempotent | re-running the installer is safe — exit 0, no duplicate server entries | 12 | covered |
 
 ## External tier (real testnet)
 
-Only scenario 11 (fresh-install, GitHub egress — above). No real-testnet
+Only scenarios 11–12 (install from scratch, GitHub egress — above). No real-testnet
 scenarios: they require the canonical test13 endpoints (test11 is dead — never
 reference it). The built-in `testnet` profile (`internal/profiles/config.go`)
 points at test11, so the zero-config testnet experience fails against the live
