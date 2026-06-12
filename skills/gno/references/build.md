@@ -63,7 +63,7 @@ Empty file at the workspace root — its presence is the signal; no configuratio
 | Fix | How | Caveat |
 |---|---|---|
 | Workspace | Put an empty `gnowork.toml` in a parent dir; place the dep's source anywhere under it with `module = "gno.land/p/..."` in its `gnomod.toml`. Match is by declared module path, not directory name. | Deps must be on disk under the workspace. |
-| Download cache | `gno mod download` fetches deps from a chain RPC into `$GNOHOME/pkg/mod/`; a standalone dir then resolves them. | Needs the dep deployed on the target chain + network. |
+| Download cache | `gno mod download` fetches deps from a chain RPC into `$GNOHOME/pkg/mod/`; a standalone dir then resolves them. | Needs the dep deployed on the target chain + network — and released `gno` versions (through v1.1.0) reject `mod download` itself in a bare dir with the same single-package error: add the workspace marker first. Targeting a specific chain: see `toolchain.md`. |
 | `replace` | A `[[replace]]` in `gnomod.toml` redirects an import to a local path. | **Blocks `addpkg`** — strip it before deploying. |
 
 ## The `gno` binary

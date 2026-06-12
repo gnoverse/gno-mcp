@@ -15,7 +15,7 @@ The shape of the work is: **author and test locally first, decide where it runs 
 
 3. **Ground the code in real examples.** Before inventing structure, `gno_read` an existing on-chain realm of a similar shape and match its crossing-function signatures and state layout (outline mode surveys the API; `full=true` reads a file verbatim). Then write it.
 
-4. **Test locally — no chain, no keys.** Run `gno test` and filetests against the source on disk. This loop is friction-free and is where a realm becomes correct; stay in it until tests pass. A realm that compiles is not a realm that works. (If `gno` is not on PATH, fall back to a cheap on-chain check with `gno_eval` / `simulate=true` once a target exists.)
+4. **Test locally — no chain, no keys.** Run `gno test` and filetests against the source on disk. This loop is friction-free and is where a realm becomes correct; stay in it until tests pass. A realm that compiles is not a realm that works. (If `gno` is missing from PATH, or the realm imports on-chain packages that must come from a specific chain, `../gno/references/toolchain.md` covers installing a chain-matched binary and fetching deps from the target; fall back to a cheap on-chain check with `gno_eval` / `simulate=true` only when a local toolchain truly can't be had.)
 
 5. **Now pick the target.** Only when the realm is ready to go on-chain, ask where it should run: a local devnet (`gnodev` — fast, throwaway) or a testnet (via a gnomcp profile). This is the right moment for that question; before this point there was nothing to place.
 
