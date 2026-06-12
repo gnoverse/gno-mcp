@@ -16,7 +16,7 @@ func TestIntegration_counterRoundTrip(t *testing.T) {
 	_, err := c.Render(ctx, "gno.land/r/test/counter", "")
 	require.NoError(t, err, "render")
 
-	_, err = c.Call(ctx, test1Signer(t), "gno.land/r/test/counter", "Increment", nil, false)
+	_, err = c.Call(ctx, test1Signer(t), "gno.land/r/test/counter", "Increment", nil, "", false)
 	require.NoError(t, err, "call increment")
 
 	out, err := c.Eval(ctx, "gno.land/r/test/counter", "Total()")

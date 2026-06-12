@@ -231,7 +231,6 @@ func TestSessionPropose_NoMaster_offersParamNotCLIEdit(t *testing.T) {
 	assert.NotContains(t, err.Error(), "gnomcp profile add", "no dead-end CLI suggestion")
 }
 
-
 // `gnomcp profile add` refuses built-in profile names, so suggesting it for
 // one sends the agent into a guaranteed CLI failure; for built-in names the
 // only working repair is the profiles.toml entry (which overrides a built-in

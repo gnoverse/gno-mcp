@@ -1,4 +1,4 @@
-.PHONY: build test test-integration lint fmt run test-e2e dev \
+.PHONY: build test test-integration lint fmt run test-e2e dev bump \
 	playground-fresh playground-gnomcp playground-full playground-sim \
 	playground-e2e playground-e2e-external
 
@@ -17,6 +17,10 @@ lint:
 
 fmt:
 	gofmt -w .
+
+bump:
+	@test -n "$(VERSION)" || { echo "usage: make bump VERSION=x.y.z" >&2; exit 2; }
+	./scripts/bump-version.sh "$(VERSION)"
 
 run: build
 	./bin/gnomcp
