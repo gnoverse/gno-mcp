@@ -44,31 +44,63 @@ The six chain read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_packages`, 
 
 ## Install
 
-gnomcp is two artifacts: the **binary** (the MCP server — [release archives](https://github.com/gnoverse/gno-mcp/releases/latest) for linux/darwin × amd64/arm64) and the **plugin** (the skills + agent for coding harnesses — see [Skill installation](#skill-installation-for-ai-coding-agents)).
+gnomcp is two artifacts, and every harness needs both: the **binary** (the MCP server — [release archives](https://github.com/gnoverse/gno-mcp/releases/latest) for linux/darwin × amd64/arm64) and the **plugin** (the skills + agents, installed through each harness's own plugin manager). Pick your harness: [Claude Code](#claude-code) · [Codex CLI](#codex-cli) · [OpenCode](#opencode) · [Gemini CLI](#gemini-cli) · [Cursor](#cursor) · [other MCP clients](#other-mcp-clients).
 
-**Claude Code — let the agent install it.** Paste this prompt into a session; it is short enough to audit first, and each step runs under your normal permission prompts:
-
-> Install gnomcp: download the gnomcp binary for this machine from github.com/gnoverse/gno-mcp/releases/latest into ~/.local/bin, install the gno skills plugin with `claude plugin marketplace add gnoverse/gno-mcp` and `claude plugin install gnomcp@gnoverse`, register the MCP server with `claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp`, and verify with `claude mcp list`.
-
-**Claude Code — by hand:**
+**One-line install** — downloads the binary (checksum-verified, into `~/.local/bin`) and wires every harness it detects (Claude Code and Gemini CLI fully automatic; Codex and OpenCode get their steps printed). The script is short on purpose — read it before piping:
 
 ```bash
-# binary
-curl -fsSL "https://github.com/gnoverse/gno-mcp/releases/latest/download/gno-mcp_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar -xz -C /tmp
-mkdir -p ~/.local/bin && mv /tmp/gnomcp ~/.local/bin/
-~/.local/bin/gnomcp version
-# MCP registration (absolute path — no PATH assumption)
-claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp
+curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh
 ```
 
-then install the plugin from inside a session (slash commands, not shell):
+Flags (pass via `sh -s -- <flags>`): `--harness claude|gemini|codex|opencode|none` (repeatable), `--bin-dir DIR`, `--version vX.Y.Z`.
 
-```
-/plugin marketplace add gnoverse/gno-mcp
-/plugin install gnomcp@gnoverse
+Prefer no script? Download `gno-mcp_<os>_<arch>.tar.gz` from the [releases page](https://github.com/gnoverse/gno-mcp/releases/latest), put `gnomcp` wherever you like, and follow your harness section below.
+
+**When you're done: restart the harness.** Plugins and MCP servers load at session start — a session that was already open will not see gnomcp.
+
+### Claude Code
+
+Run the installer above — or paste this prompt into a session and let the agent do it (short enough to audit first; each step runs under your normal permission prompts):
+
+> Install gnomcp: download the gnomcp binary for this machine from github.com/gnoverse/gno-mcp/releases/latest into ~/.local/bin, install the gno skills plugin with `claude plugin marketplace add gnoverse/gno-mcp` and `claude plugin install gnomcp@gnoverse`, register the MCP server with `claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp`, verify with `claude mcp list`, and then remind me to restart Claude Code so the plugin loads.
+
+Or by hand, with the binary already at `~/.local/bin/gnomcp`:
+
+```bash
+claude plugin marketplace add gnoverse/gno-mcp
+claude plugin install gnomcp@gnoverse
+claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp   # absolute path — no PATH assumption
 ```
 
-**Other MCP clients** — install the binary as above (or from source: `go install github.com/gnoverse/gno-mcp/cmd/gnomcp@latest`) and point your client at it:
+(the `plugin` commands also work as `/plugin …` slash commands inside a session)
+
+Restart Claude Code, then check: `claude mcp list` shows `gnomcp … ✔ Connected` and `/gno` is available.
+
+### Codex CLI
+
+Install the plugin via Codex's plugin flow pointing at `.codex-plugin/plugin.json` in this repo, then register the binary (`gnomcp`, no arguments) as a stdio MCP server in your Codex config.
+
+### OpenCode
+
+Add the plugin to your `opencode.json` and restart OpenCode — details in [.opencode/INSTALL.md](.opencode/INSTALL.md):
+
+```json
+{ "plugin": ["gnomcp@git+https://github.com/gnoverse/gno-mcp.git"] }
+```
+
+### Gemini CLI
+
+```bash
+gemini extensions install https://github.com/gnoverse/gno-mcp
+```
+
+### Cursor
+
+Install via Cursor's plugin flow; it reads `.cursor-plugin/plugin.json`.
+
+### Other MCP clients
+
+Any MCP host that runs local stdio servers works — install the binary (or build from source: `go install github.com/gnoverse/gno-mcp/cmd/gnomcp@latest`) and point your client at it:
 
 ```json
 {
@@ -187,17 +219,9 @@ Gated tools appear mid-session when `gno_profile_add` flips their gate (the serv
 
 See [docs/security.md](docs/security.md) for the full posture.
 
-## Skill installation (for AI coding agents)
+## Skills
 
-The repo bundles the `gno` skill (knowledge + routing, at `skills/gno/`) plus three thin side skills — `gno-audit`, `gno-debug`, `gno-onboard` — that compose its reference library into explicit workflows. Everything installs as one plugin for the major coding-agent harnesses:
-
-| Agent | Install |
-| --- | --- |
-| **Claude Code** | `/plugin marketplace add gnoverse/gno-mcp` then `/plugin install gnomcp` |
-| **Codex CLI** | Install via Codex's plugin flow pointing at `.codex-plugin/plugin.json` in this repo |
-| **Cursor** | Install via Cursor's plugin flow; reads `.cursor-plugin/plugin.json` |
-| **Gemini CLI** | `gemini extensions install https://github.com/gnoverse/gno-mcp` |
-| **OpenCode** | Add `"gnomcp@git+https://github.com/gnoverse/gno-mcp.git"` to your `opencode.json` `plugin` array. See `.opencode/INSTALL.md`. |
+The repo bundles the `gno` skill (knowledge + routing, at `skills/gno/`) plus three thin side skills — `gno-audit`, `gno-debug`, `gno-onboard` — that compose its reference library into explicit workflows. Everything ships as one plugin per harness — see [Install](#install).
 
 > [!NOTE]
 > The skill's content is currently hand-distilled from the [gnolang/gno](https://github.com/gnolang/gno) monorepo, so it can drift as the language evolves. The goal is a single source of truth — the monorepo as the sole reference — with the skill reduced to a thin wrapper that adds routing, guidance, and best practice on top of monorepo knowledge, never a fork of it.

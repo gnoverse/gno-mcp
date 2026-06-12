@@ -21,11 +21,12 @@ after a push to main, since the marketplace installs from GitHub, not the local 
 
 ## Step 1: paste-the-install-prompt
 ### Instruct
-Install gnomcp: download the gnomcp binary for this machine from github.com/gnoverse/gno-mcp/releases/latest into ~/.local/bin, install the gno skills plugin with `claude plugin marketplace add gnoverse/gno-mcp` and `claude plugin install gnomcp@gnoverse`, register the MCP server with `claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp`, and verify with `claude mcp list`.
+Install gnomcp: download the gnomcp binary for this machine from github.com/gnoverse/gno-mcp/releases/latest into ~/.local/bin, install the gno skills plugin with `claude plugin marketplace add gnoverse/gno-mcp` and `claude plugin install gnomcp@gnoverse`, register the MCP server with `claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp`, verify with `claude mcp list`, and then remind me to restart Claude Code so the plugin loads.
 ### Expect
 - correctness: every phase (binary, plugin, MCP registration, verification) completes; the AUT never asks the user for input or gives up; the final answer reports the gnomcp server as connected.
 - correctness: the platform-matched archive was downloaded (asset name embeds the container's actual os/arch).
 - correctness: the final state contains no failed/broken MCP server entry — and the AUT does not have to explain one away.
+- correctness: the final answer tells the user to restart Claude Code (plugins load at session start).
 ### Verify
 - Container state: `~/.local/bin/gnomcp` exists and is executable; running it with `version` exits 0 and prints a semver.
 - Container state: `~/.claude/plugins/installed_plugins.json` lists `gnomcp@gnoverse`, and the five gno skill directories (gno, gno-audit, gno-build, gno-debug, gno-onboard) exist under the installed plugin copy (`~/.claude/plugins/cache/gnoverse/gnomcp/*/skills/`) — the skills arrive via the plugin, never hand-copied into `~/.claude/skills`.
