@@ -25,6 +25,7 @@ jobs:
         env:
           RAW_VERSION: ${{ inputs.version }} # via env, never inlined: injection hygiene
         run: |
+          set -euo pipefail
           version="${RAW_VERSION#v}"
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
             echo "::error::invalid version '$RAW_VERSION' (want X.Y.Z or X.Y.Z-pre)"
@@ -37,15 +38,23 @@ jobs:
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
       - name: Check manifest versions match
-        run: ./scripts/bump-version.sh --check "$VERSION"
+        run: |
+          set -euo pipefail
+          if ! ./scripts/bump-version.sh --check "$VERSION"; then
+            echo "::error::manifests don't carry $VERSION — run 'make bump VERSION=$VERSION', commit, merge, then re-dispatch"
+            exit 1
+          fi
+      # setup-go before tagging: nothing fallible should run between the tag
+      # push and goreleaser, so a setup failure can't strand a pushed tag.
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with: { go-version: '1.26.4' }
       - name: Create and push tag
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "v$VERSION" -m "Release v$VERSION"
           git push origin "v$VERSION"
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with: { go-version: '1.26.4' }
       - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
           version: '~> v2'
