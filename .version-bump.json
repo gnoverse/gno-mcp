@@ -8,6 +8,14 @@
     { "path": ".cursor-plugin/plugin.json", "field": "version" }
   ],
   "audit": {
-    "exclude": ["go.mod", "go.sum", "scripts"]
+    "comment": "exclude paths whose version-like strings are illustrative examples, not the package version",
+    "exclude": [
+      "go.mod",
+      "go.sum",
+      "scripts",
+      ".github/workflows/release.yml",
+      "README.md",
+      "internal/server/README.md"
+    ]
   }
 }
