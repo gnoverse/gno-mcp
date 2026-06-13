@@ -5,14 +5,24 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func srcDir() string {
 	_, file, _, _ := runtime.Caller(0)
 	return filepath.Dir(file)
+}
+
+func TestAgentFaucet_versionSubcommand(t *testing.T) {
+	cmd := exec.Command("go", "run", ".", "version")
+	cmd.Dir = srcDir()
+	out, err := cmd.Output()
+	require.NoError(t, err, "run")
+	assert.Equal(t, version, strings.TrimSpace(string(out)))
 }
 
 func TestAgentFaucet_helpListsFlags(t *testing.T) {

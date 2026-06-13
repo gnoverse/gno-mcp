@@ -110,6 +110,20 @@ Any MCP host that runs local stdio servers works — install the binary (or buil
 }
 ```
 
+### Docker
+
+gnomcp speaks MCP over stdio, so the image runs attached. Multi-arch images (amd64/arm64) are published to GitHub Container Registry on every release:
+
+```json
+{
+  "mcpServers": {
+    "gnomcp": { "command": "docker", "args": ["run", "-i", "--rm", "ghcr.io/gnoverse/gnomcp:latest"] }
+  }
+}
+```
+
+Pin a version with `ghcr.io/gnoverse/gnomcp:0.2.0` instead of `:latest`. State (audit log, sessions, agent keys) is ephemeral unless you mount a volume at `/home/nonroot/.local/share/gnomcp`. Images carry a signed build-provenance attestation — verify with `gh attestation verify oci://ghcr.io/gnoverse/gnomcp:0.2.0 --repo gnoverse/gno-mcp`.
+
 For in-repo development register a dev server once: `claude mcp add gnomcp -- go run ./cmd/gnomcp` (do **not** add a `.mcp.json` at the repo root — the Claude Code plugin is sourced from the whole repo, so a root `.mcp.json` would ship to every plugin user as a broken server definition).
 
 ## Profiles
@@ -227,6 +241,19 @@ The repo bundles the `gno` skill (knowledge + routing, at `skills/gno/`) plus th
 > The skill's content is currently hand-distilled from the [gnolang/gno](https://github.com/gnolang/gno) monorepo, so it can drift as the language evolves. The goal is a single source of truth — the monorepo as the sole reference — with the skill reduced to a thin wrapper that adds routing, guidance, and best practice on top of monorepo knowledge, never a fork of it.
 
 Authoring conventions live in [docs/skills.md](docs/skills.md).
+
+## Agent faucet (operators)
+
+`agentfaucet` is the optional, standalone HTTP service that funds agent keys on a testnet — a per-chain piece operators run, then advertise to gnomcp via a profile's `faucet-service-url`. It is independent of the MCP server (HTTP-only coupling) and ships as both a release binary (`agentfaucet_<os>_<arch>.tar.gz`) and a multi-arch image `ghcr.io/gnoverse/agentfaucet`.
+
+```bash
+docker run --rm -p 8590:8590 \
+  -e GNOMCP_FAUCET_MNEMONIC="<funding key mnemonic>" \
+  ghcr.io/gnoverse/agentfaucet:latest \
+  -rpc-url https://rpc.testN.gno.land:443 -chain-id testN -listen 0.0.0.0:8590
+```
+
+The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC` (never a flag — a flag default leaks to `-help`/logs). The default `-listen` is `127.0.0.1:8590` for host safety, so in a container you must pass `-listen 0.0.0.0:8590`. Anti-abuse is built in: per-address cooldown, per-IP rate limit, and a hard global daily outflow cap (`-per-addr-cooldown`, `-per-ip-max`, `-per-ip-window`, `-daily-cap`, `-grant`). Only `test*` chain-ids are accepted. `agentfaucet -help` lists every flag.
 
 ## Development
 

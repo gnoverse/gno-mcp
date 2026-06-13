@@ -19,7 +19,16 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/chain"
 )
 
+// version is overridden at release time via -ldflags "-X main.version=...";
+// dev builds report "dev".
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Println(version)
+		return
+	}
+
 	rpcURL := flag.String("rpc-url", "", "gno node RPC URL (required)")
 	chainID := flag.String("chain-id", "", "chain-id of the target testnet (required)")
 	// The mnemonic is NOT a flag default: a non-empty string default is printed by

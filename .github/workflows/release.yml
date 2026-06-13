@@ -2,6 +2,8 @@ name: Release
 # Manual-only: dispatch with a version input; the workflow validates, tags
 # HEAD of the chosen ref, and runs goreleaser in the same run (so the default
 # GITHUB_TOKEN suffices — no downstream tag-triggered workflow exists).
+# goreleaser builds the gnomcp + agentfaucet binaries (GitHub release archives)
+# and their multi-arch images (ghcr.io/gnoverse/{gnomcp,agentfaucet}).
 on:
   workflow_dispatch:
     inputs:
@@ -13,9 +15,10 @@ permissions: {} # each job declares exactly what it needs
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: write # push the release tag, create the GitHub release, upload artifacts
+      packages: write # push container images to ghcr.io
       id-token: write # sign the build provenance attestation (keyless OIDC)
       attestations: write # store the attestation
     steps:
@@ -44,10 +47,18 @@ jobs:
             echo "::error::manifests don't carry $VERSION — run 'make bump VERSION=$VERSION', commit, merge, then re-dispatch"
             exit 1
           fi
-      # setup-go before tagging: nothing fallible should run between the tag
-      # push and goreleaser, so a setup failure can't strand a pushed tag.
+      # All fallible setup runs BEFORE the tag push: nothing that can fail may sit
+      # between the tag push and goreleaser, so a setup failure can't strand a tag.
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with: { go-version: '1.26.4' }
+      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+      - name: Log in to ghcr.io
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Create and push tag
         run: |
           set -euo pipefail
@@ -61,6 +72,41 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+      - name: Attest release binaries
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-checksums: dist/checksums.txt
+      - name: Collect pushed image digests
+        id: imgdigest
+        run: |
+          set -euo pipefail
+          # dockers_v2 emits one "Docker Image" (artifact.DockerImageV2) per pushed
+          # tag; the multi-arch index for the version tag carries .extra.Digest.
+          # Match the exact versioned name to grab the index (not a per-arch entry
+          # or the :latest duplicate); attesting the index digest covers all tags.
+          collect() {
+            jq -r --arg img "$1:$VERSION" '
+              [ .[] | select(.type == "Docker Image" and .name == $img) | .extra.Digest ]
+              | unique | .[0] // empty' dist/artifacts.json
+          }
+          gnomcp="$(collect ghcr.io/gnoverse/gnomcp)"
+          faucet="$(collect ghcr.io/gnoverse/agentfaucet)"
+          if [ -z "$gnomcp" ] || [ -z "$faucet" ]; then
+            echo "::error::could not resolve image digests from dist/artifacts.json"
+            jq -r '.[] | select(.type | test("Docker")) | .type + "  " + .name + "  " + (.extra.Digest // "-")' dist/artifacts.json
+            exit 1
+          fi
+          echo "gnomcp=$gnomcp" >> "$GITHUB_OUTPUT"
+          echo "faucet=$faucet" >> "$GITHUB_OUTPUT"
+      - name: Attest gnomcp image
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ghcr.io/gnoverse/gnomcp
+          subject-digest: ${{ steps.imgdigest.outputs.gnomcp }}
+          push-to-registry: true
+      - name: Attest agentfaucet image
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ghcr.io/gnoverse/agentfaucet
+          subject-digest: ${{ steps.imgdigest.outputs.faucet }}
+          push-to-registry: true

@@ -1,4 +1,5 @@
 version: 2
+
 builds:
   - id: gnomcp
     main: ./cmd/gnomcp
@@ -8,11 +9,68 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w -X main.version={{ .Version }}
+  - id: agentfaucet
+    main: ./cmd/agentfaucet
+    binary: agentfaucet
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
 archives:
-  - formats: [tar.gz]
-    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+  # gnomcp archive name is load-bearing: scripts/install.sh resolves
+  # gno-mcp_<os>_<arch>.tar.gz from the release. Do not rename it.
+  - id: gnomcp
+    ids: [gnomcp]
+    formats: [tar.gz]
+    name_template: "gno-mcp_{{ .Os }}_{{ .Arch }}"
+  - id: agentfaucet
+    ids: [agentfaucet]
+    formats: [tar.gz]
+    name_template: "agentfaucet_{{ .Os }}_{{ .Arch }}"
+
 checksum:
   name_template: "checksums.txt"
+
+# Multi-platform images, manifest stitched automatically. Built with buildx so an
+# amd64 runner emits arm64 too (the Dockerfiles only COPY a prebuilt static
+# binary — no cross-compilation). The release workflow sets up QEMU + buildx and
+# logs in to ghcr.io.
+dockers_v2:
+  - id: gnomcp
+    ids: [gnomcp]
+    dockerfile: docker/gnomcp.Dockerfile
+    images:
+      - ghcr.io/gnoverse/gnomcp
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms: [linux/amd64, linux/arm64]
+    labels:
+      org.opencontainers.image.title: gnomcp
+      org.opencontainers.image.description: MCP server for gno.land
+      org.opencontainers.image.source: https://github.com/gnoverse/gno-mcp
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: Apache-2.0
+  - id: agentfaucet
+    ids: [agentfaucet]
+    dockerfile: docker/agentfaucet.Dockerfile
+    images:
+      - ghcr.io/gnoverse/agentfaucet
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms: [linux/amd64, linux/arm64]
+    labels:
+      org.opencontainers.image.title: agentfaucet
+      org.opencontainers.image.description: Testnet faucet service for gnomcp agent keys
+      org.opencontainers.image.source: https://github.com/gnoverse/gno-mcp
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: Apache-2.0
+
 release:
   github:
     owner: gnoverse
