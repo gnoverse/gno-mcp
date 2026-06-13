@@ -45,11 +45,11 @@ jobs:
       # Schema-check the goreleaser config, then build the full release matrix
       # (binaries + images) as a snapshot so config rot surfaces on PRs instead
       # of on release day. Snapshot builds images but never pushes them.
-      - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+      - uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
         with:
           version: '~> v2'
           args: check
-      - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+      - uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
         with:
           version: '~> v2'
           args: release --snapshot --clean
