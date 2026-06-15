@@ -56,9 +56,9 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 
 | When you… | Update |
 |---|---|
-| Add / rename / remove a tool | `docs/tools.md` (catalog) · README tool table + counts (two places: "Why this exists", table header) · `skills/gno/references/mcp.md` task table · `docs/security.md` envelope list (if it's a text tool) · server `instructions` in `cmd/gnomcp/main.go` (if a flow changes) |
-| Change write-auth / session / scope behavior | `docs/security.md` · README "Write authorization" · `docs/adr/session_authorization.md` |
-| Change profile fields or config semantics | README "Profiles" · `docs/adr/multichain_via_profiles.md` · `playground/e2e/profiles.e2e.toml` (the e2e harness profile) |
+| Add / rename / remove a tool | `docs/tools.md` (catalog) · README "20 tools" counts (intro bullet + "Tools" section) · `skills/gno/references/mcp.md` task table · `docs/security.md` envelope list (if it's a text tool) · server `instructions` in `cmd/gnomcp/main.go` (if a flow changes) |
+| Change write-auth / session / scope behavior | `docs/security.md` · `docs/gnomcp.md` "Write authorization" · `docs/adr/session_authorization.md` |
+| Change profile fields or config semantics | `docs/gnomcp.md` "Configuration" · `docs/adr/multichain_via_profiles.md` · `playground/e2e/profiles.e2e.toml` (the e2e harness profile) |
 | Make or revise an architectural decision | `docs/adr/` — edit in place with an updated status line; keep records matching shipped state, not plans |
 | Add a skill or a reference file under `skills/` | `docs/skills.md` · README skills section · **this file** (Map + this table) — harnesses discover `skills/` automatically, no per-skill registration |
 | Add a make target or change the dev flow | this file (Commands) |
