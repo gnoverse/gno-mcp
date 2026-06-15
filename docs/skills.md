@@ -8,7 +8,8 @@ The `skills/` directory is a Claude plugin package. Each subdirectory is a singl
 
 | Skill | Trigger |
 |---|---|
-| [`gno`](../skills/gno/) | Gno development deep work: writing/modifying realm code, interrealm semantics, payments, `Render()` authoring, project setup. Also the reference library every side skill loads. Defers audits, tx debugging, and onboarding to its siblings. |
+| [`gno`](../skills/gno/) | Reading, reviewing, and reasoning about existing Gno code: interrealm semantics, on-chain payments, `Render()` output, the memory and data model. The reference library every side skill loads. Defers building to `gno-build`, audits to `gno-audit`, tx debugging to `gno-debug`, onboarding to `gno-onboard`. |
+| [`gno-build`](../skills/gno-build/) | Authoring: write, test, and deploy a realm or `/p/` package, or scaffold a project — including when the user only describes the behavior they want ("deploy a counter I can bump"). Owns writing Gno source. |
 | [`gno-audit`](../skills/gno-audit/) | Explicit security audit of a realm/package ("is this safe", pre-funding review). Thin wrapper over `audit.md` + `security.md`. |
 | [`gno-debug`](../skills/gno-debug/) | Failed transaction/call triage. Thin wrapper over `debug.md`. |
 | [`gno-onboard`](../skills/gno-onboard/) | First-contact teaching; interview-first, adapts to the user's actual background (no fixed tiers). |
