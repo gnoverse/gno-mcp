@@ -8,11 +8,11 @@
 
 `gnomcp` connects gno.land to any MCP client (Claude Code, Claude Desktop, Cursor, Gemini CLI, OpenCode, …): read realms, evaluate expressions, inspect accounts, manage testnet keys, and simulate or broadcast transactions.
 
-- **MCP server** — 20 tools for reading and writing gno.land, with safety built in: mainnet is locked out, chain output can't hijack the agent, and user keys never leave `gnokey`.
+- **MCP server** — 20 tools for reading and writing gno.land, with safety built in: the agent can read any chain but only signs writes on dev/testnet, chain output can't hijack the agent, and user keys never leave `gnokey`.
 - **`gno` skill** — the knowledge layer for coding agents: interrealm semantics, security taxonomy, idiomatic patterns, `Render()` conventions, stdlib surface.
 
 > [!WARNING]
-> **Work in progress — unaudited, pre-release, testnet only.** The tool API can still change, the session write path is young and will be reworked, and there's no guaranteed upgrade path. Only `dev`/`testNN` chain-ids pass validation — mainnet is rejected by design. Read [docs/security.md](docs/security.md) and file issues when something looks off.
+> **Work in progress — unaudited and pre-release.** The tool API can still change, the session write path is young and will be reworked, and there's no guaranteed upgrade path. The agent can read any chain, but writes are confined to dev/testnet — no code path signs a transaction on mainnet or betanet. Read [docs/security.md](docs/security.md) and file issues when something looks off.
 
 ## Install
 
@@ -51,14 +51,14 @@ The tools cover chain reads, indexer reads, writes, sessions, and agent-key mana
 
 ## Configuration
 
-gnomcp can connect to any gno.land testnet or local dev chain — mainnet isn't supported. Beyond the built-in testnet and local defaults, save the chains you use as named **profiles** so gnomcp remembers them between runs: `gnomcp profile add` writes them to `profiles.toml`. A profile can also hold per-chain settings — an indexer URL, or the master address that lets the agent act as you for writes (user sessions).
+gnomcp can connect to any gno.land chain. Dev and testnet chains are read/write; mainnet and betanet are read-only — the agent can inspect and audit deployed code there, but no code path can sign a transaction on a real-funds chain. Beyond the built-in testnet and local defaults, save the chains you use as named **profiles** so gnomcp remembers them between runs: `gnomcp profile add` writes them to `profiles.toml`. A profile can also hold per-chain settings — an indexer URL, or the master address that lets the agent act as you for writes (dev/testnet only).
 
 Profile fields and the agent-key-vs-session signing model → [Configuration](docs/gnomcp.md#configuration) and [Write authorization](docs/gnomcp.md#write-authorization).
 
 ## Security posture
 
 - **User keys never leave `gnokey`.** Sessions are authorized by the user running a printed `gnokey` command on their own machine; gnomcp never sees a mnemonic and never asks for one.
-- **Mainnet cannot enter the config.** The chain-id allowlist (`dev`, `testNN`) is enforced at validation time — there is no confirm flag to get past it, because there is nothing to confirm against.
+- **No signing on real-funds chains.** Writes are gated by chain-id (`dev`/`testNN`): mainnet and betanet can be read and audited, but the keystore won't derive an agent key for them, there's no faucet or session path, and `master-address` on such a chain is a config error. No code path signs for a read-only chain.
 - **Untrusted-content envelope on every chain byte.** Tool output derived from the chain is wrapped in `<untrusted_content kind="…" source="…">` with embedded-tag neutralization, so the LLM treats it as data, not instructions.
 - **Output budgeting.** Read tools cap inline output and summarize overflows instead of returning chopped halves.
 - **Audit log on every write.** JSON-lines, append-only, mode `0600`; records the tool, profile, result, and signing identity (agent vs session address). Operator-facing — not queryable through MCP.
