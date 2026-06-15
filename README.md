@@ -37,7 +37,7 @@ gnomcp ships pointed at the public testnet — nothing to configure:
 | `testnet` | `test11` | `https://rpc.test11.testnets.gno.land:443` |
 | `local` | `dev` | `http://127.0.0.1:26657` (local [gnodev](https://docs.gno.land/builders/local-dev-with-gnodev) node) |
 
-Read tools work right away. To write, generate an agent key (`gno_key_generate`) and fund it (`gno_faucet_fund`); the built-in `local` profile signs with gnodev's pre-funded `test1` key, so local writes need no setup.
+Reads work right away. Writing needs a funded agent key — gnomcp can generate one and request testnet funds for it. On the built-in `local` profile, writes are signed by gnodev's pre-funded `test1` key, so they need no setup at all.
 
 ## Tools
 
