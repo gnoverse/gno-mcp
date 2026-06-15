@@ -8,11 +8,17 @@
 
 `gnomcp` connects gno.land to any MCP client (Claude Code, Claude Desktop, Cursor, Gemini CLI, OpenCode, …): read realms, evaluate expressions, inspect accounts, manage testnet keys, and simulate or broadcast transactions.
 
-- **MCP server** — 20 tools for reading and writing gno.land, with safety built in: the agent can read any chain but only signs writes on dev/testnet, chain output can't hijack the agent, and user keys never leave `gnokey`.
+- **MCP server** — the tools to read and write gno.land from your agent, with safety built in.
 - **`gno` skill** — the knowledge layer for coding agents: interrealm semantics, security taxonomy, idiomatic patterns, `Render()` conventions, stdlib surface.
 
 > [!WARNING]
-> **Work in progress — unaudited and pre-release.** The tool API can still change, the session write path is young and will be reworked, and there's no guaranteed upgrade path. The agent can read any chain, but writes are confined to dev/testnet — no code path signs a transaction on mainnet or betanet. Read [docs/security.md](docs/security.md) and file issues when something looks off.
+> **Work in progress — unaudited and pre-release.**
+>
+> - The tool API can still change, and the session write path will be reworked.
+> - Writes are confined to dev/testnet — no code path signs on mainnet or betanet.
+> - No guaranteed upgrade path yet.
+>
+> Read [docs/security.md](docs/security.md) and file issues when something looks off.
 
 ## Install
 
@@ -43,32 +49,48 @@ Once it's installed, just talk to your agent in plain language:
 - *"what's the balance of g1…?"* — inspects an account
 - *"call AddPost on gno.land/r/myorg/blog with …"* — builds and broadcasts a transaction
 
-Reads work right away. Writing needs a funded agent key — gnomcp can generate one and request testnet funds for it. On the built-in `local` profile, writes are signed by gnodev's pre-funded `test1` key, so they need no setup at all.
+Reads work right away. Writing needs a funded agent key — gnomcp can generate one and request testnet funds. On the `local` profile, writes use gnodev's pre-funded `test1` key, so they need no setup.
 
 ## Tools
 
-The tools cover chain reads, indexer reads, writes, sessions, and agent-key management. Reads work right away against the built-in profiles; the write, session, and indexer tools become available once their prerequisites exist (an agent key or an active session, a profile with an indexer URL). Full catalog → [docs/tools.md](docs/tools.md).
+20 tools, grouped by what they touch:
+
+- **Chain reads** — render realms, evaluate expressions, read packages, inspect accounts and status. Work immediately.
+- **Indexer reads** — list realms, deploy and transaction history, on-chain activity. Need a profile with an indexer URL.
+- **Writes** — call functions, run code, deploy packages. Need a funded agent key or an active session.
+- **Sessions & keys** — propose and revoke user sessions, generate and fund agent keys.
+
+Full catalog → [docs/tools.md](docs/tools.md).
 
 ## Configuration
 
-gnomcp can connect to any gno.land chain. Dev and testnet chains are read/write; mainnet and betanet are read-only — the agent can inspect and audit deployed code there, but no code path can sign a transaction on a real-funds chain. Beyond the built-in testnet and local defaults, save the chains you use as named **profiles** so gnomcp remembers them between runs: `gnomcp profile add` writes them to `profiles.toml`. A profile can also hold per-chain settings — an indexer URL, or the master address that lets the agent act as you for writes (dev/testnet only).
+gnomcp can reach any gno.land chain. Dev and testnet chains are read/write; mainnet and betanet are read-only — inspect and audit deployed code, but no signing on real-funds chains.
 
-Profile fields and the agent-key-vs-session signing model → [Configuration](docs/gnomcp.md#configuration) and [Write authorization](docs/gnomcp.md#write-authorization).
+Beyond the built-in `testnet` and `local` defaults, save the chains you use as named **profiles** with `gnomcp profile add` (written to `profiles.toml`), so gnomcp remembers them between runs. A profile can also carry an indexer URL, or a master address for user-session writes (dev/testnet only).
 
-## Security posture
+Profile fields and the signing model → [Configuration](docs/gnomcp.md#configuration) · [Write authorization](docs/gnomcp.md#write-authorization).
 
-- **User keys never leave `gnokey`.** Sessions are authorized by the user running a printed `gnokey` command on their own machine; gnomcp never sees a mnemonic and never asks for one.
-- **No signing on real-funds chains.** Writes are gated by chain-id (`dev`/`testNN`): mainnet and betanet can be read and audited, but the keystore won't derive an agent key for them, there's no faucet or session path, and `master-address` on such a chain is a config error. No code path signs for a read-only chain.
-- **Untrusted-content envelope on every chain byte.** Tool output derived from the chain is wrapped in `<untrusted_content kind="…" source="…">` with embedded-tag neutralization, so the LLM treats it as data, not instructions.
-- **Output budgeting.** Read tools cap inline output and summarize overflows instead of returning chopped halves.
-- **Audit log on every write.** JSON-lines, append-only, mode `0600`; records the tool, profile, result, and signing identity (agent vs session address). Operator-facing — not queryable through MCP.
-- **Structured errors.** Failures carry a machine-routable code (`insufficient_funds`, `authentication_required`, `scope_mismatch`, …) plus a recovery hint, so agents fail forward instead of guessing.
+## Security
 
-See [docs/security.md](docs/security.md) for the full posture.
+- **Keys stay in `gnokey`** — gnomcp never sees a mnemonic; the user signs sessions on their own machine.
+- **No signing on real-funds chains** — writes are gated to dev/testnet; mainnet and betanet are read-only.
+- **Chain output can't hijack the agent** — every chain-derived byte is wrapped in an untrusted-content envelope.
+- **Bounded reads** — output is budgeted and summarized, never silently truncated.
+- **Every write is logged** — an append-only audit trail of the tool, profile, result, and signer.
+- **Structured errors** — machine-routable codes and recovery hints, so the agent fails forward.
+
+Full posture and threat model → [docs/security.md](docs/security.md).
 
 ## Skills
 
-The plugin bundles the `gno` skill (knowledge + routing, at `skills/gno/`) plus thin side skills — `gno-audit`, `gno-debug`, `gno-onboard` — that turn its reference library into step-by-step workflows. Authoring conventions → [docs/skills.md](docs/skills.md).
+The plugin teaches your agent gno.land — one deep skill plus focused workflows it routes to:
+
+- **gno** — write and modify realm code: interrealm calls, payments, `Render()`, project setup. The reference library the others build on.
+- **gno-onboard** — bring a newcomer up to speed, adapting to what they already know.
+- **gno-audit** — review a realm before you trust it ("is this safe?", pre-funding checks).
+- **gno-debug** — trace a failed transaction back to its cause.
+
+Authoring conventions → [docs/skills.md](docs/skills.md).
 
 ## Development
 
