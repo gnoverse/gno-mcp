@@ -75,7 +75,18 @@ Classifies the error, reproduces it cheaply without broadcasting, applies the fi
 
 Your agent proposes a scoped session and hands you a `gnokey` command to authorize on your own machine — it never touches your keys. Once you approve, it writes as you, within the limits you set, and tells you exactly how to revoke.
 
-Under all of these, the `gno` skill gives your agent the language, idioms, and security model; the workflows above build on it. Full reference: the [20 tools](docs/tools.md) and [skill authoring](docs/skills.md).
+Under all of these, the `gno` skill gives your agent the language, idioms, and security model; the workflows above build on it. Skill authoring → [docs/skills.md](docs/skills.md).
+
+## Tools
+
+20 tools, grouped by what they touch:
+
+- **Chain reads** — render realms, evaluate expressions, read packages, inspect accounts and status. Work immediately.
+- **Indexer reads** — list realms, deploy and transaction history, on-chain activity. Need a profile with an indexer URL.
+- **Writes** — call functions, run code, deploy packages. Need a funded agent key or an active session.
+- **Sessions & keys** — propose and revoke user sessions, generate and fund agent keys.
+
+Full catalog → [docs/tools.md](docs/tools.md).
 
 ## Configuration
 
