@@ -37,11 +37,14 @@ func main() {
 	// env var in practice, since argv is visible to ps and shell history.
 	mnemonic := flag.String("mnemonic", "", "BIP-39 mnemonic for the funding key (default: $GNOMCP_FAUCET_MNEMONIC)")
 	listen := flag.String("listen", "127.0.0.1:8590", "address to listen on")
-	grant := flag.Int64("grant", 1_000_000_000, "ugnot amount per drip")
+	grant := flag.Int64("grant", 1_000_000_000, "ugnot amount granted per fund request")
 	perAddrCooldown := flag.Duration("per-addr-cooldown", 24*time.Hour, "cooldown window between grants to the same address")
-	perIPMax := flag.Int("per-ip-max", 5, "max grants per IP per per-ip-window")
-	perIPWindow := flag.Duration("per-ip-window", time.Hour, "sliding window for per-IP rate limiting")
+	perIPMax := flag.Int("per-ip-max", 60, "coarse anti-hammer guard: max grants per IP per per-ip-window (not a token-safety control — the faucet is typically called server-side, so all requests share one egress IP)")
+	perIPWindow := flag.Duration("per-ip-window", time.Hour, "sliding window for the per-IP anti-hammer guard")
 	dailyCap := flag.Int64("daily-cap", 100_000_000_000, "hard daily ugnot outflow cap")
+	dripBurst := flag.Int64("drip-burst", 0, "global outflow token-bucket capacity in ugnot — the largest burst tolerated; this is the master switch (0 disables the drip control entirely)")
+	dripRate := flag.Int64("drip-rate", 0, "global outflow token-bucket refill, ugnot/sec; inert unless drip-burst is set (daily-cap still applies)")
+	minFundingBalance := flag.Int64("min-funding-balance", 0, "refuse grants (503) while the funding wallet holds fewer ugnot than this (0 disables)")
 	flag.Parse()
 
 	if *mnemonic == "" {
@@ -74,16 +77,30 @@ func main() {
 	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(),
 		fmt.Sprintf("%dugnot", chain.DefaultGasFeeUgnot), chain.DefaultGasWanted)
 	lim := faucet.NewLimiter(faucet.LimiterCfg{
-		PerAddrWindow: *perAddrCooldown,
-		PerAddrMax:    1,
-		PerIPWindow:   *perIPWindow,
-		PerIPMax:      *perIPMax,
-		DailyCapUgnot: *dailyCap,
-		GrantUgnot:    *grant,
+		PerAddrWindow:       *perAddrCooldown,
+		PerAddrMax:          1,
+		PerIPWindow:         *perIPWindow,
+		PerIPMax:            *perIPMax,
+		DailyCapUgnot:       *dailyCap,
+		GrantUgnot:          *grant,
+		DripBurstUgnot:      *dripBurst,
+		DripRateUgnotPerSec: *dripRate,
 	})
-	f := faucet.New(*chainID, *grant, disp, lim)
+
+	var opts []faucet.Option
+	if *minFundingBalance > 0 {
+		opts = append(opts, faucet.WithBalanceFloor(*minFundingBalance,
+			faucet.NewGnoclientBalance(cli, info.GetAddress(), 30*time.Second)))
+	}
+	f := faucet.New(*chainID, *grant, disp, lim, opts...)
 
 	log.Printf("agentfaucet: chain=%s listen=%s from=%s grant=%d", *chainID, *listen, info.GetAddress(), *grant)
+	// Dispenses are serialized (gnoclient signs against a queried account
+	// sequence), so concurrent /fund requests queue behind one chain round-trip
+	// each. WriteTimeout must comfortably exceed worst-case queue-depth × send
+	// latency; a request that blows it still completes its dispense on-chain
+	// (Send ignores ctx) but delivers no response — sized at 30s for low
+	// concurrency.
 	srv := &http.Server{
 		Addr:         *listen,
 		Handler:      f.Handler(),

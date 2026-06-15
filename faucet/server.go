@@ -46,8 +46,10 @@ func (f *Faucet) handleFund(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request: invalid recipient address", http.StatusBadRequest)
 	case errors.Is(err, ErrChainRefused), errors.Is(err, ErrChainMismatch):
 		http.Error(w, err.Error(), http.StatusForbidden)
-	case errors.Is(err, ErrCooldown), errors.Is(err, ErrRateLimited), errors.Is(err, ErrDailyCap):
+	case errors.Is(err, ErrCooldown), errors.Is(err, ErrRateLimited), errors.Is(err, ErrDailyCap), errors.Is(err, ErrDripLimited):
 		http.Error(w, err.Error(), http.StatusTooManyRequests)
+	case errors.Is(err, ErrFundingLow):
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	default:
 		// Internal dispense failures (CheckTx logs, RPC transport details) aid
 		// probing of a service that holds a funded key: log them, return a

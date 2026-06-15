@@ -95,6 +95,25 @@ func TestFaucet_badAddressDoesNotBurnDailyCap(t *testing.T) {
 	require.NoError(t, err, "bad-address requests must not consume the daily cap")
 }
 
+func TestFaucet_refusesWhenFundingBalanceBelowFloor(t *testing.T) {
+	fd := &fakeDispenser{}
+	bal := int64(1_000_000) // below the floor
+	f := New("test5", 1_000_000, fd, NewLimiter(LimiterCfg{
+		PerAddrMax: 1, PerIPMax: 100, DailyCapUgnot: 1_000_000_000, GrantUgnot: 1_000_000,
+	}), WithBalanceFloor(5_000_000, func(context.Context) (int64, error) { return bal, nil }))
+
+	_, err := f.Fund(context.Background(), validAddr, "1.1.1.1", "test5")
+	require.ErrorIs(t, err, ErrFundingLow, "drained funding wallet must refuse")
+	assert.Equal(t, 0, fd.calls, "no dispense when funding is below floor")
+
+	// The floor check must run before the limiter, leaving the address fundable
+	// once the wallet is topped up.
+	bal = 5_000_000
+	_, err = f.Fund(context.Background(), validAddr, "1.1.1.1", "test5")
+	require.NoError(t, err, "above the floor, the same address funds normally")
+	assert.Equal(t, 1, fd.calls)
+}
+
 func TestFaucet_refundsCooldownAndCapOnDispenseFailure(t *testing.T) {
 	fd := &fakeDispenser{err: errors.New("chain hiccup")}
 	f := New("test5", 1_000_000, fd, NewLimiter(LimiterCfg{

@@ -10,6 +10,7 @@ var (
 	ErrCooldown    = errors.New("faucet: address in cooldown")
 	ErrRateLimited = errors.New("faucet: per-IP rate limit")
 	ErrDailyCap    = errors.New("faucet: global daily cap reached")
+	ErrDripLimited = errors.New("faucet: global drip rate exceeded")
 )
 
 // LimiterCfg configures the rate limiter.
@@ -24,6 +25,14 @@ type LimiterCfg struct {
 	PerIPMax      int              // max grants per IP per window
 	DailyCapUgnot int64            // hard ceiling on total daily outflow
 	GrantUgnot    int64            // amount counted per successful Allow
+
+	// Global drip: a token bucket over total ugnot outflow, independent of
+	// address or IP. DripBurstUgnot is the bucket capacity (the largest spike
+	// tolerated); DripRateUgnotPerSec is the sustained refill. A zero
+	// DripBurstUgnot disables the drip control (fail-open for this one check —
+	// the daily cap still bounds total outflow).
+	DripBurstUgnot      int64
+	DripRateUgnotPerSec int64
 }
 
 // Limiter is a clock-injectable, mutex-guarded in-memory rate limiter that
@@ -42,6 +51,19 @@ type Limiter struct {
 	daySpent int64
 	dayStart time.Time
 
+	// Global drip token bucket (ugnot). dripTokens is refilled at dripRatePerSec
+	// up to dripBurst and spent by grantUgnot on each Allow. In-memory, like the
+	// daily cap and the cooldown windows: these limits bound outflow only over a
+	// SINGLE process lifetime. A restart re-seeds the bucket to full burst, zeroes
+	// daySpent, and forgives every cooldown — so a crash-loop multiplies the
+	// effective budget. For a long-lived single process this is fine; a
+	// multi-replica or restart-resilient faucet must move this state to a shared
+	// durable store keyed on a single global key (GCRA-on-Redis or a DB counter).
+	dripTokens     float64
+	dripBurst      float64
+	dripRatePerSec float64
+	dripLast       time.Time
+
 	mu sync.Mutex
 }
 
@@ -58,22 +80,26 @@ func NewLimiter(cfg LimiterCfg) *Limiter {
 		cfg.PerIPWindow = time.Hour
 	}
 	return &Limiter{
-		now:           cfg.Now,
-		perAddrWindow: cfg.PerAddrWindow,
-		perAddrMax:    cfg.PerAddrMax,
-		perIPWindow:   cfg.PerIPWindow,
-		perIPMax:      cfg.PerIPMax,
-		dailyCapUgnot: cfg.DailyCapUgnot,
-		grantUgnot:    cfg.GrantUgnot,
-		addrHits:      make(map[string][]time.Time),
-		ipHits:        make(map[string][]time.Time),
+		now:            cfg.Now,
+		perAddrWindow:  cfg.PerAddrWindow,
+		perAddrMax:     cfg.PerAddrMax,
+		perIPWindow:    cfg.PerIPWindow,
+		perIPMax:       cfg.PerIPMax,
+		dailyCapUgnot:  cfg.DailyCapUgnot,
+		grantUgnot:     cfg.GrantUgnot,
+		dripBurst:      float64(cfg.DripBurstUgnot),
+		dripRatePerSec: float64(cfg.DripRateUgnotPerSec),
+		dripTokens:     float64(cfg.DripBurstUgnot), // bucket starts full
+		addrHits:       make(map[string][]time.Time),
+		ipHits:         make(map[string][]time.Time),
 	}
 }
 
 // Allow records a grant for addr/ip and returns the time it was recorded, or a
-// non-nil error (ErrCooldown, ErrRateLimited, ErrDailyCap) if blocked. Checks
-// run in order: addr → IP → daily cap. The returned time is passed to Refund so
-// a refund knows which UTC day the grant counted against.
+// non-nil error (ErrCooldown, ErrRateLimited, ErrDailyCap, ErrDripLimited) if
+// blocked. Checks run in order: addr → IP → daily cap → global drip. The
+// returned time is passed to Refund so a refund knows which UTC day the grant
+// counted against.
 func (l *Limiter) Allow(addr, ip string) (time.Time, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -99,9 +125,19 @@ func (l *Limiter) Allow(addr, ip string) (time.Time, error) {
 		return time.Time{}, ErrRateLimited
 	}
 
-	// Check global daily cap.
-	if l.daySpent+l.grantUgnot > l.dailyCapUgnot {
+	// Check global daily cap. Written as a subtraction to avoid an int64 overflow
+	// when an operator sets dailyCapUgnot near math.MaxInt64.
+	if l.daySpent > l.dailyCapUgnot-l.grantUgnot {
 		return time.Time{}, ErrDailyCap
+	}
+
+	// Check global drip token bucket (skipped when disabled).
+	if l.dripBurst > 0 {
+		l.refillDrip(now)
+		if l.dripTokens < float64(l.grantUgnot) {
+			return time.Time{}, ErrDripLimited
+		}
+		l.dripTokens -= float64(l.grantUgnot)
 	}
 
 	// Grant: prune stale hits, record this hit, update counter.
@@ -131,6 +167,36 @@ func (l *Limiter) Refund(addr, ip string, grantedAt time.Time) {
 			l.daySpent = 0
 		}
 	}
+	// Credit the grant back to the drip bucket so a failed dispense doesn't
+	// permanently consume drip capacity. Refill first so the credit lands on a
+	// current bucket, then cap at burst. Relies on Refund only ever following a
+	// successful Allow, which has already seeded dripLast — so this never
+	// credits a grant the bucket did not spend.
+	if l.dripBurst > 0 {
+		l.refillDrip(l.now())
+		l.dripTokens += float64(l.grantUgnot)
+		if l.dripTokens > l.dripBurst {
+			l.dripTokens = l.dripBurst
+		}
+	}
+}
+
+// refillDrip adds tokens accrued since the last refill, capped at burst.
+// Callers must hold l.mu. The first call seeds dripLast without accruing.
+func (l *Limiter) refillDrip(now time.Time) {
+	if l.dripLast.IsZero() {
+		l.dripLast = now
+		return
+	}
+	elapsed := now.Sub(l.dripLast).Seconds()
+	if elapsed <= 0 {
+		return
+	}
+	l.dripTokens += elapsed * l.dripRatePerSec
+	if l.dripTokens > l.dripBurst {
+		l.dripTokens = l.dripBurst
+	}
+	l.dripLast = now
 }
 
 // sweepStale drops keys whose hits have all aged out of their window. Callers

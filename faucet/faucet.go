@@ -13,6 +13,7 @@ var (
 	ErrChainRefused  = errors.New("faucet: chain-id is not a testnet")
 	ErrChainMismatch = errors.New("faucet: chain-id does not match this faucet")
 	ErrBadAddress    = errors.New("faucet: invalid recipient address")
+	ErrFundingLow    = errors.New("faucet: funding wallet below minimum balance")
 
 	// testnet only; dev (local) and everything else are refused.
 	testChainRE = regexp.MustCompile(`^test-?\d+$`)
@@ -24,10 +25,37 @@ type Faucet struct {
 	grantUgnot int64
 	dispenser  Dispenser
 	limiter    *Limiter
+
+	// Balance-aware throttle (optional). When minFundingUgnot > 0 and
+	// fundingBalance is set, Fund refuses with ErrFundingLow once the funding
+	// wallet drops below the floor, so the faucet degrades gracefully rather than
+	// failing mid-dispense on an empty key. The floor is best-effort: the balance
+	// read and the dispense are not atomic (and the balance is TTL-cached), so
+	// concurrent in-flight grants can undershoot it by up to their combined size.
+	// It is a graceful-degradation guard, not a hard solvency invariant.
+	minFundingUgnot int64
+	fundingBalance  func(context.Context) (int64, error)
 }
 
-func New(chainID string, grantUgnot int64, d Dispenser, l *Limiter) *Faucet {
-	return &Faucet{chainID: chainID, grantUgnot: grantUgnot, dispenser: d, limiter: l}
+// Option configures optional Faucet behavior.
+type Option func(*Faucet)
+
+// WithBalanceFloor refuses grants (ErrFundingLow) while the funding wallet's
+// balance is below minUgnot. balance reports the funding wallet's current ugnot;
+// it should cache internally to avoid an RPC per request.
+func WithBalanceFloor(minUgnot int64, balance func(context.Context) (int64, error)) Option {
+	return func(f *Faucet) {
+		f.minFundingUgnot = minUgnot
+		f.fundingBalance = balance
+	}
+}
+
+func New(chainID string, grantUgnot int64, d Dispenser, l *Limiter, opts ...Option) *Faucet {
+	f := &Faucet{chainID: chainID, grantUgnot: grantUgnot, dispenser: d, limiter: l}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
 }
 
 // IsTestnetChainID reports whether id matches the testnet chain-id pattern (test-?N).
@@ -52,6 +80,19 @@ func (f *Faucet) Fund(ctx context.Context, address, ip, reqChainID string) (stri
 		return "", fmt.Errorf("%w: %q", ErrBadAddress, address)
 	}
 	canonical := addr.String()
+
+	// Funding-balance floor is a global precondition: if the faucet is broke,
+	// refuse fast and never touch the limiter (so a top-up restores service
+	// without having burnt anyone's cooldown).
+	if f.fundingBalance != nil && f.minFundingUgnot > 0 {
+		bal, err := f.fundingBalance(ctx)
+		if err != nil {
+			return "", fmt.Errorf("faucet: funding balance: %w", err)
+		}
+		if bal < f.minFundingUgnot {
+			return "", ErrFundingLow
+		}
+	}
 
 	grantedAt, err := f.limiter.Allow(canonical, ip)
 	if err != nil {

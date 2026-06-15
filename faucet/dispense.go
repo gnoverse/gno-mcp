@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"time"
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	"github.com/gnolang/gno/gno.land/pkg/gnoland/ugnot"
@@ -58,4 +59,33 @@ func (d *gnoclientDispenser) Send(_ context.Context, to string, amountUgnot int6
 		return "", fmt.Errorf("faucet: send: %w", err)
 	}
 	return hex.EncodeToString(res.Hash), nil
+}
+
+// NewGnoclientBalance returns a funding-balance source for WithBalanceFloor: it
+// queries addr's ugnot balance through cli, caching the result for ttl so a busy
+// faucet does not issue an account query per fund request. The funding key is
+// always a funded account, so a QueryAccount error is treated as a transport
+// failure and propagated (the caller surfaces it) rather than masked as a zero
+// balance.
+func NewGnoclientBalance(cli *gnoclient.Client, addr crypto.Address, ttl time.Duration) func(context.Context) (int64, error) {
+	var (
+		mu       sync.Mutex
+		cached   int64
+		cachedAt time.Time
+		seeded   bool
+	)
+	return func(context.Context) (int64, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if seeded && time.Since(cachedAt) < ttl {
+			return cached, nil
+		}
+		acc, _, err := cli.QueryAccount(addr)
+		if err != nil {
+			return 0, fmt.Errorf("query funding account: %w", err)
+		}
+		cached = acc.Coins.AmountOf(ugnot.Denom)
+		cachedAt, seeded = time.Now(), true
+		return cached, nil
+	}
 }
