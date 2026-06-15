@@ -121,7 +121,7 @@ Built against the official MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
 ## Roadmap
 
-- More side skills driving the tools through common workflows: onboarding, explicit audits, debugging a failed tx
+- Thin the skills toward the [gnolang/gno](https://github.com/gnolang/gno) monorepo as the single source of truth, less hand-distilled content
 - Docker as the canonical deployment
 - a2a serve mode (agent-to-agent realm bridge)
 - External security audit before any "stable" claim
