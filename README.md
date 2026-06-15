@@ -41,15 +41,13 @@ Read tools work right away. To write, generate an agent key (`gno_key_generate`)
 
 ## Tools
 
-20 tools across chain reads, indexer reads, writes, sessions, and agent-key management. The six chain read tools and `gno_connect` work right away against the built-in profiles; the write, session, and indexer tools appear once their prerequisites exist (an agent key or an active session, a profile with `tx-indexer-url`). Full catalog → [docs/tools.md](docs/tools.md).
+20 tools across chain reads, indexer reads, writes, sessions, and agent-key management. The read tools work right away against the built-in profiles; the write, session, and indexer tools become available once their prerequisites exist (an agent key or an active session, a profile with an indexer URL). Full catalog → [docs/tools.md](docs/tools.md).
 
 ## Configuration
 
-gnomcp reaches every chain through a **profile**. The built-in `local` and `testnet` profiles are read-only defaults, and only `dev`/`testNN` chain-ids are ever accepted — mainnet can't enter.
+gnomcp can connect to any gno.land testnet or local dev chain — mainnet isn't supported. Beyond the built-in testnet and local defaults, save the chains you use as named **profiles** so gnomcp remembers them between runs: `gnomcp profile add` writes them to `profiles.toml`. A profile can also hold per-chain settings — an indexer URL, or the master address that lets the agent act as you for writes (user sessions).
 
-Reaching a new chain needs no setup file: gnomcp can connect to one at runtime from a gnoweb URL, reading the page's connection metadata to register the chain in memory — good for reads and agent-key writes, and gone on restart. To make a chain persist across restarts, or to enable user-session writes (which need a `master-address`), add it to `profiles.toml` with `gnomcp profile add`.
-
-Profile fields, file precedence, and the agent-key-vs-session signing model → [Configuration](docs/gnomcp.md#configuration) and [Write authorization](docs/gnomcp.md#write-authorization).
+Profile fields and the agent-key-vs-session signing model → [Configuration](docs/gnomcp.md#configuration) and [Write authorization](docs/gnomcp.md#write-authorization).
 
 ## Security posture
 

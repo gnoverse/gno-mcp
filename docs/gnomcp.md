@@ -107,7 +107,7 @@ For in-repo development register a dev server once: `claude mcp add gnomcp -- go
 
 Profiles are the source of truth for which chains gnomcp can reach. The built-in `local` and `testnet` are read-only defaults. Only `dev` and `testNN` chain-ids are accepted — betanet, staging, and mainnet ids cannot enter a profile.
 
-There are two ways to add a chain. **Persistently**, with the `gnomcp profile add` CLI below — these survive restarts and are required for user-session writes (they can carry a `master-address`). Or **dynamically at runtime**: gnomcp can connect to a chain from a gnoweb URL and register it in memory, supporting reads and agent-key writes, never sessions, and gone on restart. (The agent tools that drive the runtime path are listed in [docs/tools.md](tools.md).)
+gnomcp can connect to a chain on the fly during a session, but a chain added that way isn't saved. Persist the ones you want it to remember between runs with `gnomcp profile add` (below); a saved profile is also what user-session writes need, since it carries the `master-address`.
 
 ```bash
 # From a gnoweb URL (autofills rpc + chain-id from the page's gnoconnect meta-tags)
