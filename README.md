@@ -45,9 +45,9 @@ Read tools work right away. To write, generate an agent key (`gno_key_generate`)
 
 ## Configuration
 
-Under the hood, gnomcp reaches every chain through a **profile**. The built-in `local` and `testnet` profiles are read-only defaults, and only `dev`/`testNN` chain-ids are ever accepted — mainnet can't enter.
+gnomcp reaches every chain through a **profile**. The built-in `local` and `testnet` profiles are read-only defaults, and only `dev`/`testNN` chain-ids are ever accepted — mainnet can't enter.
 
-You don't have to pre-configure anything to reach a new chain. An agent can discover one from a gnoweb URL with `gno_connect` and register it mid-session with `gno_profile_add` — added in memory, good for reads and agent-key writes, and gone on restart. To make a chain survive restarts, or to enable user-session writes (which need a `master-address`), persist it to `profiles.toml` with `gnomcp profile add`.
+Reaching a new chain needs no setup file: gnomcp can connect to one at runtime from a gnoweb URL, reading the page's connection metadata to register the chain in memory — good for reads and agent-key writes, and gone on restart. To make a chain persist across restarts, or to enable user-session writes (which need a `master-address`), add it to `profiles.toml` with `gnomcp profile add`.
 
 Profile fields, file precedence, and the agent-key-vs-session signing model → [Configuration](docs/gnomcp.md#configuration) and [Write authorization](docs/gnomcp.md#write-authorization).
 
