@@ -37,6 +37,14 @@ type Fake struct {
 	lastAddPkgFiles map[string][]*std.MemFile // key: deployPath; set on every AddPackage call
 	lastSend        string                    // send arg of the most recent Call/CallAsUser
 	lastAsUserMstr  string                    // master arg of the most recent CallAsUser/RunAsUser
+	bankSends       []SendRecord              // every bank/MsgSend via Send, in order
+	sendErr         error                     // when set, Send returns it
+}
+
+// SendRecord captures one bank/MsgSend made through the Fake (test introspection).
+type SendRecord struct {
+	To     string
+	Amount int64
 }
 
 func NewFake() *Fake {
@@ -261,6 +269,33 @@ func (f *Fake) SetAddPackage(deployPath string, result AddPackageResult) {
 func (f *Fake) LastAddPackageFiles(deployPath string) []*std.MemFile {
 	return f.lastAddPkgFiles[deployPath]
 }
+
+// Send records a bank/MsgSend and moves the seeded balances (debit from, credit
+// to) so a follow-up Balance reflects the transfer. Returns the configured
+// SetSendError, if any.
+func (f *Fake) Send(_ context.Context, signer gnoclient.Signer, toAddr string, amountUgnot int64) (SendResult, error) {
+	if f.sendErr != nil {
+		return SendResult{}, f.sendErr
+	}
+	if amountUgnot <= 0 { // mirror Real.Send so the fake enforces the same contract
+		return SendResult{}, fmt.Errorf("send: amount must be positive, got %d", amountUgnot)
+	}
+	f.bankSends = append(f.bankSends, SendRecord{To: toAddr, Amount: amountUgnot})
+	if signer != nil {
+		if info, err := signer.Info(); err == nil {
+			f.balances[info.GetAddress().String()] -= amountUgnot
+		}
+	}
+	f.balances[toAddr] += amountUgnot
+	return SendResult{TxHash: "0xsend", Height: 1, GasUsed: 1}, nil
+}
+
+// SetSendError makes Send return err for all subsequent calls until reset (it is
+// sticky, not one-shot).
+func (f *Fake) SetSendError(err error) { f.sendErr = err }
+
+// BankSends returns every bank/MsgSend recorded by Send, in order.
+func (f *Fake) BankSends() []SendRecord { return f.bankSends }
 
 // SetBalance seeds the ugnot balance for addr (used in tests to simulate a funded account).
 func (f *Fake) SetBalance(addr string, ugnot int64) { f.balances[addr] = ugnot }

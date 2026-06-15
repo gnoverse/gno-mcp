@@ -18,7 +18,7 @@ Writes sign with one of two identities — never with the user's key.
 **Agent identity — local and testnet.** The agent signs with its own key directly — no session required:
 
 - **Local profiles** use the built-in **test1** account (the well-known *public* test mnemonic). Structurally confined to dev chains by the chain-id capability gate.
-- **Testnet profiles** use a key generated and persisted by `gno_key_generate`. The key is stored in `~/.local/share/gnomcp/agent-keys` (mode `0600`); when `GNOMCP_SESSION_PASSPHRASE` is set it is encrypted at rest with scrypt+AES-256-GCM.
+- **Testnet profiles** use keys generated and persisted by `gno_key_generate`. Each profile may hold up to `GNOMCP_AGENT_MAX_KEYS` (default 5) named keys, stored one file per key at `~/.local/share/gnomcp/agent-keys/<profile>/<name>.key` (mode `0600`); when `GNOMCP_SESSION_PASSPHRASE` is set they are encrypted at rest with scrypt+AES-256-GCM. `gno_key_send` moves ugnot only between a profile's own keys (the destination is a key name, never an arbitrary address).
 
 Both tiers are confined to dev/test by the chain-id capability gate (`^(dev|test-?\d+)$`); no path creates an agent key for a read-only chain (mainnet/betanet).
 
@@ -83,3 +83,5 @@ Errors are JSON-encoded payloads with `code`, `message`, and (where useful) extr
 | `insufficient_funds` | The agent's testnet account is unfunded (run `gno_faucet_fund`) |
 | `simulate_unsupported` | `simulate=true` against a client that can't dry-run |
 | `agent_identity_unavailable` | Agent identity requested on a profile with no agent key (run `gno_key_generate` for testnet) |
+| `key_cap_reached` | The profile already holds `GNOMCP_AGENT_MAX_KEYS` agent keys; delete one (`gno_key_delete`) to free a slot |
+| `key_ignored_for_session` | A `key` arg was supplied with `identity=session`, where it does not apply (the session signer is used) |

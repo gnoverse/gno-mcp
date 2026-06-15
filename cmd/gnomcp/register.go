@@ -65,8 +65,11 @@ func registerAllTools(d *toolDeps) {
 	// Agent-only tools — every allowed chain (local dev or testnet) has an
 	// agent key path (test1 or generated key), so these are unconditional.
 	writetools.RegisterAddPkg(s, d.keystore, d.chainResolver, d.auditLog)
+	writetools.RegisterKeySend(s, d.keystore, d.chainResolver, d.auditLog)
 	writetools.RegisterKeyAddress(s, d.keystore)
+	writetools.RegisterKeyList(s, d.keystore)
 	writetools.RegisterKeyGenerate(s, d.keystore)
+	writetools.RegisterKeyDelete(s, d.keystore)
 
 	if s.AnyProfileTestnet() {
 		writetools.RegisterFaucetFund(s, d.keystore, d.chainResolver, d.faucetClient)

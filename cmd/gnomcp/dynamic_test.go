@@ -31,7 +31,7 @@ func newDynDeps(t *testing.T, s *server.Server, resolver chain.Resolver) *toolDe
 		chainResolver:   resolver,
 		indexerResolver: buildIndexerResolver(s),
 		sessionMgr:      session.NewManager(t.TempDir(), ""),
-		keystore:        keystore.New(t.TempDir(), ""),
+		keystore:        keystore.New(t.TempDir(), "", 5),
 		auditLog:        audit.NewLog(io.Discard),
 		connectClient:   http.DefaultClient,
 		faucetClient:    http.DefaultClient,

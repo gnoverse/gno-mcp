@@ -15,7 +15,7 @@ import (
 
 func TestKeyGenerate_testnetProfile_returnsAddress(t *testing.T) {
 	s := newTestnetTestServer(t)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 	RegisterKeyGenerate(s, ks)
 
 	res, err := s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{
@@ -30,7 +30,7 @@ func TestKeyGenerate_testnetProfile_returnsAddress(t *testing.T) {
 
 func TestKeyGenerate_secondCall_keyAlreadyExists(t *testing.T) {
 	s := newTestnetTestServer(t)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 	RegisterKeyGenerate(s, ks)
 
 	_, err := s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{
@@ -49,7 +49,7 @@ func TestKeyGenerate_secondCall_keyAlreadyExists(t *testing.T) {
 
 func TestKeyGenerate_noKeyDir_keyStorageUnconfigured(t *testing.T) {
 	s := newTestnetTestServer(t)
-	ks := keystore.New("", "")
+	ks := keystore.New("", "", 5)
 	RegisterKeyGenerate(s, ks)
 
 	_, err := s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{
@@ -63,7 +63,7 @@ func TestKeyGenerate_noKeyDir_keyStorageUnconfigured(t *testing.T) {
 
 func TestKeyGenerate_localProfile_keyGenerationUnsupported(t *testing.T) {
 	s := newLocalTestServerWithTestnet(t)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 	RegisterKeyGenerate(s, ks)
 
 	_, err := s.Registry().Call(context.Background(), "gno_key_generate", map[string]any{

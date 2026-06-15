@@ -22,7 +22,7 @@ import (
 func TestAddPkg_descriptionRoutesAuthoringGuidance(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
-	RegisterAddPkg(s, keystore.New(t.TempDir(), ""), constChainResolver(chain.NewFake()), audit.NewLog(&auditBuf))
+	RegisterAddPkg(s, keystore.New(t.TempDir(), "", 5), constChainResolver(chain.NewFake()), audit.NewLog(&auditBuf))
 
 	tool, ok := s.Registry().Get("gno_addpkg")
 	require.True(t, ok)
@@ -35,7 +35,7 @@ func TestAddPkg_happyPath(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	fake := chain.NewFake()
 	fake.SetAddPackage("gno.land/r/test/foo", chain.AddPackageResult{
@@ -71,7 +71,7 @@ func TestAddPkg_agentIdentityUnavailable(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	fake := chain.NewFake()
 	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
@@ -98,9 +98,9 @@ func TestAddPkg_agentTestnet_insufficientFunds(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
-	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake() // balance 0 by default
@@ -127,9 +127,9 @@ func TestAddPkg_insufficientFundsDenialAuditsArgs(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
-	_, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	_, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake() // balance 0 by default
@@ -158,9 +158,9 @@ func TestAddPkg_agentTestnet_funded(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
-	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake()

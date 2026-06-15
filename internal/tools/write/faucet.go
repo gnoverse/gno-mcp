@@ -26,7 +26,8 @@ func RegisterFaucetFund(s *server.Server, ks *keystore.Keystore, resolver chain.
 		Description: "Funds the agent's own testnet account for a profile so it can submit transactions. " +
 			"Uses whatever the profile configures: an automatic faucet service, an existing faucet page, " +
 			"or (if neither) reports the address to fund manually. Requires a generated agent key " +
-			"(run gno_key_generate first). Optional arg: profile (testnet profiles only; the server default applies when omitted). Reports the acting " +
+			"(run gno_key_generate first). Optional args: profile (testnet profiles only; the server default applies when omitted) " +
+			"and key (which named key to fund; default \"default\"). Reports the acting " +
 			"address and whether it is funded yet; if not, surfaces where to fund it.",
 		InputSchema: faucetFundInputSchema(s),
 		OutputKind:  server.OutputText,
@@ -42,6 +43,7 @@ func faucetFundInputSchema(s *server.Server) map[string]any {
 	props := map[string]any{}
 	required := []string{}
 	addTestnetProfileArg(s, props, &required)
+	addOptionalKeyArg(props)
 	return map[string]any{"type": "object", "properties": props, "required": required, "additionalProperties": false}
 }
 
@@ -50,7 +52,11 @@ func faucetFundHandler(ctx context.Context, args map[string]any, s *server.Serve
 	if err != nil {
 		return server.Result{}, err
 	}
-	addr, err := ks.AgentAddress(profileName, profile)
+	keyName, err := keyArg(args)
+	if err != nil {
+		return server.Result{}, err
+	}
+	addr, err := ks.AgentAddress(profileName, keyName, profile)
 	if err != nil {
 		if terr := agentKeyToolError(err, profileName, "run gno_key_generate first, then gno_faucet_fund"); terr != nil {
 			return server.Result{}, terr

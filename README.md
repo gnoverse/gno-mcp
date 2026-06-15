@@ -79,12 +79,12 @@ Under all of these, the `gno` skill gives your agent the language, idioms, and s
 
 ## Tools
 
-20 tools, grouped by what they touch:
+23 tools, grouped by what they touch:
 
 - **Chain reads** — render realms, evaluate expressions, read packages, inspect accounts and status. Work immediately.
 - **Indexer reads** — list realms, deploy and transaction history, on-chain activity. Need a profile with an indexer URL.
 - **Writes** — call functions, run code, deploy packages. Need a funded agent key or an active session.
-- **Sessions & keys** — propose and revoke user sessions, generate and fund agent keys.
+- **Sessions & keys** — propose and revoke user sessions; generate, list, fund, delete agent keys, and transfer ugnot between a profile's own keys.
 
 Full catalog → [docs/tools.md](docs/tools.md).
 

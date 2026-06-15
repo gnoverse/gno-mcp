@@ -16,6 +16,7 @@ import (
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 	tmed25519 "github.com/gnolang/gno/tm2/pkg/crypto/ed25519"
+	"github.com/gnolang/gno/tm2/pkg/sdk/bank"
 	"github.com/gnolang/gno/tm2/pkg/std"
 )
 
@@ -541,6 +542,31 @@ func (r *Real) AddPackage(_ context.Context, signer gnoclient.Signer, deployPath
 		return AddPackageResult{}, fmt.Errorf("addpackage: broadcast: %w", err)
 	}
 	return AddPackageResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, GasUsed: res.DeliverTx.GasUsed}, nil
+}
+
+// Send broadcasts a bank/MsgSend of amountUgnot from the agent key to toAddr.
+func (r *Real) Send(_ context.Context, signer gnoclient.Signer, toAddr string, amountUgnot int64) (SendResult, error) {
+	if amountUgnot <= 0 {
+		return SendResult{}, fmt.Errorf("send: amount must be positive, got %d", amountUgnot)
+	}
+	from, cli, err := r.agentTxSetup(signer, "send")
+	if err != nil {
+		return SendResult{}, err
+	}
+	to, err := crypto.AddressFromBech32(toAddr)
+	if err != nil {
+		return SendResult{}, fmt.Errorf("send: bad recipient %q: %w", toAddr, err)
+	}
+	msg := bank.MsgSend{
+		FromAddress: from,
+		ToAddress:   to,
+		Amount:      std.Coins{{Denom: ugnot.Denom, Amount: amountUgnot}},
+	}
+	res, err := cli.Send(defaultBaseTxCfg(), msg)
+	if err != nil {
+		return SendResult{}, fmt.Errorf("send: broadcast: %w", err)
+	}
+	return SendResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, GasUsed: res.DeliverTx.GasUsed}, nil
 }
 
 // Balance returns the ugnot balance of a bech32 address.

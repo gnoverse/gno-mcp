@@ -85,6 +85,10 @@ func runHandler(
 	if err != nil {
 		return server.Result{}, err
 	}
+	keyName, err := keyArg(args)
+	if err != nil {
+		return server.Result{}, err
+	}
 
 	code, err := server.StringArg(args, "code")
 	if err != nil {
@@ -118,6 +122,7 @@ func runHandler(
 		tool:        "gno_run",
 		noKeyHint:   "run gno_key_generate (or pass identity=session to act as the user)",
 		profileName: profileName,
+		keyName:     keyName,
 		profile:     profile,
 		simulate:    simulate,
 		c:           c,
@@ -216,11 +221,12 @@ func runInputSchema(s *server.Server) map[string]any {
 		"identity": map[string]any{
 			"type":        "string",
 			"enum":        []string{"agent", "session"},
-			"description": "Who signs: agent (the agent's own key — local test1 or testnet generated key) or session (act as the user via a master-bound session). Default: agent; pass session to act as the user.",
+			"description": "Who signs: agent (the agent's own key — local test1 or testnet generated key) or session (act as the user via a master-bound session). Default: agent; pass session to act as the user. The key arg applies to identity=agent only and is rejected with identity=session.",
 		},
 	}
 	required := []string{"code"}
 	addWritableProfileArg(s, props, &required)
+	addOptionalKeyArg(props)
 	return map[string]any{
 		"type":                 "object",
 		"properties":           props,

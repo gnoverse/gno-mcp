@@ -15,8 +15,8 @@ import (
 
 func TestFaucetFund_linkBackend_reportsFunded(t *testing.T) {
 	s := newTestnetTestServer(t)
-	ks := keystore.New(t.TempDir(), "")
-	addr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	ks := keystore.New(t.TempDir(), "", 5)
+	addr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err)
 
 	fake := chain.NewFake()
@@ -31,7 +31,7 @@ func TestFaucetFund_linkBackend_reportsFunded(t *testing.T) {
 
 func TestFaucetFund_missingProfileHint(t *testing.T) {
 	s := newTestnetTestServer(t)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 	RegisterFaucetFund(s, ks, constChainResolver(chain.NewFake()), &http.Client{})
 
 	_, err := s.Registry().Call(context.Background(), "gno_faucet_fund", map[string]any{"profile": ""})
@@ -42,7 +42,7 @@ func TestFaucetFund_missingProfileHint(t *testing.T) {
 
 func TestFaucetFund_keystoreUnconfigured(t *testing.T) {
 	s := newTestnetTestServer(t)
-	ks := keystore.New("", "") // no agent-keys directory configured
+	ks := keystore.New("", "", 5) // no agent-keys directory configured
 	RegisterFaucetFund(s, ks, constChainResolver(chain.NewFake()), &http.Client{})
 
 	_, err := s.Registry().Call(context.Background(), "gno_faucet_fund", map[string]any{"profile": "testnet9999"})
@@ -54,7 +54,7 @@ func TestFaucetFund_keystoreUnconfigured(t *testing.T) {
 
 func TestFaucetFund_noAgentKey(t *testing.T) {
 	s := newTestnetTestServer(t)
-	ks := keystore.New(t.TempDir(), "") // no key generated
+	ks := keystore.New(t.TempDir(), "", 5) // no key generated
 	RegisterFaucetFund(s, ks, constChainResolver(chain.NewFake()), &http.Client{})
 
 	_, err := s.Registry().Call(context.Background(), "gno_faucet_fund", map[string]any{"profile": "testnet9999"})

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -45,6 +46,7 @@ const serverInstructions = "gnomcp exposes Gno chain operations over MCP. The in
 	"- DISCOVER: when the user names an app or realm without its full path, enumerate the chain — gno_packages (path prefix or @namespace), or gno_list where an indexer is configured — instead of guessing package paths or asking the user for something the chain can answer.\n" +
 	"- READ: gno_read (default = structural outline; symbols=[...] for specific declarations; full=true for raw source) plus gno_render / gno_eval (rendered output / on-chain values). The outline is navigation, not evidence — audit-grade review reads whole files.\n" +
 	"- WRITE on testnet: gno_key_generate (once) -> gno_faucet_fund (fund the agent key) -> gno_call / gno_run / gno_addpkg. An unfunded write returns insufficient_funds pointing at gno_faucet_fund.\n" +
+	"- MULTIPLE KEYS (testnet): a profile can hold several named agent keys (key arg on the write tools, default \"default\"; cap GNOMCP_AGENT_MAX_KEYS). gno_key_list shows them, gno_key_delete removes one (replace = delete then generate). To exercise a realm involving multiple addresses, fund one key, then gno_key_send to move ugnot to your own secondary keys and sign calls as each with the key arg. key applies to identity=agent only.\n" +
 	"- WRITE as the user (any WRITABLE chain): gno_session_propose -> the user runs the printed gnokey command to authorize -> retry the write with identity=session. The session needs the user's master account: if the profile has a master-address it is used; if it has none, gno_session_propose requires master_address — ASK the user for their PUBLIC address (g1..., the public one, NOT a key or seed phrase) and pass it. Do NOT tell the user to edit profiles.toml or restart — that friction is gone. gno_auth_status / gno_session_revoke inspect and revoke sessions. Sessions cover gno_call and gno_run ONLY — gno_addpkg (deploy) is not session-supported and always signs with the agent key; deploying under the USER's own address means the user runs `gnokey maketx addpkg` themselves. The session path is WIP — prefer tight allow_paths, a low spend_limit, and a short expires_in.\n" +
 	"- A GNOWEB URL NAMES A CHAIN: a gnoweb URL (e.g. https://gno.land/r/gnoland/blog) is authoritative for WHICH chain to use — resolve it from the URL with gno_profile_add (gnoweb_url=...) before reading, never on whatever profile is ambient. gno_profile_add discovers, verifies, and adds in one call (in-memory, gone on restart); gno_connect previews without adding. dev/testnets are write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is added READ-ONLY (read tools only), which is all an audit needs. " +
 	"To persist: run the returned persist_command and restart gnomcp. Writable dynamic profiles support reads and agent-key writes; sessions need a persisted profile with master-address.\n" +
@@ -144,7 +146,7 @@ func main() {
 	}
 
 	// ---- keystore (agent identity for local and testnet profiles)
-	ks := keystore.New(defaultAgentKeysPath(), passphrase)
+	ks := keystore.New(defaultAgentKeysPath(), passphrase, defaultAgentMaxKeys())
 
 	// ---- build MCP SDK server
 	mcpServer := mcpsdk.NewServer(&mcpsdk.Implementation{
@@ -513,6 +515,20 @@ func defaultAgentKeysPath() string {
 		return filepath.Join(home, ".local", "share", "gnomcp", "agent-keys")
 	}
 	return "./agent-keys"
+}
+
+// defaultAgentMaxKeys is the per-profile cap on agent keys: GNOMCP_AGENT_MAX_KEYS
+// when set to a positive integer, else 5. The cap lets a profile hold several
+// keys (to exercise multi-address realms) while keeping the count bounded.
+func defaultAgentMaxKeys() int {
+	const fallback = 5
+	if v := os.Getenv("GNOMCP_AGENT_MAX_KEYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+		log.Printf("gnomcp: ignoring invalid GNOMCP_AGENT_MAX_KEYS=%q (want a positive integer), using %d", v, fallback)
+	}
+	return fallback
 }
 
 // ---- helpers

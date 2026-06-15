@@ -81,6 +81,10 @@ func addpkgHandler(
 	if err != nil {
 		return server.Result{}, err
 	}
+	keyName, err := keyArg(args)
+	if err != nil {
+		return server.Result{}, err
+	}
 
 	deployPath, err := server.StringArg(args, "deploy_path")
 	if err != nil {
@@ -126,7 +130,7 @@ func addpkgHandler(
 	// ---- Acquire agent signer (with the testnet unfunded pre-check)
 
 	signer, addr, aerr := acquireAgentSigner(ctx, ks, c, "gno_addpkg",
-		"run gno_key_generate to create one", profileName, p, simulate)
+		"run gno_key_generate to create one", profileName, keyName, p, simulate)
 	if aerr != nil {
 		return server.Result{}, aerr
 	}
@@ -247,6 +251,7 @@ func addpkgInputSchema(s *server.Server) map[string]any {
 	}
 	required := []string{"deploy_path", "files"}
 	addAgentProfileArg(s, props, &required)
+	addOptionalKeyArg(props)
 	return map[string]any{
 		"type":                 "object",
 		"properties":           props,

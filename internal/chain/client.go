@@ -61,6 +61,13 @@ type AddPackageResult struct {
 	Simulated bool
 }
 
+// SendResult is the outcome of a bank/MsgSend broadcast.
+type SendResult struct {
+	TxHash  string
+	Height  int64
+	GasUsed int64
+}
+
 // NodeStatus is the node-reported chain identity and sync tip.
 type NodeStatus struct {
 	ChainID   string
@@ -152,6 +159,11 @@ type Client interface {
 
 	// AddPackage broadcasts (or simulates) a vm/MsgAddPackage signed by the agent key.
 	AddPackage(ctx context.Context, signer gnoclient.Signer, deployPath string, files []*std.MemFile, simulate bool) (AddPackageResult, error)
+
+	// Send broadcasts a bank/MsgSend of amountUgnot ugnot from the agent key
+	// (signer's own address) to toAddr (bech32 g1...). Used by gno_key_send to move
+	// funds between the agent's own keys so it can exercise multi-address realms.
+	Send(ctx context.Context, signer gnoclient.Signer, toAddr string, amountUgnot int64) (SendResult, error)
 
 	// Balance returns the ugnot balance of a bech32 address. A never-funded address
 	// (unknown to the chain) reports 0 with no error. Intended as a "can this account

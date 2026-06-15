@@ -14,17 +14,20 @@ import (
 func RegisterKeyGenerate(s *server.Server, ks *keystore.Keystore) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_key_generate",
-		Description: "Generates and persists the agent's own testnet account for a profile, " +
+		Description: "Generates and persists a testnet agent account for a profile, " +
 			"returning its bech32 g1… address. " +
 			"Testnet profiles only: local profiles use the built-in test1 account, " +
 			"and mainnet/prod profiles use session-based signing. " +
-			"The returned address must be funded before the agent can submit transactions " +
-			"(faucet support is a later phase). " +
-			"Refuses to overwrite an existing key — call gno_key_address to retrieve it. " +
+			"A profile can hold several named keys (optional key arg, default \"default\") so the agent " +
+			"can fund secondary accounts and exercise realms involving multiple addresses; " +
+			"the number of keys per profile is capped. " +
+			"The returned address must be funded (gno_faucet_fund) before it can submit transactions. " +
+			"Purely additive: it refuses to overwrite an existing key — to replace one, gno_key_delete it first, " +
+			"then generate again. " +
 			"The key is stored encrypted only when GNOMCP_SESSION_PASSPHRASE is set; " +
 			"otherwise it is stored as plaintext, acceptable for a dev/test hot key. " +
-			"Returns key_generation_unsupported for non-testnet profiles and " +
-			"key_already_exists if a key was already generated for this profile.",
+			"Returns key_generation_unsupported for non-testnet profiles, key_already_exists if the " +
+			"named key exists, and key_cap_reached when the profile is full.",
 		InputSchema: keyGenInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -50,9 +53,30 @@ func keyGenHandler(
 	if err != nil {
 		return server.Result{}, err
 	}
-
-	addr, err := ks.GenerateForProfile(profileName, p)
+	keyName, err := keyArg(args)
 	if err != nil {
+		return server.Result{}, err
+	}
+
+	addr, err := ks.GenerateForProfile(profileName, keyName, p)
+	if err != nil {
+		if errors.Is(err, keystore.ErrInvalidKeyName) {
+			return server.Result{}, &server.ToolError{
+				Code:    "invalid_key_name",
+				Message: err.Error(),
+				Extra:   map[string]any{"profile": profileName},
+			}
+		}
+		if errors.Is(err, keystore.ErrKeyCapReached) {
+			return server.Result{}, &server.ToolError{
+				Code: "key_cap_reached",
+				Message: fmt.Sprintf(
+					"profile %q has reached its agent-key cap — delete an existing key (gno_key_delete) to free a slot; see gno_key_list",
+					profileName,
+				),
+				Extra: map[string]any{"profile": profileName},
+			}
+		}
 		if errors.Is(err, keystore.ErrKeyGenTestnetOnly) {
 			return server.Result{}, &server.ToolError{
 				Code: "key_generation_unsupported",
@@ -81,10 +105,8 @@ func keyGenHandler(
 	}
 
 	return server.Result{
-		Text: addr,
-		StructuredContent: map[string]any{
-			"address": addr,
-		},
+		Text:              addr,
+		StructuredContent: map[string]any{"address": addr},
 	}, nil
 }
 
@@ -92,6 +114,7 @@ func keyGenInputSchema(s *server.Server) map[string]any {
 	props := map[string]any{}
 	required := []string{}
 	addTestnetProfileArg(s, props, &required)
+	addOptionalKeyArg(props)
 	return map[string]any{
 		"type":                 "object",
 		"properties":           props,

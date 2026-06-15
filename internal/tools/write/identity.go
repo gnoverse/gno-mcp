@@ -52,8 +52,8 @@ func agentKeyToolError(err error, profileName, noKeyHint string) error {
 // mapping keystore errors to structured ToolErrors and running the testnet
 // unfunded-account pre-check (skipped when simulate). tool and noKeyHint tailor
 // the error messages to the calling tool.
-func acquireAgentSigner(ctx context.Context, ks *keystore.Keystore, c chain.Client, tool, noKeyHint, profileName string, profile profiles.Profile, simulate bool) (gnoclient.Signer, string, error) {
-	signer, err := ks.SignerForProfile(profileName, profile)
+func acquireAgentSigner(ctx context.Context, ks *keystore.Keystore, c chain.Client, tool, noKeyHint, profileName, keyName string, profile profiles.Profile, simulate bool) (gnoclient.Signer, string, error) {
+	signer, err := ks.SignerForProfile(profileName, keyName, profile)
 	if err != nil {
 		if terr := agentKeyToolError(err, profileName, noKeyHint); terr != nil {
 			return nil, "", terr

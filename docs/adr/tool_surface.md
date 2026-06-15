@@ -1,6 +1,6 @@
 # Tool Surface
 
-**Status: implemented — 20 tools.**
+**Status: implemented — 23 tools.**
 
 ## Context
 
@@ -8,7 +8,7 @@ The v1 server exposed 16 tools mixing reads, open-ended writes, config mutation,
 
 ## Decision
 
-20 tools, registered conditionally and re-registered after dynamic profile adds (gates re-evaluate, profile enums regenerate, `tools/list_changed` notifies clients):
+23 tools, registered conditionally and re-registered after dynamic profile adds (gates re-evaluate, profile enums regenerate, `tools/list_changed` notifies clients):
 
 | Tool | Category | Backend | Registered when |
 |---|---|---|---|
@@ -26,14 +26,19 @@ The v1 server exposed 16 tools mixing reads, open-ended writes, config mutation,
 | `gno_call` | write | gnoclient (agent or session signer) | always |
 | `gno_run` | write | gnoclient (agent or session signer) | always |
 | `gno_addpkg` | write | gnoclient (agent signer only) | always |
+| `gno_key_send` | agent key | gnoclient `bank.MsgSend` (own keys only) | always |
 | `gno_session_propose` | session prep | local keypair + scope clamp | always |
 | `gno_session_revoke` | session prep | local | always |
 | `gno_auth_status` | session read | local store + `auth/accounts` query | always |
 | `gno_key_address` | agent key | keystore | always |
+| `gno_key_list` | agent key | keystore | always |
 | `gno_key_generate` | agent key | keystore (testnet only at call time) | always |
+| `gno_key_delete` | agent key | keystore (testnet only at call time) | always |
 | `gno_faucet_fund` | agent key | faucet service/link + balance poll | a testnet profile exists |
 
-Cold-start counts: built-in defaults register 17 (no indexer profile); a local-only custom config registers 16 (no faucet); an indexer-bearing profile brings the full 20.
+Cold-start counts: built-in defaults register 20 (no indexer profile); a local-only custom config registers 19 (no faucet); an indexer-bearing profile brings the full 23.
+
+**Multiple named keys per profile.** A profile holds up to `GNOMCP_AGENT_MAX_KEYS` (default 5) named agent keys at `<keys-root>/<profile>/<name>.key`, so the agent can fund secondary accounts and exercise multi-address realms. The write and key tools take an optional `key` arg (default `"default"`) selecting which key; it applies to `identity=agent` only and is rejected with `identity=session`. Generation is purely additive (no overwrite); replacement is `gno_key_delete` then `gno_key_generate`. `gno_key_send` moves ugnot only between a profile's own keys — `to`/`from` are key names, never raw addresses, so there is no arbitrary-recipient path.
 
 **Identity dispatch.** `gno_call` and `gno_run` accept `identity` (`agent` default, `session` opt-in) and `simulate` as a flag — not a separate simulate tool. Call args are a stringified array (gnokey-compatible); type-to-wire encoding is delegated to gnoclient.
 

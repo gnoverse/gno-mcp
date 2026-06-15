@@ -56,7 +56,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 
 | When you… | Update |
 |---|---|
-| Add / rename / remove a tool | `docs/tools.md` (catalog) · README "20 tools" counts (intro bullet + "Tools" section) · `skills/gno/references/mcp.md` task table · `docs/security.md` envelope list (if it's a text tool) · server `instructions` in `cmd/gnomcp/main.go` (if a flow changes) |
+| Add / rename / remove a tool | `docs/tools.md` (catalog) · `docs/adr/tool_surface.md` (count + table) · README tool count ("23 tools" — intro bullet + "Tools" section) · `skills/gno/references/mcp.md` task table · `docs/security.md` envelope list (if it's a text tool) + error-code table (if it adds a code) · server `instructions` in `cmd/gnomcp/main.go` (if a flow changes) |
 | Change write-auth / session / scope behavior | `docs/security.md` · `docs/gnomcp.md` "Write authorization" · `docs/adr/session_authorization.md` |
 | Change profile fields or config semantics | `docs/gnomcp.md` "Configuration" · `docs/adr/multichain_via_profiles.md` · `playground/e2e/profiles.e2e.toml` (the e2e harness profile) |
 | Make or revise an architectural decision | `docs/adr/` — edit in place with an updated status line; keep records matching shipped state, not plans |

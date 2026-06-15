@@ -18,6 +18,8 @@ func RegisterKeyAddress(s *server.Server, ks *keystore.Keystore) {
 			"the account it signs with (e.g. so you can fund it). " +
 			"Read-only; performs no transaction. Local profiles use the built-in test1 key; " +
 			"testnet profiles require a key previously generated via gno_key_generate. " +
+			"Optional key arg selects which named key when the profile holds several (default: \"default\"). " +
+			"Does NOT enumerate keys — use gno_key_list to discover the available key names. " +
 			"Returns agent_identity_unavailable when no agent key exists for the profile.",
 		InputSchema: keyAddrInputSchema(s),
 		OutputKind:  server.OutputText,
@@ -44,8 +46,12 @@ func keyAddrHandler(
 	if err != nil {
 		return server.Result{}, err
 	}
+	keyName, err := keyArg(args)
+	if err != nil {
+		return server.Result{}, err
+	}
 
-	addr, err := ks.AgentAddress(profileName, p)
+	addr, err := ks.AgentAddress(profileName, keyName, p)
 	if err != nil {
 		if terr := agentKeyToolError(err, profileName, "run gno_key_generate to create one"); terr != nil {
 			return server.Result{}, terr
@@ -65,6 +71,7 @@ func keyAddrInputSchema(s *server.Server) map[string]any {
 	props := map[string]any{}
 	required := []string{}
 	addAgentProfileArg(s, props, &required)
+	addOptionalKeyArg(props)
 	return map[string]any{
 		"type":                 "object",
 		"properties":           props,

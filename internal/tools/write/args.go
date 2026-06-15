@@ -32,6 +32,24 @@ func requireProfile(args map[string]any, s *server.Server) (string, profiles.Pro
 
 func profileWritableBySession(p profiles.Profile) bool { return p.MasterAddress != "" }
 
+// addOptionalKeyArg adds the optional `key` arg that selects which of a profile's
+// named agent keys to act with. Omitted ⇒ the "default" key.
+func addOptionalKeyArg(props map[string]any) {
+	props["key"] = map[string]any{
+		"type": "string",
+		"description": "Optional name of the agent key to act with (default: \"default\"). " +
+			"Applies to identity=agent only — it is rejected with identity=session, which signs with the session key. " +
+			"A profile can hold several keys so you can exercise realms involving multiple addresses; " +
+			"create more with gno_key_generate and list them with gno_key_list. e.g. \"bob\".",
+	}
+}
+
+// keyArg reads the optional `key` arg; "" means the default key (the keystore
+// resolves it).
+func keyArg(args map[string]any) (string, error) {
+	return server.StringArg(args, "key")
+}
+
 // profileSessionEligible reports whether a chain-bound session can exist for p:
 // any writable chain (local/testnet). The master account comes from the
 // profile's master-address, or from a master_address the user supplies at

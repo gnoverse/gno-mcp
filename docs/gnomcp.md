@@ -156,6 +156,12 @@ Writes are signed by one of two identities, chosen per call via the `identity` a
 - **Agent identity (default).** Testnet profiles sign with a per-profile key: run
   `gno_key_generate` once, then fund it (`gno_faucet_fund` or send it ugnot). Local
   (gnodev) profiles sign with the built-in `test1` key — no setup.
+  A profile can hold several named keys (the optional `key` arg on the write tools,
+  default `default`; cap `GNOMCP_AGENT_MAX_KEYS`, default 5). List them with
+  `gno_key_list`, remove one with `gno_key_delete` (to replace a key: delete, then
+  generate again), and move ugnot between your own keys with `gno_key_send` — fund one
+  key from the faucet, then seed secondary keys to exercise realms that involve
+  multiple addresses.
 - **Session (WIP) — the agent acts as the user (requires `master-address`).** Call
   `gno_session_propose` to get a paste-ready `gnokey maketx session create` command; run it
   to authorize a chain-bound session with explicit scope (`allow_paths`, `allow_run`,

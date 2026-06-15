@@ -66,6 +66,29 @@ func parseAuditEntries(t *testing.T, buf *bytes.Buffer) []audit.Entry {
 
 // ---- tests
 
+// The `key` arg selects an agent key; it is meaningless on the session path and
+// must be rejected loudly rather than silently ignored.
+func TestCall_keyArgRejectedForSession(t *testing.T) {
+	s := newBaseTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
+	})
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(chain.NewFake()), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"identity": "session",
+		"key":      "bob",
+	})
+	require.Error(t, err, "key with identity=session must be rejected, not silently ignored")
+	assert.Contains(t, err.Error(), "session")
+}
+
 func TestCall_happyPath(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
@@ -83,7 +106,7 @@ func TestCall_happyPath(t *testing.T) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -121,7 +144,7 @@ func TestCall_wrapsRealmResultInEnvelope(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -149,7 +172,7 @@ func TestCall_auditDoesNotLogRawArgs(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -177,7 +200,7 @@ func TestCall_auditsDeniedAttempt(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/other"}, "1000000ugnot")
 	})
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(chain.NewFake()), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(chain.NewFake()), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -199,7 +222,7 @@ func TestCall_missingRealm(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -216,7 +239,7 @@ func TestCall_missingFunc(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -233,7 +256,7 @@ func TestCall_wrongTypeArgs(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -251,7 +274,7 @@ func TestCall_authenticationRequired(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t) // no sessions
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -276,7 +299,7 @@ func TestCall_scopeMismatch(t *testing.T) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/other/realm"}, "1000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -299,7 +322,7 @@ func TestCall_simulateRequiresSession(t *testing.T) {
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t) // no session — simulate must still error
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -329,7 +352,7 @@ func TestCall_simulateWithSession(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -357,7 +380,7 @@ func TestCall_simulateUnsupported(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -389,7 +412,7 @@ func TestCall_updatesSessionSpend(t *testing.T) {
 		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "100000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -423,7 +446,7 @@ func TestCall_writesAuditEntry(t *testing.T) {
 		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -454,7 +477,7 @@ func TestCall_simulateError_auditsSimErr(t *testing.T) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
 	var auditBuf bytes.Buffer
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(f), audit.NewLog(&auditBuf))
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(f), audit.NewLog(&auditBuf))
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -478,7 +501,7 @@ func TestCall_NoSession_ReadOnlyProfile(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t) // empty session manager
 	fake := chain.NewFake()
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -505,7 +528,7 @@ func TestCall_broadcastError_auditsResult(t *testing.T) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
 
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -528,7 +551,7 @@ func TestCall_agentIdentity_local(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	fake := chain.NewFake()
 	fake.SetCall("gno.land/r/test/counter", "Increment", []string{"1"}, chain.CallResult{
@@ -570,7 +593,7 @@ func TestCall_sessionMasterFromSessionRecord(t *testing.T) {
 		// seedActiveSession stores master "g1master" — deliberately != the profile's.
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
 	})
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile": "testnet5", "realm": "gno.land/r/test/counter", "func": "Increment", "identity": "session",
@@ -585,7 +608,7 @@ func TestCall_sessionIdentity_explicit(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	fake := chain.NewFake()
 	fake.SetCallAsUser("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{
@@ -620,7 +643,7 @@ func TestCall_defaultAgent_testnet(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "") // no agent key
+	ks := keystore.New(t.TempDir(), "", 5) // no agent key
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t)
@@ -645,7 +668,7 @@ func TestCall_defaultAgent_testnet_noKey(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "") // no key generated
+	ks := keystore.New(t.TempDir(), "", 5) // no key generated
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t)
@@ -670,7 +693,7 @@ func TestCall_sessionIdentity_testnet_explicit(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "") // no agent key
+	ks := keystore.New(t.TempDir(), "", 5) // no agent key
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t) // no session either — confirms we go session path (not agent)
@@ -695,7 +718,7 @@ func TestCall_agentKeystoreUnconfigured(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New("", "") // no agent-keys directory configured
+	ks := keystore.New("", "", 5) // no agent-keys directory configured
 
 	RegisterCall(s, ks, noSessionMgr(t), constChainResolver(chain.NewFake()), alog)
 
@@ -716,10 +739,10 @@ func TestCall_agentTestnet_insufficientFunds(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	// Generate an agent key for the testnet profile.
-	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	// Fake balance is 0 (never-funded) by default.
@@ -745,10 +768,10 @@ func TestCall_agentTestnet_funded(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	// Generate an agent key and capture its address.
-	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake()
@@ -771,15 +794,48 @@ func TestCall_agentTestnet_funded(t *testing.T) {
 	assert.Contains(t, res.Text, "0xfunded")
 }
 
+// The optional `key` arg selects which of a profile's named keys signs. A call
+// with key=bob must be signed by bob's account, not the default key.
+func TestCall_signsWithSelectedKey(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "", 5)
+
+	defAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
+	require.NoError(t, err)
+	bobAddr, err := ks.GenerateForProfile("testnet9999", "bob", testnet9999Profile())
+	require.NoError(t, err)
+	require.NotEqual(t, defAddr, bobAddr)
+
+	fake := chain.NewFake()
+	fake.SetBalance(bobAddr, 10_000_000) // only bob is funded
+	fake.SetCall("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{
+		TxHash: "0xbob", Height: 1, GasUsed: 3000,
+	})
+
+	mgr := noSessionMgr(t)
+	RegisterCall(s, ks, mgr, constChainResolver(fake), alog)
+
+	res, callErr := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet9999",
+		"key":     "bob",
+		"realm":   "gno.land/r/test/counter",
+		"func":    "Increment",
+	})
+	require.NoError(t, callErr, "bob is funded, so the call must succeed when signing as bob")
+	assert.Contains(t, res.Text, bobAddr, "the result must report bob as the signer")
+}
+
 // A payable realm function (e.g. an auction Bid) needs coins sent with the call.
 // The `send` arg must reach the chain as MsgCall.Send.
 func TestCall_attachesSendCoins(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
-	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake()
@@ -816,7 +872,7 @@ func TestCall_attachesSendCoins_session(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/auction"}, "100000000ugnot")
 	})
-	RegisterCall(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
 		"profile":  "testnet5",
@@ -835,8 +891,8 @@ func TestCall_rejectsMalformedSend(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
-	_, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	ks := keystore.New(t.TempDir(), "", 5)
+	_, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	RegisterCall(s, ks, noSessionMgr(t), constChainResolver(chain.NewFake()), alog)
@@ -858,9 +914,9 @@ func TestCall_agentTestnet_simulate_skipsBalanceCheck(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
-	_, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	_, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake()
@@ -888,7 +944,7 @@ func TestCall_bogusIdentity(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t)

@@ -23,6 +23,7 @@ type writeTxDispatch struct {
 	tool        string // tool name, used in error prefixes (e.g. "gno_call")
 	noKeyHint   string // tailors acquireAgentSigner's missing-key message
 	profileName string
+	keyName     string // agent key to sign with ("" ⇒ default)
 	profile     profiles.Profile
 	simulate    bool
 	c           chain.Client
@@ -64,7 +65,7 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 	case "agent":
 		// ---- Agent branch: sign with the agent's own key (local test1 or testnet generated key)
 
-		agentSigner, addr, aerr := acquireAgentSigner(ctx, d.ks, d.c, d.tool, d.noKeyHint, d.profileName, d.profile, d.simulate)
+		agentSigner, addr, aerr := acquireAgentSigner(ctx, d.ks, d.c, d.tool, d.noKeyHint, d.profileName, d.keyName, d.profile, d.simulate)
 		if aerr != nil {
 			return identity, "", "", aerr
 		}
@@ -77,6 +78,17 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 
 	case "session":
 		// ---- Session branch
+
+		// The session path signs with the session keypair, not an agent key, so a
+		// supplied `key` would be silently ignored. Fail loudly instead so the
+		// caller never believes a tx went out under the named key.
+		if d.keyName != "" {
+			return identity, "", "", &server.ToolError{
+				Code:    "key_ignored_for_session",
+				Message: "the key arg selects an agent key and does not apply to identity=session (the session signer is used)",
+				Extra:   map[string]any{"profile": d.profileName, "key": d.keyName},
+			}
+		}
 
 		signer, sessMaster, pickErr := d.pickSession(ctx)
 		if pickErr != nil {

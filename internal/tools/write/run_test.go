@@ -36,7 +36,7 @@ func TestRun_happyPath(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -71,7 +71,7 @@ func TestRun_wrapsOutputInEnvelope(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -90,7 +90,7 @@ func TestRun_missingProfile(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"code": testCode,
@@ -105,7 +105,7 @@ func TestRun_missingCode(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t)
 	fake := chain.NewFake()
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -121,7 +121,7 @@ func TestRun_authenticationRequired(t *testing.T) {
 	alog := audit.NewLog(&auditBuf)
 	mgr := noSessionMgr(t) // no sessions
 	fake := chain.NewFake()
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -153,7 +153,7 @@ func TestRun_picksAnySessionWhenNoRealm(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -171,7 +171,7 @@ func TestRun_simulateRequiresSession(t *testing.T) {
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t) // no session — simulate must still error
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -199,7 +199,7 @@ func TestRun_simulateWithSession(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -226,7 +226,7 @@ func TestRun_simulateUnsupported(t *testing.T) {
 	mgr := constSessionMgr(t, func(m *session.Manager) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -257,7 +257,7 @@ func TestRun_updatesSessionSpend(t *testing.T) {
 		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "100000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -289,7 +289,7 @@ func TestRun_writesAuditEntry(t *testing.T) {
 		sessionAddr = seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -316,7 +316,7 @@ func TestRun_simulateError_auditsSimErr(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 	var auditBuf bytes.Buffer
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(f), audit.NewLog(&auditBuf))
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(f), audit.NewLog(&auditBuf))
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -342,7 +342,7 @@ func TestRun_broadcastError_auditsResult(t *testing.T) {
 		seedActiveSessionWithRun(t, m, "testnet5", []string{"gno.land/r/test/blog"}, "1000000ugnot", true)
 	})
 
-	RegisterRun(s, keystore.New(t.TempDir(), ""), mgr, constChainResolver(fake), alog)
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
 
 	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
 		"profile":  "testnet5",
@@ -364,7 +364,7 @@ func TestRun_agentIdentity_local(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	fake := chain.NewFake()
 	fake.SetRun(testCode, chain.RunResult{
@@ -396,7 +396,7 @@ func TestRun_sessionIdentity_explicit(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	fake := chain.NewFake()
 	fake.SetRunAsUser(testCode, chain.RunResult{
@@ -430,7 +430,7 @@ func TestRun_defaultAgent_testnet(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "") // no agent key
+	ks := keystore.New(t.TempDir(), "", 5) // no agent key
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t)
@@ -453,9 +453,9 @@ func TestRun_agentTestnet_insufficientFunds(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
-	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake() // balance 0 by default
@@ -479,9 +479,9 @@ func TestRun_agentTestnet_funded(t *testing.T) {
 	s := newTestnetTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
-	agentAddr, err := ks.GenerateForProfile("testnet9999", testnet9999Profile())
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
 	require.NoError(t, err, "GenerateForProfile")
 
 	fake := chain.NewFake()
@@ -508,7 +508,7 @@ func TestRun_bogusIdentity(t *testing.T) {
 	s := newLocalTestServer(t)
 	var auditBuf bytes.Buffer
 	alog := audit.NewLog(&auditBuf)
-	ks := keystore.New(t.TempDir(), "")
+	ks := keystore.New(t.TempDir(), "", 5)
 
 	fake := chain.NewFake()
 	mgr := noSessionMgr(t)

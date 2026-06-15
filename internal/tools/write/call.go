@@ -85,6 +85,10 @@ func callHandler(
 	if err != nil {
 		return server.Result{}, err
 	}
+	keyName, err := keyArg(args)
+	if err != nil {
+		return server.Result{}, err
+	}
 
 	realm, err := server.StringArg(args, "realm")
 	if err != nil {
@@ -150,6 +154,7 @@ func callHandler(
 		tool:        "gno_call",
 		noKeyHint:   "run gno_key_generate (or pass identity=session to act as the user)",
 		profileName: profileName,
+		keyName:     keyName,
 		profile:     profile,
 		simulate:    simulate,
 		c:           c,
@@ -256,7 +261,8 @@ func callInputSchema(s *server.Server) map[string]any {
 			"type": "string",
 			"description": "Coins to attach to the call for a payable function (one that reads std.OriginSend() / banker coins, e.g. a Bid or Buy). " +
 				"Single-denomination amount, e.g. \"5000000ugnot\". Optional; omit or \"\" sends nothing. " +
-				"For identity=session the coins are spent from the user's master account and count against the session spend_limit.",
+				"For identity=session the coins are spent from the user's master account and count against the session spend_limit. " +
+				"To move plain ugnot between your own keys without calling a function, use gno_key_send instead.",
 		},
 		"simulate": map[string]any{
 			"type":        "boolean",
@@ -266,11 +272,12 @@ func callInputSchema(s *server.Server) map[string]any {
 		"identity": map[string]any{
 			"type":        "string",
 			"enum":        []string{"agent", "session"},
-			"description": "Who signs: agent (the agent's own key — local test1 or testnet generated key) or session (act as the user via a master-bound session). Default: agent; pass session to act as the user.",
+			"description": "Who signs: agent (the agent's own key — local test1 or testnet generated key) or session (act as the user via a master-bound session). Default: agent; pass session to act as the user. The key arg applies to identity=agent only and is rejected with identity=session.",
 		},
 	}
 	required := []string{"realm", "func"}
 	addWritableProfileArg(s, props, &required)
+	addOptionalKeyArg(props)
 	return map[string]any{
 		"type":                 "object",
 		"properties":           props,

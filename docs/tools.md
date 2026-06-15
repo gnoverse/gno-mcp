@@ -1,6 +1,6 @@
 # Tools
 
-20 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
+23 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
 
 Chain-returned bytes are untrusted: the inline-text read/indexer tools (including `gno_render`) wrap their output in an `<untrusted_content>` envelope, and `gno_read` delivers content as an MCP resource (see `docs/security.md` §4).
 
@@ -88,7 +88,9 @@ gnomcp signs writes with one of two identities, chosen per call via the `identit
 
 Every write result names the signer (`Signed by: agent test1 (g1…)` or `Signed by: session g1… on behalf of master g1…`) and the structured output carries `identity` + `signer_address`.
 
-Registration: every allowed chain (local dev or testnet) has an agent key path, so `gno_call`, `gno_run`, `gno_addpkg`, `gno_key_address`, and `gno_key_generate` always register. `gno_faucet_fund` appears when a testnet profile exists (including one added mid-session via `gno_profile_add`).
+Registration: every allowed chain (local dev or testnet) has an agent key path, so `gno_call`, `gno_run`, `gno_addpkg`, `gno_key_send`, `gno_key_address`, `gno_key_list`, `gno_key_generate`, and `gno_key_delete` always register. `gno_faucet_fund` appears when a testnet profile exists (including one added mid-session via `gno_profile_add`).
+
+A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, default 5), so the agent can fund secondary accounts and exercise realms involving multiple addresses. The write and key tools take an optional `key` arg (default `"default"`) selecting which key to act with; `gno_key_list` enumerates them. `key` applies to `identity=agent` only and is rejected with `identity=session`.
 
 ### `gno_session_propose`
 
@@ -109,34 +111,49 @@ Registration: every allowed chain (local dev or testnet) has an agent key path, 
 
 ### `gno_call`
 
-- **Args:** `profile` (required), `realm` (required), `func` (required), `args?[]`, `send?`, `simulate?`, `identity?`
+- **Args:** `profile` (required), `realm` (required), `func` (required), `args?[]`, `send?`, `simulate?`, `identity?`, `key?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
 - Default identity: **agent** (test1 on local, generated key on testnet). Pass `identity=session` to act as the user instead.
 - `send` attaches coins to the call (e.g. `"1000000ugnot"`) for payable functions that read `std.OriginSend()`; under a session, the chain enforces the session spend limit against it.
 
 ### `gno_run`
 
-- **Args:** `profile` (required), `code` (required), `simulate?`, `identity?`
+- **Args:** `profile` (required), `code` (required), `simulate?`, `identity?`, `key?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
 - Default identity: **agent**; pass `identity=session` to act as the user.
 
 ### `gno_addpkg`
 
-- **Args:** `profile` (required), `deploy_path` (required), `files[]` (required — each `{name, body}`), `simulate?`
+- **Args:** `profile` (required), `deploy_path` (required), `files[]` (required — each `{name, body}`), `simulate?`, `key?`
 - **Returns:** deploy (or `simulate`) result, prefixed with the signing identity.
 - Deploys a package/realm via `vm/MsgAddPackage`, signed by the agent key (local: test1, testnet: generated key). A `gnomod.toml` is generated automatically if omitted.
 
 ### `gno_key_address`
 
+- **Args:** `profile?`, `key?`
+- **Returns:** the agent's own account address for a local or testnet profile — read-only, no transaction. Use it to fund or inspect the agent account. Local returns test1; testnet returns the address of the named key (default `"default"`). Does NOT enumerate keys — use `gno_key_list`.
+
+### `gno_key_list`
+
 - **Args:** `profile?`
-- **Returns:** the agent's own account address for a local or testnet profile — read-only, no transaction. Use it to fund or inspect the agent account. Local returns test1; testnet returns the address of the generated key.
+- **Returns:** the profile's agent keys as an array of `{name, address}` (read-only). Use it to rediscover keys generated in earlier sessions before selecting one with the `key` arg. Local profiles report a single `"default"` (test1); an empty list means none generated yet. A key whose file is unreadable is flagged rather than hidden.
 
 ### `gno_key_generate`
 
-- **Args:** `profile` (required — testnet profiles only)
-- **Returns:** the generated bech32 g1… address for the agent's testnet account. Persists the key. Refuses to overwrite an existing key.
+- **Args:** `profile` (required — testnet profiles only), `key?`
+- **Returns:** the generated bech32 g1… address for a testnet agent key. Persists the key under `key` (default `"default"`). Purely additive: refuses to overwrite an existing name, and refuses past the per-profile cap (`GNOMCP_AGENT_MAX_KEYS`). To replace a key, `gno_key_delete` it first, then generate again.
+
+### `gno_key_delete`
+
+- **Args:** `profile` (required — testnet only), `key` (required)
+- **Returns:** confirmation naming the deleted address. **Irreversible** — any ugnot the address held becomes unreachable. The `key` arg is required (no default), so a key can't be deleted by omission. Use to free a slot at the cap, or to replace a key (delete, then `gno_key_generate`).
+
+### `gno_key_send`
+
+- **Args:** `profile` (required — testnet only), `to` (required — destination key name), `amount` (required — ugnot, whole number), `from?` (source key name, default `"default"`)
+- **Returns:** the from/to addresses, the amount, and the tx hash. Transfers ugnot **between two of the agent's own keys** in the same profile (`bank.MsgSend`). `to`/`from` are key NAMES, not addresses — there is no path to an arbitrary external address. Use to seed a secondary key from the main funded key. Does NOT call realm functions (use `gno_call` with `send=`).
 
 ### `gno_faucet_fund`
 
-- **Args:** `profile?` (testnet only)
-- **Returns:** the outcome of requesting a testnet grant for the agent's generated key — an automatic service grant (tx hash), a faucet link, or manual instructions, depending on the profile's faucet config. Use after `gno_key_generate` when the agent account is unfunded.
+- **Args:** `profile?` (testnet only), `key?`
+- **Returns:** the outcome of requesting a testnet grant for the named agent key — an automatic service grant (tx hash), a faucet link, or manual instructions, depending on the profile's faucet config. Use after `gno_key_generate` when the agent account is unfunded.
