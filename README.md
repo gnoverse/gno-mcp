@@ -34,7 +34,7 @@ When it finishes, restart your editor or agent so it loads gnomcp.
 
 Other clients (Cursor, Claude Desktop, …), manual install, building from source, and Docker → **[docs/gnomcp.md](docs/gnomcp.md#install)**.
 
-## Try it
+## What you can do
 
 gnomcp ships pointed at the public testnet and a local gnodev node — nothing to configure:
 
@@ -43,13 +43,39 @@ gnomcp ships pointed at the public testnet and a local gnodev node — nothing t
 | `testnet` | `test11` | `https://rpc.test11.testnets.gno.land:443` |
 | `local` | `dev` | `http://127.0.0.1:26657` (local [gnodev](https://docs.gno.land/builders/local-dev-with-gnodev) node) |
 
-Once it's installed, just talk to your agent in plain language:
+Then talk to your agent in plain language. New to gno.land? Just ask it to teach you — it gauges your background and gives you a hands-on tour (the `gno-onboard` skill). Otherwise:
 
-- *"render gno.land/r/gnoland/home"* — fetches and returns the realm's page
-- *"what's the balance of g1…?"* — inspects an account
-- *"call AddPost on gno.land/r/myorg/blog with …"* — builds and broadcasts a transaction
+### Explore a chain
 
-Reads work right away. Writing needs a funded agent key — gnomcp can generate one and request testnet funds. On the `local` profile, writes use gnodev's pre-funded `test1` key, so they need no setup.
+> *"Which chain is this, is the node live, and what realms exist under gno.land/r/test? Show me what the counter realm renders."*
+
+Reads live state — node status, the realm catalog, account balances, a realm's source and rendered page — grounded in real queries, never guessed. Works immediately, on any chain.
+
+### Build and deploy a realm — `gno-build`
+
+> *"Deploy a check-in board at gno.land/r/test/checkin: anyone can check in, it records their address, and reading it back lists everyone so far. Then check in yourself."*
+
+Your agent writes the realm, tests it locally, runs a security pass, then — once you pick where it runs — funds a key from the faucet, deploys, and makes a real call to prove it works. You get working on-chain code and the transaction that proves it.
+
+### Audit a realm before you trust it — `gno-audit`
+
+> *"Give me a formal security audit of gno.land/r/test/vault before I route user data through it."*
+
+Fetches the on-chain source (read-only — works on mainnet too) and returns an evidence-backed report: findings with quoted lines and severity, plus an honest note on what it did and didn't check. Nothing is mutated.
+
+### Debug a failed transaction — `gno-debug`
+
+> *"My transaction failed with insufficient_funds — what happened?"*
+
+Classifies the error, reproduces it cheaply without broadcasting, applies the fix, and re-runs to prove it works — telling you which identity signed each attempt.
+
+### Act as yourself, safely — sessions
+
+> *"From now on write as my account g1… , not your own key. Bump the counter at gno.land/r/test/counter as me."*
+
+Your agent proposes a scoped session and hands you a `gnokey` command to authorize on your own machine — it never touches your keys. Once you approve, it writes as you, within the limits you set, and tells you exactly how to revoke.
+
+Under all of these, the `gno` skill gives your agent the language, idioms, and security model; the workflows above build on it. Skill authoring → [docs/skills.md](docs/skills.md).
 
 ## Tools
 
@@ -80,17 +106,6 @@ Profile fields and the signing model → [Configuration](docs/gnomcp.md#configur
 - **Structured errors** — machine-routable codes and recovery hints, so the agent fails forward.
 
 Full posture and threat model → [docs/security.md](docs/security.md).
-
-## Skills
-
-The plugin teaches your agent gno.land — one deep skill plus focused workflows it routes to:
-
-- **gno** — write and modify realm code: interrealm calls, payments, `Render()`, project setup. The reference library the others build on.
-- **gno-onboard** — bring a newcomer up to speed, adapting to what they already know.
-- **gno-audit** — review a realm before you trust it ("is this safe?", pre-funding checks).
-- **gno-debug** — trace a failed transaction back to its cause.
-
-Authoring conventions → [docs/skills.md](docs/skills.md).
 
 ## Development
 
