@@ -45,11 +45,22 @@ Read tools work right away. To write, generate an agent key (`gno_key_generate`)
 
 ## Configuration
 
-Profiles decide which chains gnomcp can reach — built-in `local` and `testnet` are read-only defaults, and only `dev`/`testNN` chain-ids are accepted. Add your own chains and choose how writes are signed (an agent key by default, or a user session): see [Configuration](docs/gnomcp.md#configuration) and [Write authorization](docs/gnomcp.md#write-authorization).
+Under the hood, gnomcp reaches every chain through a **profile**. The built-in `local` and `testnet` profiles are read-only defaults, and only `dev`/`testNN` chain-ids are ever accepted — mainnet can't enter.
+
+You don't have to pre-configure anything to reach a new chain. An agent can discover one from a gnoweb URL with `gno_connect` and register it mid-session with `gno_profile_add` — added in memory, good for reads and agent-key writes, and gone on restart. To make a chain survive restarts, or to enable user-session writes (which need a `master-address`), persist it to `profiles.toml` with `gnomcp profile add`.
+
+Profile fields, file precedence, and the agent-key-vs-session signing model → [Configuration](docs/gnomcp.md#configuration) and [Write authorization](docs/gnomcp.md#write-authorization).
 
 ## Security posture
 
-User keys never leave `gnokey`, mainnet can't enter the config, every chain-derived byte is wrapped in an untrusted-content envelope, read output is budgeted, and every write lands in an append-only audit log. Full posture and threat model → [docs/security.md](docs/security.md).
+- **User keys never leave `gnokey`.** Sessions are authorized by the user running a printed `gnokey` command on their own machine; gnomcp never sees a mnemonic and never asks for one.
+- **Mainnet cannot enter the config.** The chain-id allowlist (`dev`, `testNN`) is enforced at validation time — there is no confirm flag to get past it, because there is nothing to confirm against.
+- **Untrusted-content envelope on every chain byte.** Tool output derived from the chain is wrapped in `<untrusted_content kind="…" source="…">` with embedded-tag neutralization, so the LLM treats it as data, not instructions.
+- **Output budgeting.** Read tools cap inline output and summarize overflows instead of returning chopped halves.
+- **Audit log on every write.** JSON-lines, append-only, mode `0600`; records the tool, profile, result, and signing identity (agent vs session address). Operator-facing — not queryable through MCP.
+- **Structured errors.** Failures carry a machine-routable code (`insufficient_funds`, `authentication_required`, `scope_mismatch`, …) plus a recovery hint, so agents fail forward instead of guessing.
+
+See [docs/security.md](docs/security.md) for the full posture.
 
 ## Skills
 
