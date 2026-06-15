@@ -6,17 +6,17 @@
 
 > MCP server + agent skill for [gno.land](https://gno.land).
 
-`gnomcp` connects gno.land to any MCP client (Claude Code, Claude Desktop, Cursor, Gemini CLI, OpenCode, …): read realms, evaluate expressions, inspect accounts, manage testnet keys, and simulate or broadcast transactions. It ships as two parts that work together:
+`gnomcp` connects gno.land to any MCP client (Claude Code, Claude Desktop, Cursor, Gemini CLI, OpenCode, …): read realms, evaluate expressions, inspect accounts, manage testnet keys, and simulate or broadcast transactions.
 
-- **MCP server** — 20 tools behind one security spine: untrusted-content envelopes on every chain-derived byte, a chain-id allowlist that keeps mainnet out, output budgeting, an append-only audit log, and user keys that never leave `gnokey`.
-- **`gno` skill** — the knowledge layer for coding agents: interrealm semantics, security taxonomy, idiomatic patterns, `Render()` conventions, stdlib surface. (skill = knowledge, server = on-chain tools.)
+- **MCP server** — 20 tools for reading and writing gno.land, with safety built in: mainnet is locked out, chain output can't hijack the agent, and user keys never leave `gnokey`.
+- **`gno` skill** — the knowledge layer for coding agents: interrealm semantics, security taxonomy, idiomatic patterns, `Render()` conventions, stdlib surface.
 
 > [!WARNING]
 > **Work in progress — unaudited, pre-release, testnet only.** The tool API can still change, the session write path is young and will be reworked, and there's no guaranteed upgrade path. Only `dev`/`testNN` chain-ids pass validation — mainnet is rejected by design. Read [docs/security.md](docs/security.md) and file issues when something looks off.
 
 ## Install
 
-gnomcp is two parts — the **binary** (the MCP server) and the **plugin** (the skills + agents). One command installs both: it downloads the binary into `~/.local/bin` (verifying the checksum) and sets up every client it finds — Claude Code and Gemini CLI automatically, Codex and OpenCode with printed steps.
+One command installs everything — the server **binary** and the **plugin** (skills + agents). It downloads the binary into `~/.local/bin` (verifying the checksum) and wires up the clients it can: Claude Code and Gemini CLI automatically, Codex and OpenCode with printed steps.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh
@@ -26,22 +26,28 @@ This runs a script from the internet on your machine — read [the script](scrip
 
 When it finishes, restart your editor or agent so it loads gnomcp.
 
-Full per-client steps, manual install, building from source, and Docker → **[docs/gnomcp.md](docs/gnomcp.md#install)**.
+Other clients (Cursor, Claude Desktop, …), manual install, building from source, and Docker → **[docs/gnomcp.md](docs/gnomcp.md#install)**.
 
-## Zero-config testnet
+## Try it
 
-gnomcp ships pointed at the public testnet — nothing to configure:
+gnomcp ships pointed at the public testnet and a local gnodev node — nothing to configure:
 
 | Profile | Chain-id | RPC |
 |---------|----------|-----|
 | `testnet` | `test11` | `https://rpc.test11.testnets.gno.land:443` |
 | `local` | `dev` | `http://127.0.0.1:26657` (local [gnodev](https://docs.gno.land/builders/local-dev-with-gnodev) node) |
 
+Once it's installed, just talk to your agent in plain language:
+
+- *"render gno.land/r/gnoland/home"* — fetches and returns the realm's page
+- *"what's the balance of g1…?"* — inspects an account
+- *"call AddPost on gno.land/r/myorg/blog with …"* — builds and broadcasts a transaction
+
 Reads work right away. Writing needs a funded agent key — gnomcp can generate one and request testnet funds for it. On the built-in `local` profile, writes are signed by gnodev's pre-funded `test1` key, so they need no setup at all.
 
 ## Tools
 
-20 tools across chain reads, indexer reads, writes, sessions, and agent-key management. The read tools work right away against the built-in profiles; the write, session, and indexer tools become available once their prerequisites exist (an agent key or an active session, a profile with an indexer URL). Full catalog → [docs/tools.md](docs/tools.md).
+The tools cover chain reads, indexer reads, writes, sessions, and agent-key management. Reads work right away against the built-in profiles; the write, session, and indexer tools become available once their prerequisites exist (an agent key or an active session, a profile with an indexer URL). Full catalog → [docs/tools.md](docs/tools.md).
 
 ## Configuration
 

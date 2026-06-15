@@ -37,7 +37,12 @@ Prefer not to run a script? Download `gno-mcp_<os>_<arch>.tar.gz` from the [rele
 
 Run the installer above — or paste this prompt into a session and let the agent do it (short enough to read first; each step runs under your normal permission prompts):
 
-> Install gnomcp: download the gnomcp binary for this machine from github.com/gnoverse/gno-mcp/releases/latest into ~/.local/bin, install the gno skills plugin with `claude plugin marketplace add gnoverse/gno-mcp` and `claude plugin install gnomcp@gnoverse`, register the MCP server with `claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp`, verify with `claude mcp list`, and then remind me to restart Claude Code so the plugin loads.
+> Install gnomcp for me:
+> - Download the gnomcp binary for this machine from github.com/gnoverse/gno-mcp/releases/latest into `~/.local/bin`
+> - Install the skills plugin: `claude plugin marketplace add gnoverse/gno-mcp`, then `claude plugin install gnomcp@gnoverse`
+> - Register the MCP server: `claude mcp add gnomcp --scope user -- ~/.local/bin/gnomcp`
+> - Verify with `claude mcp list`
+> - Then remind me to restart Claude Code so the plugin loads
 
 Or by hand, with the binary already at `~/.local/bin/gnomcp`:
 
