@@ -1,12 +1,16 @@
 package faucet
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -67,10 +71,11 @@ func TestServer_health(t *testing.T) {
 }
 
 func TestServer_dispenseFailureIsGeneric(t *testing.T) {
+	var logBuf bytes.Buffer
 	fd := &fakeDispenser{err: errors.New("SECRET-INTERNAL-CHECKTX-LOG")}
 	f := New("test5", 1_000_000, fd, NewLimiter(LimiterCfg{
 		PerAddrMax: 1, PerIPMax: 5, DailyCapUgnot: 1_000_000_000, GrantUgnot: 1_000_000,
-	}))
+	}), WithLogger(slog.New(slog.NewJSONHandler(&logBuf, nil))))
 	srv := httptest.NewServer(f.Handler())
 	defer srv.Close()
 
@@ -83,4 +88,50 @@ func TestServer_dispenseFailureIsGeneric(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(body), "SECRET-INTERNAL-CHECKTX-LOG",
 		"internal dispense error must not leak to anonymous clients")
+	// The internal detail is logged server-side for operators (it carries no
+	// user secret — no mnemonic, no key), so ops can debug a failing dispenser.
+	assert.Contains(t, logBuf.String(), "SECRET-INTERNAL-CHECKTX-LOG",
+		"internal dispense error must be logged server-side")
+}
+
+type captureMetrics struct {
+	mu       sync.Mutex
+	outcomes []string
+}
+
+func (c *captureMetrics) RecordOutcome(_ context.Context, outcome string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.outcomes = append(c.outcomes, outcome)
+}
+
+// postFund POSTs body to srv's /fund and returns the response status code.
+func postFund(t *testing.T, baseURL, body string) int {
+	t.Helper()
+	resp, err := http.Post(baseURL+"/fund", "application/json", strings.NewReader(body))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	return resp.StatusCode
+}
+
+func TestHandleFundRecordsOutcomeAndStatus(t *testing.T) {
+	var buf bytes.Buffer
+	cm := &captureMetrics{}
+	lim := NewLimiter(LimiterCfg{PerAddrMax: 1, PerIPMax: 10, DailyCapUgnot: 1_000_000_000_000, GrantUgnot: 1_000_000})
+	f := New("test5", 1_000_000, &fakeDispenser{}, lim,
+		WithLogger(slog.New(slog.NewJSONHandler(&buf, nil))),
+		WithMetrics(cm),
+		WithTrustedProxies(0),
+	)
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+
+	// success
+	assert.Equal(t, http.StatusOK, postFund(t, srv.URL, `{"address":"`+validAddr+`","chain_id":"test5"}`))
+	// chain mismatch -> 403 + chain_mismatch outcome (test99 is a valid testnet id, just not ours)
+	assert.Equal(t, http.StatusForbidden, postFund(t, srv.URL, `{"address":"`+validAddr+`","chain_id":"test99"}`))
+	// malformed body -> 400 + bad_request outcome, never reaches Fund
+	assert.Equal(t, http.StatusBadRequest, postFund(t, srv.URL, `not json`))
+
+	assert.Equal(t, []string{OutcomeSuccess, OutcomeChainMismatch, OutcomeBadRequest}, cm.outcomes)
 }

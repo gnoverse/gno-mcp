@@ -181,6 +181,51 @@ func (l *Limiter) Refund(addr, ip string, grantedAt time.Time) {
 	}
 }
 
+// LimiterSnapshot is a point-in-time view of the limiter's global budget state,
+// for metrics. It carries no per-address or per-IP data.
+type LimiterSnapshot struct {
+	DripEnabled   bool
+	DripTokens    float64 // projected tokens available now (0 when disabled)
+	DripBurst     float64 // bucket capacity
+	DailyCapUgnot int64
+	DaySpentUgnot int64 // 0 once the UTC day has rolled over
+}
+
+// Snapshot returns the current global budget state without mutating the limiter:
+// it projects accrued drip tokens up to now (capped at burst) without advancing
+// the bucket clock, and reports zero daily spend once the UTC day has rolled
+// over. Safe to call on every scrape.
+func (l *Limiter) Snapshot() LimiterSnapshot {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := l.now()
+	daySpent := l.daySpent
+	if l.dayStart.IsZero() || !sameUTCDay(l.dayStart, now) {
+		daySpent = 0
+	}
+
+	s := LimiterSnapshot{
+		DripEnabled:   l.dripBurst > 0,
+		DripBurst:     l.dripBurst,
+		DailyCapUgnot: l.dailyCapUgnot,
+		DaySpentUgnot: daySpent,
+	}
+	if l.dripBurst > 0 {
+		tokens := l.dripTokens
+		if !l.dripLast.IsZero() {
+			if elapsed := now.Sub(l.dripLast).Seconds(); elapsed > 0 {
+				tokens += elapsed * l.dripRatePerSec
+				if tokens > l.dripBurst {
+					tokens = l.dripBurst
+				}
+			}
+		}
+		s.DripTokens = tokens
+	}
+	return s
+}
+
 // refillDrip adds tokens accrued since the last refill, capped at burst.
 // Callers must hold l.mu. The first call seeds dripLast without accruing.
 func (l *Limiter) refillDrip(now time.Time) {

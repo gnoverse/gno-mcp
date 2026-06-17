@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -147,4 +148,54 @@ func TestLimiter_refundAcrossDayBoundaryDoesNotUndercountNewDay(t *testing.T) {
 
 	_, err = l.Allow("g1c", "3.3.3.3")
 	require.ErrorIs(t, err, ErrDailyCap, "cross-day refund must not free a slot on the new day")
+}
+
+func TestLimiterSnapshot(t *testing.T) {
+	now := time.Date(2026, 6, 17, 12, 0, 0, 0, time.UTC)
+	clock := now
+	l := NewLimiter(LimiterCfg{
+		Now:                 func() time.Time { return clock },
+		PerAddrMax:          1,
+		PerIPMax:            10,
+		DailyCapUgnot:       1_000,
+		GrantUgnot:          100,
+		DripBurstUgnot:      500,
+		DripRateUgnotPerSec: 10,
+	})
+
+	// Fresh bucket: full drip, zero spent.
+	s := l.Snapshot()
+	assert.True(t, s.DripEnabled)
+	assert.Equal(t, float64(500), s.DripTokens)
+	assert.Equal(t, float64(500), s.DripBurst)
+	assert.Equal(t, int64(1_000), s.DailyCapUgnot)
+	assert.Equal(t, int64(0), s.DaySpentUgnot)
+
+	// One grant spends 100 from drip and daily.
+	_, err := l.Allow("g1abc", "1.2.3.4")
+	require.NoError(t, err)
+	s = l.Snapshot()
+	assert.Equal(t, float64(400), s.DripTokens)
+	assert.Equal(t, int64(100), s.DaySpentUgnot)
+
+	// Snapshot is a pure read: calling it does not consume or refill the bucket.
+	s2 := l.Snapshot()
+	assert.Equal(t, s.DripTokens, s2.DripTokens)
+
+	// Time advances: drip projects refill (+10/s for 5s = +50), capped at burst.
+	clock = now.Add(5 * time.Second)
+	s = l.Snapshot()
+	assert.Equal(t, float64(450), s.DripTokens)
+
+	// New UTC day: daily spend reads as 0 even though daySpent field is stale.
+	clock = now.Add(24 * time.Hour)
+	s = l.Snapshot()
+	assert.Equal(t, int64(0), s.DaySpentUgnot)
+}
+
+func TestLimiterSnapshotDripDisabled(t *testing.T) {
+	l := NewLimiter(LimiterCfg{PerAddrMax: 1, PerIPMax: 10, DailyCapUgnot: 1_000, GrantUgnot: 100})
+	s := l.Snapshot()
+	assert.False(t, s.DripEnabled)
+	assert.Equal(t, float64(0), s.DripTokens)
 }

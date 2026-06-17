@@ -5,15 +5,19 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	otelmetric "go.opentelemetry.io/otel/metric"
 
 	"github.com/gnoverse/gno-mcp/faucet"
 )
@@ -21,6 +25,10 @@ import (
 // version is overridden at release time via -ldflags "-X main.version=...";
 // dev builds report "dev".
 var version = "dev"
+
+// balanceTTL is the funding-balance cache/poll interval, shared by the optional
+// balance floor and the funding-balance gauge poller.
+const balanceTTL = 30 * time.Second
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "version" {
@@ -36,6 +44,8 @@ func main() {
 	// env var in practice, since argv is visible to ps and shell history.
 	mnemonic := flag.String("mnemonic", "", "BIP-39 mnemonic for the funding key (default: $GNOMCP_FAUCET_MNEMONIC)")
 	listen := flag.String("listen", "127.0.0.1:8590", "address to listen on")
+	metricsAddr := flag.String("metrics-addr", "", "address for the Prometheus /metrics listener, e.g. 127.0.0.1:8591 (empty disables; opt-in)")
+	trustedProxies := flag.Int("trusted-proxies", 0, "number of trusted reverse-proxy hops for X-Forwarded-For client IP (0 = ignore XFF, use direct peer; set to the proxy count, e.g. 1 behind a single ALB)")
 	grant := flag.Int64("grant", 1_000_000_000, "ugnot amount granted per fund request")
 	// Gas is scoped to the faucet's only tx type — a bank send (~1.6M on test-13).
 	// Defaults mirror the gno faucet (1 GNOT fee, 5M wanted), far below the gnomcp
@@ -51,29 +61,35 @@ func main() {
 	minFundingBalance := flag.Int64("min-funding-balance", 0, "refuse grants (503) while the funding wallet holds fewer ugnot than this (0 disables)")
 	flag.Parse()
 
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	fatal := func(msg string, args ...any) {
+		logger.Error(msg, args...)
+		os.Exit(1)
+	}
+
 	if *mnemonic == "" {
 		*mnemonic = os.Getenv("GNOMCP_FAUCET_MNEMONIC")
 	}
 	if *rpcURL == "" || *chainID == "" || *mnemonic == "" {
-		log.Fatal("agentfaucet: -rpc-url, -chain-id, and -mnemonic (or GNOMCP_FAUCET_MNEMONIC) are required")
+		fatal("missing required config", "need", "-rpc-url, -chain-id, and -mnemonic (or GNOMCP_FAUCET_MNEMONIC)")
 	}
 	if !faucet.IsTestnetChainID(*chainID) {
-		log.Fatalf("agentfaucet: chain-id %q is not a testnet (only test* is allowed)", *chainID)
+		fatal("chain-id is not a testnet (only test* is allowed)", "chain_id", *chainID)
 	}
 
 	signer, err := gnoclient.SignerFromBip39(*mnemonic, *chainID, "", 0, 0)
 	if err != nil {
-		log.Fatalf("agentfaucet: build signer: %v", err)
+		fatal("build signer", "err", err.Error())
 	}
 
 	info, err := signer.Info()
 	if err != nil {
-		log.Fatalf("agentfaucet: signer info: %v", err)
+		fatal("signer info", "err", err.Error())
 	}
 
 	rpc, err := rpcclient.NewHTTPClient(*rpcURL)
 	if err != nil {
-		log.Fatalf("agentfaucet: rpc client: %v", err)
+		fatal("rpc client", "err", err.Error())
 	}
 
 	cli := &gnoclient.Client{RPCClient: rpc, Signer: signer}
@@ -90,14 +106,78 @@ func main() {
 		DripRateUgnotPerSec: *dripRate,
 	})
 
-	var opts []faucet.Option
-	if *minFundingBalance > 0 {
-		opts = append(opts, faucet.WithBalanceFloor(*minFundingBalance,
-			faucet.NewGnoclientBalance(cli, info.GetAddress(), 30*time.Second)))
+	// The funding-balance source is always built so the balance gauge can observe
+	// it; the optional floor reuses the same TTL-cached query.
+	balanceFn := faucet.NewGnoclientBalance(cli, info.GetAddress(), balanceTTL)
+
+	opts := []faucet.Option{
+		faucet.WithLogger(logger),
+		faucet.WithTrustedProxies(*trustedProxies),
 	}
+	if *minFundingBalance > 0 {
+		opts = append(opts, faucet.WithBalanceFloor(*minFundingBalance, balanceFn))
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	// mp is the meter provider for HTTP server metrics; nil leaves the handler
+	// uninstrumented when metrics are disabled.
+	var mp otelmetric.MeterProvider
+	if *metricsAddr != "" {
+		tel, err := setupTelemetry(ctx, version)
+		if err != nil {
+			fatal("setup telemetry", "err", err.Error())
+		}
+		defer func() { _ = tel.shutdown(context.Background()) }()
+		mp = tel.provider
+
+		// -1 sentinel: the balance gauge stays unset until the first successful
+		// poll, so an unreachable RPC at startup reads as "no data" rather than a
+		// misleading 0 (empty wallet).
+		var balanceGauge atomic.Int64
+		balanceGauge.Store(-1)
+		if err := tel.registerGauges(lim, &balanceGauge); err != nil {
+			fatal("register gauges", "err", err.Error())
+		}
+		opts = append(opts, faucet.WithMetrics(tel.metrics))
+
+		// Poll the funding balance on a TTL so the gauge callback only reads an
+		// atomic and never blocks a scrape on an RPC.
+		go pollBalance(ctx, balanceFn, &balanceGauge, balanceTTL, logger)
+
+		// Bind the metrics listener synchronously so a port conflict fails loudly
+		// at startup (like the main listener) instead of logging from a goroutine
+		// while the faucet runs on, blind, without metrics.
+		metricsLn, err := net.Listen("tcp", *metricsAddr)
+		if err != nil {
+			fatal("metrics listen", "addr", *metricsAddr, "err", err.Error())
+		}
+		metricsSrv := &http.Server{Handler: metricsMux(tel.handler), ReadTimeout: 5 * time.Second}
+		go func() {
+			logger.Info("metrics listening", "addr", *metricsAddr)
+			if err := metricsSrv.Serve(metricsLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Error("metrics serve", "err", err.Error())
+			}
+		}()
+		defer func() {
+			sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer scancel()
+			_ = metricsSrv.Shutdown(sctx)
+		}()
+	}
+
 	f := faucet.New(*chainID, *grant, disp, lim, opts...)
 
-	log.Printf("agentfaucet: chain=%s listen=%s from=%s grant=%d", *chainID, *listen, info.GetAddress(), *grant)
+	// otelhttp records HTTP server metrics (request duration, body sizes) against
+	// our meter provider; it would otherwise use the global no-op provider. mp is
+	// nil when metrics are disabled, leaving the handler bare.
+	var serverOpts []otelhttp.Option
+	if mp != nil {
+		serverOpts = append(serverOpts, otelhttp.WithMeterProvider(mp))
+	}
+
+	logger.Info("starting", "chain", *chainID, "listen", *listen, "from", info.GetAddress().String(), "grant", *grant)
 	// Dispenses are serialized (gnoclient signs against a queried account
 	// sequence), so concurrent /fund requests queue behind one chain round-trip
 	// each. WriteTimeout must comfortably exceed worst-case queue-depth × send
@@ -106,7 +186,7 @@ func main() {
 	// concurrency.
 	srv := &http.Server{
 		Addr:         *listen,
-		Handler:      f.Handler(),
+		Handler:      otelhttp.NewHandler(f.Handler(), "agentfaucet", serverOpts...),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -119,17 +199,46 @@ func main() {
 		}
 	}()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	select {
 	case err := <-serveErr:
-		log.Fatalf("agentfaucet: serve: %v", err)
-	case sig := <-stop:
-		log.Printf("agentfaucet: %s received, shutting down", sig)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			log.Printf("agentfaucet: graceful shutdown failed: %v", err)
+		fatal("serve", "err", err.Error())
+	case <-ctx.Done():
+		logger.Info("shutdown signal received")
+		sctx, scancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer scancel()
+		if err := srv.Shutdown(sctx); err != nil {
+			logger.Error("graceful shutdown failed", "err", err.Error())
+		}
+	}
+}
+
+// metricsMux serves the Prometheus handler at /metrics.
+func metricsMux(h http.Handler) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", h)
+	return mux
+}
+
+// pollBalance refreshes balance into dst every interval until ctx is done, so
+// the balance gauge reads a fresh atomic without an RPC on the scrape path.
+func pollBalance(ctx context.Context, balance func(context.Context) (int64, error), dst *atomic.Int64, interval time.Duration, logger *slog.Logger) {
+	tick := func() {
+		v, err := balance(ctx)
+		if err != nil {
+			logger.Warn("funding balance poll failed", "err", err.Error())
+			return
+		}
+		dst.Store(v)
+	}
+	tick() // seed immediately
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			tick()
 		}
 	}
 }

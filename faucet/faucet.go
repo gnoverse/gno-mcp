@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 
 	"github.com/gnolang/gno/tm2/pkg/crypto"
@@ -35,6 +36,10 @@ type Faucet struct {
 	// It is a graceful-degradation guard, not a hard solvency invariant.
 	minFundingUgnot int64
 	fundingBalance  func(context.Context) (int64, error)
+
+	logger         *slog.Logger
+	metrics        Metrics
+	trustedProxies int
 }
 
 // Option configures optional Faucet behavior.
@@ -50,8 +55,23 @@ func WithBalanceFloor(minUgnot int64, balance func(context.Context) (int64, erro
 	}
 }
 
+// WithLogger sets the structured logger used for the per-request access log and
+// internal-error logging. Defaults to slog.Default().
+func WithLogger(l *slog.Logger) Option { return func(f *Faucet) { f.logger = l } }
+
+// WithMetrics sets the outcome metrics recorder. Defaults to a no-op.
+func WithMetrics(m Metrics) Option { return func(f *Faucet) { f.metrics = m } }
+
+// WithTrustedProxies sets how many reverse-proxy hops in front of the faucet are
+// trusted to append honest X-Forwarded-For entries (e.g. 1 for a single ALB). 0
+// means use the direct peer address. See clientIP.
+func WithTrustedProxies(n int) Option { return func(f *Faucet) { f.trustedProxies = n } }
+
 func New(chainID string, grantUgnot int64, d Dispenser, l *Limiter, opts ...Option) *Faucet {
-	f := &Faucet{chainID: chainID, grantUgnot: grantUgnot, dispenser: d, limiter: l}
+	f := &Faucet{
+		chainID: chainID, grantUgnot: grantUgnot, dispenser: d, limiter: l,
+		logger: slog.Default(), metrics: nopMetrics{},
+	}
 	for _, opt := range opts {
 		opt(f)
 	}

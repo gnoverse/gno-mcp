@@ -2,9 +2,6 @@ package faucet
 
 import (
 	"encoding/json"
-	"errors"
-	"log"
-	"net"
 	"net/http"
 )
 
@@ -18,12 +15,13 @@ type fundResponse struct {
 	AmountUgnot int64  `json:"amount_ugnot"`
 }
 
-// Handler returns the faucet's HTTP mux (POST /fund, GET /health).
+// Handler returns the faucet's HTTP mux (POST /fund, GET /health), wrapped with
+// the access-log middleware.
 func (f *Faucet) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /fund", f.handleFund)
 	mux.HandleFunc("GET /health", f.handleHealth)
-	return mux
+	return f.logRequests(mux)
 }
 
 // handleHealth is a liveness probe for the load balancer: 200 while the
@@ -37,32 +35,43 @@ func (f *Faucet) handleFund(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10) // tiny request; bound untrusted input
 	var req fundRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Address == "" {
+		f.recordFund(r, OutcomeBadRequest, "", "")
 		http.Error(w, "bad request: expected JSON {address, chain_id}", http.StatusBadRequest)
 		return
 	}
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr // fall back to the raw addr instead of collapsing to ""
+
+	// The access-log middleware extracts the client IP once and stores it here.
+	// Guard nil so handleFund stays safe even if ever mounted without it.
+	var ip string
+	if info := reqInfoFromContext(r.Context()); info != nil {
+		ip = info.ip
 	}
 
 	tx, err := f.Fund(r.Context(), req.Address, ip, req.ChainID)
+	status, outcome := classify(err)
+	f.recordFund(r, outcome, req.Address, req.ChainID)
+
 	switch {
 	case err == nil:
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(fundResponse{TxHash: tx, AmountUgnot: f.grantUgnot})
-	case errors.Is(err, ErrBadAddress):
-		http.Error(w, "bad request: invalid recipient address", http.StatusBadRequest)
-	case errors.Is(err, ErrChainRefused), errors.Is(err, ErrChainMismatch):
-		http.Error(w, err.Error(), http.StatusForbidden)
-	case errors.Is(err, ErrCooldown), errors.Is(err, ErrRateLimited), errors.Is(err, ErrDailyCap), errors.Is(err, ErrDripLimited):
-		http.Error(w, err.Error(), http.StatusTooManyRequests)
-	case errors.Is(err, ErrFundingLow):
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-	default:
+	case outcome == OutcomeDispenseFailed:
 		// Internal dispense failures (CheckTx logs, RPC transport details) aid
 		// probing of a service that holds a funded key: log them, return a
 		// generic error to the anonymous caller.
-		log.Printf("faucet: dispense failed for %s: %v", req.Address, err)
+		f.logger.Error("dispense failed", "address", req.Address, "err", err.Error())
 		http.Error(w, "faucet: dispense failed", http.StatusBadGateway)
+	default:
+		http.Error(w, err.Error(), status)
 	}
+}
+
+// recordFund enriches the access-log record and records the outcome metric.
+func (f *Faucet) recordFund(r *http.Request, outcome, address, chainID string) {
+	if info := reqInfoFromContext(r.Context()); info != nil {
+		info.outcome = outcome
+		info.address = address
+		info.chainID = chainID
+	}
+	f.metrics.RecordOutcome(r.Context(), outcome)
 }
