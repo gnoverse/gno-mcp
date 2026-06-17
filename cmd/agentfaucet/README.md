@@ -52,7 +52,7 @@ Behaviors worth knowing when you set these:
 
 ## HTTP API
 
-A single endpoint:
+The funding endpoint:
 
 ```
 POST /fund
@@ -74,3 +74,11 @@ curl -sX POST http://127.0.0.1:8590/fund \
 | `502` | the on-chain dispense failed | generic `faucet: dispense failed` (details only in the service logs, to avoid leaking probe signal to anonymous callers) |
 
 The request body is capped at 4 KiB.
+
+A liveness probe:
+
+```
+GET /health   ->  200 "ok"
+```
+
+Returns `200` whenever the process is serving; it does not probe the chain, so a transient RPC blip won't fail the check (suited to a load-balancer health check that should only remove a genuinely down instance).

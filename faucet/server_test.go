@@ -51,6 +51,21 @@ func TestServer_fund(t *testing.T) {
 	resp4.Body.Close()
 }
 
+func TestServer_health(t *testing.T) {
+	f := New("test5", 1_000_000, &fakeDispenser{}, NewLimiter(LimiterCfg{
+		PerAddrMax: 1, PerIPMax: 5, DailyCapUgnot: 1_000_000_000, GrantUgnot: 1_000_000,
+	}))
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+
+	// Liveness probe for the load balancer: 200 while the process serves,
+	// independent of chain reachability.
+	resp, err := http.Get(srv.URL + "/health")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
 func TestServer_dispenseFailureIsGeneric(t *testing.T) {
 	fd := &fakeDispenser{err: errors.New("SECRET-INTERNAL-CHECKTX-LOG")}
 	f := New("test5", 1_000_000, fd, NewLimiter(LimiterCfg{

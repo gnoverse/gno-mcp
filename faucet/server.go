@@ -18,11 +18,19 @@ type fundResponse struct {
 	AmountUgnot int64  `json:"amount_ugnot"`
 }
 
-// Handler returns the faucet's HTTP mux (POST /fund).
+// Handler returns the faucet's HTTP mux (POST /fund, GET /health).
 func (f *Faucet) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /fund", f.handleFund)
+	mux.HandleFunc("GET /health", f.handleHealth)
 	return mux
+}
+
+// handleHealth is a liveness probe for the load balancer: 200 while the
+// process is serving. It deliberately does not probe the chain — a transient
+// RPC blip must not take the instance out of rotation.
+func (f *Faucet) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	_, _ = w.Write([]byte("ok"))
 }
 
 func (f *Faucet) handleFund(w http.ResponseWriter, r *http.Request) {
