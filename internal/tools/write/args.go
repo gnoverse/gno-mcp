@@ -1,9 +1,10 @@
 // Package write holds the chain-write and write-prep MCP tools: gno_call,
-// gno_run, gno_addpkg (transactions); gno_faucet_fund, gno_key_generate,
-// gno_key_address (agent key lifecycle); and gno_session_propose,
-// gno_auth_status, gno_session_revoke (session lifecycle). Each exposes a
-// Register* function. All register unconditionally except gno_faucet_fund,
-// which is gated on a testnet profile existing; see cmd/gnomcp/register.go.
+// gno_run, gno_addpkg, gno_key_send (transactions); gno_faucet_fund,
+// gno_key_generate, gno_key_address, gno_key_list, gno_key_delete (agent key
+// lifecycle); and gno_session_propose, gno_auth_status, gno_session_revoke
+// (session lifecycle). Each exposes a Register* function. All register
+// unconditionally except gno_faucet_fund, which is gated on a testnet profile
+// existing; see cmd/gnomcp/register.go.
 package write
 
 import (
