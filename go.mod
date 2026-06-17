@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/gnolang/gno v0.0.0-20260611082924-74dcfb12523e
+	github.com/gnolang/gno v1.1.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/modelcontextprotocol/go-sdk v1.4.1
 	github.com/prometheus/client_golang v1.23.2
@@ -25,8 +25,6 @@ require (
 	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/alecthomas/chroma/v2 v2.26.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.24.4 // indirect
-	github.com/bmatsuo/lmdb-go v1.8.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.5.0 // indirect
 	github.com/btcsuite/btcd/btcutil v1.2.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -38,7 +36,6 @@ require (
 	github.com/cockroachdb/pebble v1.1.5 // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
-	github.com/consensys/gnark-crypto v0.20.1 // indirect
 	github.com/cosmos/gogoproto v1.7.0 // indirect
 	github.com/cosmos/ics23/go v0.11.0 // indirect
 	github.com/cosmos/ledger-cosmos-go v1.0.0 // indirect
@@ -48,7 +45,6 @@ require (
 	github.com/dlclark/regexp2/v2 v2.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/dot v1.11.0 // indirect
-	github.com/erigontech/mdbx-go v0.40.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/getsentry/sentry-go v0.35.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -62,7 +58,6 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
-	github.com/ianlancetaylor/cgosymbolizer v0.0.0-20241129212102-9c50ad6b591e // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
