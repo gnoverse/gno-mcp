@@ -1,6 +1,6 @@
 {
   "name": "gnomcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Gno smart-contract skill + MCP server for gno.land: interrealm semantics, security auditing, Render() authoring, idiomatic patterns, and on-chain tools (read, deploy, call, sessions).",
   "author": {
     "name": "gnoverse",
