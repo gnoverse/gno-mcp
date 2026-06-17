@@ -23,8 +23,8 @@ func TestLoadResolved_ExplicitFileLayers(t *testing.T) {
 	p := filepath.Join(dir, "profiles.toml")
 	err := os.WriteFile(p, []byte(`
 [testnet]
-rpc-url = "https://rpc.test11.testnets.gno.land:443"
-chain-id = "test11"
+rpc-url = "https://rpc.test13.testnets.gno.land:443"
+chain-id = "test-13"
 master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 `), 0o600)
 	require.NoError(t, err)

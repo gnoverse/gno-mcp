@@ -72,9 +72,11 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 		assert.Fail(t, "local default missing or wrong chain-id", "%+v", local)
 	}
 	tn, ok := cfg.Profiles["testnet"]
-	if !ok || tn.ChainID != "test11" {
-		assert.Fail(t, "testnet default missing or wrong chain-id", "%+v", tn)
-	}
+	require.True(t, ok, "testnet default missing")
+	assert.Equal(t, "test-13", tn.ChainID, "testnet default chain-id")
+	assert.Equal(t, "https://rpc.test13.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
+	assert.Equal(t, "https://test13.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
+	assert.Equal(t, "https://indexer.test13.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
 	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
 }
@@ -122,8 +124,8 @@ func TestMerge_LaterOverridesByName(t *testing.T) {
 	base := BuiltinProfiles()
 	overlay, err := Load(strings.NewReader(`
 [testnet]
-rpc-url = "https://rpc.test11.testnets.gno.land:443"
-chain-id = "test11"
+rpc-url = "https://rpc.test13.testnets.gno.land:443"
+chain-id = "test-13"
 master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 `))
 	require.NoError(t, err, "load overlay")

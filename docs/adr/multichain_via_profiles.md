@@ -4,7 +4,7 @@
 
 ## Context
 
-A gno developer works across multiple chains: a local devnet (`gnodev`), the current public testnet (`test11` at time of writing; successor testnets reset on a regular cadence), and occasionally other test deployments. The MCP server must support all of these without forcing the user to install or configure separate MCP instances per chain.
+A gno developer works across multiple chains: a local devnet (`gnodev`), the current public testnet (`test-13` at time of writing; successor testnets reset on a regular cadence), and occasionally other test deployments. The MCP server must support all of these without forcing the user to install or configure separate MCP instances per chain.
 
 The threat model treats mainnet as out of scope entirely: an LLM-driven signer must not be able to reach a chain holding real funds, by construction rather than by ceremony.
 

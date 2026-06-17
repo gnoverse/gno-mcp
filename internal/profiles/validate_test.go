@@ -170,7 +170,7 @@ chain-id = "dev"
 // from everything else. Only these get an agent key path and writable tools.
 func TestChainIDWritable(t *testing.T) {
 	cases := map[string]bool{
-		"dev": true, "test5": true, "test11": true, "test-13": true,
+		"dev": true, "test5": true, "test-13": true,
 		"gnoland1": false, "staging": false, "mychain": false, "portal-loop": false,
 	}
 	for id, want := range cases {
@@ -246,7 +246,7 @@ func TestValidate_rejectsMasterAddressOnReadOnlyChain(t *testing.T) {
 
 func TestValidate_MasterAddressOptional(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
-		"testnet": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
+		"testnet": {RPCURL: "https://rpc.test13.testnets.gno.land:443", ChainID: "test-13"},
 	}}
 	_, err := cfg.Validate()
 	require.NoError(t, err, "read-only profile should validate")
@@ -254,7 +254,7 @@ func TestValidate_MasterAddressOptional(t *testing.T) {
 
 func TestValidate_BypassRequiresMaster(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
-		"p": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11", BypassHardLimits: true},
+		"p": {RPCURL: "https://rpc.test13.testnets.gno.land:443", ChainID: "test-13", BypassHardLimits: true},
 	}}
 	_, err := cfg.Validate()
 	require.Error(t, err, "bypass-hard-limits without master-address should be rejected")
@@ -263,8 +263,8 @@ func TestValidate_BypassRequiresMaster(t *testing.T) {
 func TestValidate_BypassWithMasterAccepted(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
 		"p": {
-			RPCURL:           "https://rpc.test11.testnets.gno.land:443",
-			ChainID:          "test11",
+			RPCURL:           "https://rpc.test13.testnets.gno.land:443",
+			ChainID:          "test-13",
 			BypassHardLimits: true,
 			MasterAddress:    "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 		},
@@ -329,10 +329,10 @@ func TestValidate_rejectsNonHTTPFaucetURL(t *testing.T) {
 func TestValidate_LocalityDerivation(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
 		"local":   {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
-		"testnet": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
+		"testnet": {RPCURL: "https://rpc.test13.testnets.gno.land:443", ChainID: "test-13"},
 	}}
 	_, err := cfg.Validate()
 	require.NoError(t, err)
 	assert.True(t, cfg.Profiles["local"].IsLocal(), "dev chain-id must derive local")
-	assert.True(t, cfg.Profiles["testnet"].IsTestnet(), "test11 chain-id must derive testnet")
+	assert.True(t, cfg.Profiles["testnet"].IsTestnet(), "test-13 chain-id must derive testnet")
 }

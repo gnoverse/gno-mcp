@@ -144,10 +144,10 @@ tree: a regression shows up here only after it ships.
 ## External tier (real testnet)
 
 Only scenarios 11–12 (install from scratch, GitHub egress — above). No real-testnet
-scenarios: they require the canonical test13 endpoints (test11 is dead — never
-reference it). The built-in `testnet` profile (`internal/profiles/config.go`)
-points at test11, so the zero-config testnet experience fails against the live
-network.
+scenarios run here: they require the canonical test13 endpoints and live network
+egress. The built-in `testnet` profile (`internal/profiles/config.go`) points at
+test13 (chain-id `test-13`), so the zero-config testnet experience works against
+the live network.
 
 ## Known harness constraints (not feature gaps)
 

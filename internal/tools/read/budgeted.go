@@ -38,8 +38,8 @@ func gnowebURLFor(rpcURL, realm, path string) string {
 	if !strings.HasPrefix(base, "http") || strings.Contains(base, "127.0.0.1") || strings.Contains(base, "localhost") {
 		return ""
 	}
-	// gnoweb serves realm "gno.land/r/x" at path "/r/x" (verified: test11 returns
-	// 200 for /r/gnoland/home, 404 for /gno.land/r/gnoland/home).
+	// gnoweb serves realm "gno.land/r/x" at path "/r/x": /r/gnoland/home returns
+	// 200, /gno.land/r/gnoland/home returns 404.
 	realmPath := strings.TrimPrefix(realm, "gno.land/")
 	u := strings.TrimSuffix(base, "/") + "/" + realmPath
 	if path != "" {

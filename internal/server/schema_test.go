@@ -55,7 +55,7 @@ func TestProfileArgSchema_multipleNoLocal_smartDefault(t *testing.T) {
 func TestProfileArgSchema_SmartDefault(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"local":   {ChainID: "dev", RPCURL: "x"},
-		"testnet": {ChainID: "test11", RPCURL: "y"},
+		"testnet": {ChainID: "test-13", RPCURL: "y"},
 	}}
 	// local discovered → default local
 	got := ProfileArgSchema(cfg, "local")

@@ -17,7 +17,7 @@ import (
 
 // TestReal_Call_nilSignerSimulate ensures simulate=true still needs a signer.
 func TestReal_Call_nilSignerSimulate(t *testing.T) {
-	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
 	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, "", true)
 	require.Error(t, err, "expected error for nil signer (even with simulate=true)")
@@ -26,7 +26,7 @@ func TestReal_Call_nilSignerSimulate(t *testing.T) {
 
 // TestReal_Call_nilSignerBroadcast ensures non-simulate broadcasts require a signer.
 func TestReal_Call_nilSignerBroadcast(t *testing.T) {
-	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
 	_, err = r.CallAsUser(context.Background(), nil, "g1master", "gno.land/r/x", "Foo", nil, "", false)
 	require.Error(t, err, "expected error for nil signer in broadcast mode")
@@ -35,7 +35,7 @@ func TestReal_Call_nilSignerBroadcast(t *testing.T) {
 
 // TestReal_Call_emptyMaster ensures master is required.
 func TestReal_Call_emptyMaster(t *testing.T) {
-	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
 	stub := &minimalSigner{addr: "g1notreal"}
 	_, err = r.CallAsUser(context.Background(), stub, "", "gno.land/r/x", "Foo", nil, "", false)
@@ -69,7 +69,7 @@ func TestNewReal_emptyChainID(t *testing.T) {
 // ---- Real.RunAsUser tests
 
 func TestReal_Run_simulateRequiresSigner(t *testing.T) {
-	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
 	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", true)
 	require.Error(t, err, "expected error for nil signer (even with simulate=true)")
@@ -77,7 +77,7 @@ func TestReal_Run_simulateRequiresSigner(t *testing.T) {
 }
 
 func TestReal_Run_broadcastRequiresSigner(t *testing.T) {
-	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
 	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", false)
 	require.Error(t, err, "expected error for nil signer in broadcast mode")
@@ -85,7 +85,7 @@ func TestReal_Run_broadcastRequiresSigner(t *testing.T) {
 }
 
 func TestReal_Run_emptyMaster(t *testing.T) {
-	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
 	stub := &minimalSigner{addr: "g1notreal"}
 	_, err = r.RunAsUser(context.Background(), stub, "", "package main\nfunc main() {}", false)
@@ -107,7 +107,7 @@ func TestReal_File_rejectsEmptyFile(t *testing.T) {
 // addr means the caller cannot identify the session record on chain. The
 // Manager treats this as Unsupported (keep local state) rather than wiping.
 func TestReal_QuerySession_emptyArgsReturnsUnsupported(t *testing.T) {
-	r, err := NewReal("https://rpc.test11.testnets.gno.land:443", "test11")
+	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
 	for _, tc := range []struct {
 		name             string

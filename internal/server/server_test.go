@@ -49,7 +49,7 @@ func dynServer(t *testing.T) *Server {
 	t.Helper()
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"local":   {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
-		"testnet": {RPCURL: "https://rpc.test11.testnets.gno.land:443", ChainID: "test11"},
+		"testnet": {RPCURL: "https://rpc.test13.testnets.gno.land:443", ChainID: "test-13"},
 	}}
 	return NewServer(cfg, "")
 }
@@ -76,7 +76,7 @@ func TestAddDynamicProfile_rejectsInitProfiles(t *testing.T) {
 	err := s.AddDynamicProfile("testnet", profiles.Profile{RPCURL: "https://rpc.example", ChainID: "test5"})
 	require.Error(t, err, "init-time profiles must be immutable")
 	assert.ErrorIs(t, err, ErrProfileImmutable)
-	assert.Equal(t, "test11", s.Config().Profiles["testnet"].ChainID, "init profile must be unchanged")
+	assert.Equal(t, "test-13", s.Config().Profiles["testnet"].ChainID, "init profile must be unchanged")
 }
 
 func TestAddDynamicProfile_rejectsReservedAndInvalidNames(t *testing.T) {

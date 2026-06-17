@@ -79,14 +79,16 @@ func Load(r io.Reader) (*Config, error) {
 }
 
 // Built-in network endpoints. testnet is a release-time constant: bump when the
-// canonical persistent testnet rolls (verified live 2026-06-04: test11, block 2.27M+).
-// test12 was dead and test13 had no canonical host at the time of writing.
+// canonical persistent testnet rolls. The chain reports its chain-id hyphenated
+// ("test-13") while its hosts use the unhyphenated form ("test13.testnets.gno.land").
 const (
 	builtinLocalRPC   = "http://127.0.0.1:26657"
 	builtinLocalChain = "dev"
 
-	builtinTestnetRPC   = "https://rpc.test11.testnets.gno.land:443"
-	builtinTestnetChain = "test11"
+	builtinTestnetRPC     = "https://rpc.test13.testnets.gno.land:443"
+	builtinTestnetChain   = "test-13"
+	builtinTestnetGnoweb  = "https://test13.testnets.gno.land"
+	builtinTestnetIndexer = "https://indexer.test13.testnets.gno.land/graphql/query"
 )
 
 // BuiltinProfiles returns the zero-config default profiles. Both are read-only
@@ -99,8 +101,10 @@ func BuiltinProfiles() map[string]Profile {
 			ChainID: builtinLocalChain,
 		},
 		"testnet": {
-			RPCURL:  builtinTestnetRPC,
-			ChainID: builtinTestnetChain,
+			RPCURL:       builtinTestnetRPC,
+			ChainID:      builtinTestnetChain,
+			GnowebURL:    builtinTestnetGnoweb,
+			TxIndexerURL: builtinTestnetIndexer,
 		},
 	}
 }

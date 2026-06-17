@@ -14,8 +14,8 @@ import (
 
 func TestConnect_EmitsAddCommand(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.test11.testnets.gno.land" />` +
-			`<meta name="gnoconnect:chainid" content="test11" />`))
+		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.test13.testnets.gno.land" />` +
+			`<meta name="gnoconnect:chainid" content="test-13" />`))
 	}))
 	defer srv.Close()
 
@@ -26,14 +26,14 @@ func TestConnect_EmitsAddCommand(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Contains(t, res.Text, "gnomcp profile add", "expected persist command in output")
-	assert.Contains(t, res.Text, "test11", "expected chain-id in output")
+	assert.Contains(t, res.Text, "test-13", "expected chain-id in output")
 	assert.Contains(t, res.Text, "gno_profile_add", "expected the in-session (dynamic add) path in output")
 }
 
 func TestConnect_RejectsInjectionInName(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.test11.testnets.gno.land" />` +
-			`<meta name="gnoconnect:chainid" content="test11" />`))
+		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.test13.testnets.gno.land" />` +
+			`<meta name="gnoconnect:chainid" content="test-13" />`))
 	}))
 	defer srv.Close()
 
@@ -48,7 +48,7 @@ func TestConnect_RejectsInjectionInName(t *testing.T) {
 func TestConnect_RejectsInjectionInDiscoveredRPC(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<meta name="gnoconnect:rpc" content="http://evil/$(whoami)" />` +
-			`<meta name="gnoconnect:chainid" content="test11" />`))
+			`<meta name="gnoconnect:chainid" content="test-13" />`))
 	}))
 	defer srv.Close()
 

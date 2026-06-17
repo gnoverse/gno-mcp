@@ -43,9 +43,9 @@ func TestSmoke_docCounter(t *testing.T) {
 func TestSmoke_sessionPropose_returnsValidCommand(t *testing.T) {
 	cfg := &profiles.Config{
 		Profiles: map[string]profiles.Profile{
-			"test11": {
-				RPCURL:        "https://rpc.test11.testnets.gno.land:443",
-				ChainID:       "test11",
+			"test-13": {
+				RPCURL:        "https://rpc.test13.testnets.gno.land:443",
+				ChainID:       "test-13",
 				MasterAddress: "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
 			},
 		},
@@ -61,7 +61,7 @@ func TestSmoke_sessionPropose_returnsValidCommand(t *testing.T) {
 	require.True(t, ok, "gno_session_propose not registered")
 
 	res, err := tool.Handler(context.Background(), map[string]any{
-		"profile":     "test11",
+		"profile":     "test-13",
 		"allow_paths": []any{"gno.land/r/test/example"},
 	})
 	require.NoError(t, err, "Handler")

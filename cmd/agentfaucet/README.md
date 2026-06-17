@@ -11,11 +11,11 @@ It ships as a release binary (`agentfaucet_<os>_<arch>.tar.gz`) and a multi-arch
 docker run --rm -p 8590:8590 \
   -e GNOMCP_FAUCET_MNEMONIC="<funding key mnemonic>" \
   ghcr.io/gnoverse/agentfaucet:latest \
-  -rpc-url https://rpc.test11.testnets.gno.land:443 -chain-id test11 -listen 0.0.0.0:8590
+  -rpc-url https://rpc.test13.testnets.gno.land:443 -chain-id test-13 -listen 0.0.0.0:8590
 
 # Binary
 GNOMCP_FAUCET_MNEMONIC="<funding key mnemonic>" \
-  agentfaucet -rpc-url https://rpc.test11.testnets.gno.land:443 -chain-id test11
+  agentfaucet -rpc-url https://rpc.test13.testnets.gno.land:443 -chain-id test-13
 ```
 
 The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC`, never a flag default — a non-empty flag default is printed by `-help` and on any flag error, which would leak the key to stderr/logs (and argv is visible to `ps` and shell history). Only `test<N>` / `test-<N>` chain-ids are accepted; `dev` and everything else are refused. The default `-listen` is `127.0.0.1:8590` for host safety, so in a container you must pass `-listen 0.0.0.0:8590`.
@@ -25,7 +25,7 @@ The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC`, never a flag default
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `-rpc-url` | *(required)* | gno node RPC URL |
-| `-chain-id` | *(required)* | target testnet chain-id; must match `test<N>` or `test-<N>` (e.g. `test11`) |
+| `-chain-id` | *(required)* | target testnet chain-id; must match `test<N>` or `test-<N>` (e.g. `test-13`) |
 | `-mnemonic` | `$GNOMCP_FAUCET_MNEMONIC` | BIP-39 mnemonic for the funding key — prefer the env var |
 | `-listen` | `127.0.0.1:8590` | address to listen on |
 | `-grant` | `1000000000` | ugnot dispensed per drip (1,000 GNOT — ugnot is micro-GNOT, 1 GNOT = 1,000,000 ugnot) |
@@ -57,12 +57,12 @@ A single endpoint:
 ```
 POST /fund
 Content-Type: application/json
-{ "address": "g1...", "chain_id": "test11" }
+{ "address": "g1...", "chain_id": "test-13" }
 ```
 
 ```bash
 curl -sX POST http://127.0.0.1:8590/fund \
-  -d '{"address":"g1...","chain_id":"test11"}'
+  -d '{"address":"g1...","chain_id":"test-13"}'
 ```
 
 | Status | When | Body |

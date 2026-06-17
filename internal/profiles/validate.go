@@ -15,7 +15,7 @@ var (
 	spendLimitRE = regexp.MustCompile(`^[0-9]+[a-z]+$`)
 
 	// chainIDWritableRE marks the write-capable chains: local dev and numbered
-	// testnets. Admits "test11" and the hyphenated "test-13" form. Anything else
+	// testnets. Admits both the bare "test5" and hyphenated "test-13" forms. Anything else
 	// (betanet "gnoland1", "staging", ...) is admitted read-only, not writable —
 	// it has no agent key path and is excluded from every write tool's profile enum.
 	chainIDWritableRE = regexp.MustCompile(`^(dev|test-?\d+)$`)

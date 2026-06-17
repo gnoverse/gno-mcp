@@ -118,18 +118,18 @@ func TestProfileAdd_explicitForm_optionalURLs(t *testing.T) {
 }
 
 func TestProfileAdd_gnowebForm(t *testing.T) {
-	gw := gnowebServer(t, "https://rpc.test11.testnets.gno.land", "test11")
+	gw := gnowebServer(t, "https://rpc.test13.testnets.gno.land", "test-13")
 	defer gw.Close()
 
 	s := newAdminServer(t)
-	RegisterProfileAdd(s, gw.Client(), okVerifier("test11", nil), func() error { return nil })
+	RegisterProfileAdd(s, gw.Client(), okVerifier("test-13", nil), func() error { return nil })
 
 	res, err := callAdd(t, s, map[string]any{"name": "eleven", "gnoweb_url": gw.URL})
 	require.NoError(t, err)
 	p, ok := s.Config().Profiles["eleven"]
 	require.True(t, ok)
-	assert.Equal(t, "test11", p.ChainID)
-	assert.Equal(t, "https://rpc.test11.testnets.gno.land", p.RPCURL)
+	assert.Equal(t, "test-13", p.ChainID)
+	assert.Equal(t, "https://rpc.test13.testnets.gno.land", p.RPCURL)
 	assert.Equal(t, "gnoweb", res.StructuredContent["source"])
 }
 

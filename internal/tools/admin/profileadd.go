@@ -82,13 +82,13 @@ func profileAddInputSchema() map[string]any {
 			"gnoweb_url": map[string]any{
 				"type":   "string",
 				"format": "uri",
-				"description": "Gnoweb page URL to discover rpc_url + chain_id from (e.g. 'https://test11.testnets.gno.land'). " +
+				"description": "Gnoweb page URL to discover rpc_url + chain_id from (e.g. 'https://test13.testnets.gno.land'). " +
 					"Mutually exclusive with rpc_url/chain_id. Discovery is a hint only — the node is still dialed and verified.",
 			},
 			"tx_indexer_url": map[string]any{
 				"type":   "string",
 				"format": "uri",
-				"description": "Optional tx-indexer GraphQL endpoint (e.g. 'https://indexer.test11.testnets.gno.land/graphql/query'); " +
+				"description": "Optional tx-indexer GraphQL endpoint (e.g. 'https://indexer.test13.testnets.gno.land/graphql/query'); " +
 					"enables the indexer tools for this profile.",
 			},
 			"faucet_service_url": map[string]any{

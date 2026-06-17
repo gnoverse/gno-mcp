@@ -23,7 +23,7 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 			"(read tools only) — which is exactly what auditing deployed source needs. Use to PREVIEW " +
 			"a chain's connection info without changing gnomcp state; to discover AND add in one step, " +
 			"call gno_profile_add with gnoweb_url directly instead. Does NOT modify any config itself. " +
-			"Required: gnoweb_url (e.g. 'https://gno.land/r/gnoland/blog' or 'https://test11.testnets.gno.land'). " +
+			"Required: gnoweb_url (e.g. 'https://gno.land/r/gnoland/blog' or 'https://test13.testnets.gno.land'). " +
 			"Optional: name (suggested profile name, default derived from chain-id).",
 		InputSchema: map[string]any{
 			"type": "object",
@@ -31,11 +31,11 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 				"gnoweb_url": map[string]any{
 					"type":        "string",
 					"format":      "uri",
-					"description": "Base gnoweb URL of the chain (e.g. 'https://test11.testnets.gno.land').",
+					"description": "Base gnoweb URL of the chain (e.g. 'https://test13.testnets.gno.land').",
 				},
 				"name": map[string]any{
 					"type":        "string",
-					"description": "Suggested profile name (e.g. 'test11'). Default: the chain-id.",
+					"description": "Suggested profile name (e.g. 'test13'). Default: the chain-id.",
 				},
 			},
 			"required":             []string{"gnoweb_url"},
