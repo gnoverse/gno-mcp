@@ -46,7 +46,12 @@ listed).
 | write.simulate | gas estimate without broadcast | 02 | covered |
 | write.addpkg | gno_addpkg deploy | 02 | covered |
 | write.run | gno_run MsgRun script | 08 (deferred) | deferred with scenario 08 |
-| write.signer-reporting | answer names who signed (agent vs test1 vs session) | 02, 07 | covered |
+| write.signer-reporting | answer names who signed (agent vs test1 vs session) | 02, 07, 09 | covered |
+| write.key-multi | multiple named agent keys per profile (cap GNOMCP_AGENT_MAX_KEYS) | 09 | covered |
+| write.key-selector | `key` arg selects which named key signs a write | 09 | covered |
+| write.key-send | gno_key_send moves ugnot between a profile's own keys | 09 | covered |
+| write.key-list | gno_key_list enumerates {name, address} | 09 | covered |
+| write.key-delete | gno_key_delete removes a key; refuses a funded key (key_has_funds) unless swept or force | 09 | covered |
 
 ## Sessions (write-as-user)
 

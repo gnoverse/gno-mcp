@@ -85,3 +85,4 @@ Errors are JSON-encoded payloads with `code`, `message`, and (where useful) extr
 | `agent_identity_unavailable` | Agent identity requested on a profile with no agent key (run `gno_key_generate` for testnet) |
 | `key_cap_reached` | The profile already holds `GNOMCP_AGENT_MAX_KEYS` agent keys; delete one (`gno_key_delete`) to free a slot |
 | `key_ignored_for_session` | A `key` arg was supplied with `identity=session`, where it does not apply (the session signer is used) |
+| `key_has_funds` | `gno_key_delete` on a key that still holds ugnot without `force=true` — sweep with `gno_key_send` first, or force to abandon the funds |

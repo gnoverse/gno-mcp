@@ -21,7 +21,7 @@ I want you to be able to transact on this testnet yourself. Set yourself up with
 - correctness: reports a bech32 g1… address that is NOT g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5 (test1).
 - tool-selection: gno_key_generate in the turn log (gno_key_address also fine).
 ### Verify
-- `docker exec "${E2E_CONTAINER:-gnomcp-e2e}" ls /home/dev/.local/share/gnomcp/agent-keys/` — a `testnet.key` exists.
+- `docker exec "${E2E_CONTAINER:-gnomcp-e2e}" ls /home/dev/.local/share/gnomcp/agent-keys/testnet/` — a `default.key` exists (per-profile key dir; the default agent key).
 
 ## Step 2: fund and bump
 ### Instruct

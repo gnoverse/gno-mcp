@@ -145,8 +145,9 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 
 ### `gno_key_delete`
 
-- **Args:** `profile` (required — testnet only), `key` (required)
-- **Returns:** confirmation naming the deleted address. **Irreversible** — any ugnot the address held becomes unreachable. The `key` arg is required (no default), so a key can't be deleted by omission. Use to free a slot at the cap, or to replace a key (delete, then `gno_key_generate`).
+- **Args:** `profile` (required — testnet only), `key` (required), `sweep_to?`, `force?`
+- **Returns:** confirmation naming the deleted address (with `swept_ugnot`/`swept_to` when funds were recovered, or `abandoned_balance_ugnot` when a funded key was force-deleted). **Irreversible** — any ugnot left on the address becomes unreachable. The `key` arg is required (no default), so a key can't be deleted by omission. Use to free a slot at the cap, or to replace a key (delete, then `gno_key_generate`).
+- Refuses by default if the key still holds ugnot (`key_has_funds`). To remove a funded key safely, pass **`sweep_to=<another key name>`** — it atomically moves the full live balance (minus the gas fee) to that key, then deletes, so nothing is stranded by stale bookkeeping (a balance at or below the gas fee is left behind). Pass `force=true` instead to delete and permanently abandon the funds.
 
 ### `gno_key_send`
 

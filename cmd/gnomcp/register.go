@@ -69,7 +69,7 @@ func registerAllTools(d *toolDeps) {
 	writetools.RegisterKeyAddress(s, d.keystore)
 	writetools.RegisterKeyList(s, d.keystore)
 	writetools.RegisterKeyGenerate(s, d.keystore)
-	writetools.RegisterKeyDelete(s, d.keystore)
+	writetools.RegisterKeyDelete(s, d.keystore, d.chainResolver)
 
 	if s.AnyProfileTestnet() {
 		writetools.RegisterFaucetFund(s, d.keystore, d.chainResolver, d.faucetClient)
