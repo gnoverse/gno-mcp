@@ -29,8 +29,10 @@ The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC`, never a flag default
 | `-mnemonic` | `$GNOMCP_FAUCET_MNEMONIC` | BIP-39 mnemonic for the funding key — prefer the env var |
 | `-listen` | `127.0.0.1:8590` | address to listen on |
 | `-grant` | `1000000000` | ugnot dispensed per drip (1,000 GNOT — ugnot is micro-GNOT, 1 GNOT = 1,000,000 ugnot) |
+| `-gas-fee` | `1000000ugnot` | gas fee per dispense tx; a faucet send is cheap, so this is far below the gnomcp write default (sized for deploys) |
+| `-gas-wanted` | `5000000` | gas limit per dispense tx (a test-13 bank send burns ~1.6M) |
 | `-per-addr-cooldown` | `24h` | minimum time between grants to the same address |
-| `-per-ip-max` | `5` | max grants per IP per `-per-ip-window` |
+| `-per-ip-max` | `60` | max grants per IP per `-per-ip-window` |
 | `-per-ip-window` | `1h` | sliding window for the per-IP limit |
 | `-daily-cap` | `100000000000` | hard global daily ugnot outflow cap (100,000 GNOT) |
 
