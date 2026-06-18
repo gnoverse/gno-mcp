@@ -64,7 +64,6 @@ A driver Claude (host) QAs the containerized Claude+gnomcp+gno-skill (the AUT) s
 scenario: it plays the user turn-by-turn over `docker exec`, verifies chain ground truth against
 the in-container **simnet** (in-memory gnoland node + faucet + gnoweb on chain `test9999`, the
 `e2e` Docker target's main process), then interviews the AUT about its tool and skill choices.
-Spec: `.mynote/specs/2026-06-10-playground-driver-design.md` (local working doc, not tracked).
 
 - **Interactive (debug):** `cd playground && claude`, then `/playground-driver [scenario-id]`.
 - **Batch:** `make playground-e2e` (local tier — gates: every scenario must pass) /
