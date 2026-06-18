@@ -80,7 +80,7 @@ that returns nothing is the most common way to answer "doesn't exist" when the t
 | `r/sys/users` | Canonical name↔address store + collision index. Source of truth; holds no policy. | `IsNameTaken(n)`, `ResolveName(n)`, `ResolveAddress(a)`, `Controllers()` (which controllers it trusts) |
 | `r/sys/namereg/v1` | A *controller*: public registration policy (format/price/blacklist) writing through `users`. May or may not be loaded per network; may be superseded by a later `/vN`. | `qfuncs` first (is it deployed?); then `ValidateNymFormat(s)`, `IsPaused()`, and `Render("")` for the price + rules |
 | `r/sys/names` | Read-only verifier the chain consults to gate package deploys; reads `users`. | `IsEnabled()` (is namespace enforcement on at all?), `IsPaused()`, `IsAuthorizedAddressForNamespace(addr, ns)` |
-| `r/sys/params` | Sole privileged writer of native chain params; GovDAO-facing factory. | `Render("")`; specific getters (`GetValoperRegisterFee()`, valset getters); the param values via the `vm`/`auth`/`bank`/`node` keepers |
+| `r/sys/params` | GovDAO-facing **writer** of native chain params (sole privileged caller of native `sys/params`); exposes getters for only a handful (`GetValoperRegisterFee()`, valset getters). **Not** the read surface for arbitrary params. | its own getters for the few it exposes; **raw param values live in the keeper, not this realm** — read them via the param path (see "Reading a chain param value" below) |
 | `sys/params` (native stdlib) | The Go-side params keeper `r/sys/params` writes through; frame-gated to that one realm. | Not a realm — observed indirectly via `r/sys/params` and the params query surface |
 | `r/sys/validators/v3` | Current params-backed validator-set design (operator/signing model, trust-level + cooldown limits). | `GetValidators()`, `IsValidator(a)`, `GetTrustLevel()`, `GetCooldown()` — **report the live value; `master` may have changed since this chain deployed** |
 | `r/sys/validators/v2` | Earlier version (PoA-based). Coexists with `/v3` on some chains. | `qfuncs`/`GetValidators()` — but **don't assume which version drives a given chain's set from source; confirm live which one holds the active valset** |
@@ -88,6 +88,25 @@ that returns nothing is the most common way to answer "doesn't exist" when the t
 | `r/sys/cla` | Contributor License Agreement gate the chain consults before deploys. | `Render("")` (enabled? required hash? URL?), `HasValidSignature(addr)` |
 | `r/sys/txfees` | Reserved fee-bucket realm; a stub today — real fee collectors are `auth`/`vm` params, not this realm. | `Render(cur)` (its balance); don't infer fee routing from it |
 | `r/sys/rewards` | Reserved namespace for a future proof-of-contributions system; currently an empty stub. | `qfuncs` (expect ~no exports) — confirms it's still a placeholder |
+
+## Reading a chain param value
+
+Raw chain params (fee collectors, storage price, halt height, restricted denoms) are **not** read
+from `r/sys/params` — that realm only *writes* them (via GovDAO) and exposes getters for a handful.
+The values live in the **params keeper**, keyed `<module>:<submodule>:<name>` where `<module>` is a
+registered keeper (`vm`, `auth`, `bank`, `node`) and the submodule is usually `p`. Read one via the
+params query path:
+
+```bash
+gnokey query params/auth:p:fee_collector -remote "$RPC"   # cleanest output
+# raw ABCI: GET $RPC/abci_query?path="params/<module>:p:<name>"  → base64 value in the response
+```
+
+gno-mcp wraps realm getters via `gno_eval`, but may not expose a raw-param tool — use the
+`params/<key>` path (gnokey/raw) for keeper params. Example keys (query inputs — get the value from
+the chain, don't recite it): `auth:p:fee_collector` (gas fee collector), `vm:p:storage_fee_collector`
+(storage-deposit collector — distinct from the gas one), `vm:p:storage_price`, `node:p:halt_height`,
+`bank:p:restricted_denoms`.
 
 ## Worked example — "how do I register a name on test13?"
 
@@ -117,6 +136,7 @@ came from querying test13, not from this file.
 - `mcp.md` — the gno-mcp read tools and the no-MCP fallbacks (this reference uses them).
 - `interrealm.md` — `cur`/crossing/`IsUserCall` semantics, to read the realm calls and payment guards correctly.
 - `security.md` / `audit.md` — when auditing a sys realm; `audit.md`'s provenance rule (name the chain you read) is the same discipline as I1 here.
+- `render.md` — the `Render()` / `vm/qrender` surface and gnoweb markdown; go there to read or audit a sys realm's rendered output (the `gno_render` calls above land in its `qrender` surface).
 
 ## Source
 
