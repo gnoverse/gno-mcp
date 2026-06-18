@@ -17,6 +17,10 @@ profiles.toml
 audit.jsonl
 .worktrees/
 
+# gno skill eval scaffolding (RED findings, baseline-vs-skill transcripts, fixtures):
+# kept local for skill development, not part of the distributed skill.
+skills/gno/tests/
+
 # playground/.claude ships the e2e driver skill + agent (dev tooling deliverables);
 # re-include it over machine-global ".claude" ignores, keeping local settings out.
 !playground/.claude/
