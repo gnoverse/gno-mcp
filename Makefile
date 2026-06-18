@@ -1,4 +1,4 @@
-.PHONY: build test test-integration lint fmt run test-e2e dev bump \
+.PHONY: build test test-integration audit-harness lint fmt run test-e2e dev bump \
 	playground-fresh playground-gnomcp playground-full playground-sim \
 	playground-e2e playground-e2e-external
 
@@ -10,6 +10,9 @@ test:
 
 test-integration:
 	go test -tags=integration ./test/integration/...
+
+audit-harness:
+	go run ./cmd/auditharness $(AUDIT_HARNESS_FLAGS) ./audit-harness/expected/*.yaml
 
 lint:
 	go vet ./...

@@ -7,6 +7,7 @@ This file is for agents **contributing to gnomcp** (a Go MCP server for gno.land
 ```bash
 make test                # unit tests (no network)
 make test-integration    # in-process gno node (build tag: integration)
+make audit-harness       # run the current audit-loop fixture slice
 make playground-e2e      # agent e2e — driver QAs a container (see test/README.md)
 make lint                # go vet + gofmt -l
 make build               # bin/gnomcp
@@ -27,6 +28,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 | `internal/session/`, `internal/keystore/` | session lifecycle/scope; per-profile agent keys |
 | `internal/profiles/` | profiles.toml loading, validation, chain-id allowlist, hard limits |
 | `internal/untrusted/`, `internal/budget/`, `internal/audit/` | envelope+neutralization, output budget, JSONL audit log |
+| `audit-harness/`, `cmd/auditharness/`, `internal/auditharness/` | sanitized audit-loop fixture records, runner CLI, and harness implementation |
 | `faucet/`, `cmd/agentfaucet/`, `internal/clientfaucet/` | faucet service + client tiers |
 | `docker/` | release Dockerfiles (`gnomcp`, `agentfaucet`); built by goreleaser `dockers_v2`, COPY a prebuilt static binary via `$TARGETOS/$TARGETARCH` |
 | `test/integration/` | real-node tests (`-tags=integration`) |
