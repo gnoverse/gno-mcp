@@ -1,4 +1,4 @@
-.PHONY: build test test-integration lint fmt run test-e2e dev bump \
+.PHONY: build test test-integration lint fmt run test-e2e dev bump bump.gnomcp \
 	playground-fresh playground-gnomcp playground-full playground-sim \
 	playground-e2e playground-e2e-external
 
@@ -18,9 +18,16 @@ lint:
 fmt:
 	gofmt -w .
 
-bump:
-	@test -n "$(VERSION)" || { echo "usage: make bump VERSION=x.y.z" >&2; exit 2; }
+# gnomcp ships as a plugin, so its version lives in committed manifests
+# (package.json, plugin.json, …) that this rewrites before a gnomcp release.
+# agentfaucet is a Docker image with no manifest — it is versioned by its release
+# tag alone, so it has no bump target. See docs/releasing.md.
+bump.gnomcp:
+	@test -n "$(VERSION)" || { echo "usage: make bump.gnomcp VERSION=x.y.z" >&2; exit 2; }
 	./scripts/bump-version.sh "$(VERSION)"
+
+# Back-compat alias: gnomcp is the only component with bumpable manifests.
+bump: bump.gnomcp
 
 run: build
 	./bin/gnomcp

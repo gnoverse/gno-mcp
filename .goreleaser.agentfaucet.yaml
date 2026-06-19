@@ -1,0 +1,54 @@
+version: 2
+
+# agentfaucet releases independently of gnomcp (see docs/releasing.md). It is
+# consumed only as a container image (the infra pins ghcr.io/gnoverse/agentfaucet),
+# so this is an IMAGE-ONLY release: no GitHub release, no archives. Its git tags
+# carry the agentfaucet/ prefix (e.g. agentfaucet/vX.Y.Z) for an independent
+# version line; OSS goreleaser can't derive a version from a non-semver tag, so
+# the release workflow passes the clean version via GORELEASER_CURRENT_TAG.
+# An agentfaucet release never rebuilds gnomcp.
+
+builds:
+  - id: agentfaucet
+    main: ./cmd/agentfaucet
+    binary: agentfaucet
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+# Not published anywhere (release is disabled below), but named explicitly so the
+# local/CI dist artifacts don't fall back to goreleaser's default "gno-mcp_*" name.
+archives:
+  - id: agentfaucet
+    ids: [agentfaucet]
+    formats: [tar.gz]
+    name_template: "agentfaucet_{{ .Os }}_{{ .Arch }}"
+
+# Multi-platform image, manifest stitched automatically. Built with buildx so an
+# amd64 runner emits arm64 too (the Dockerfile only COPYs a prebuilt static
+# binary — no cross-compilation). The release workflow sets up QEMU + buildx and
+# logs in to ghcr.io.
+dockers_v2:
+  - id: agentfaucet
+    ids: [agentfaucet]
+    dockerfile: docker/agentfaucet.Dockerfile
+    images:
+      - ghcr.io/gnoverse/agentfaucet
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms: [linux/amd64, linux/arm64]
+    labels:
+      org.opencontainers.image.title: agentfaucet
+      org.opencontainers.image.description: Testnet faucet service for gnomcp agent keys
+      org.opencontainers.image.source: https://github.com/gnoverse/gno-mcp
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: Apache-2.0
+
+# Image-only: no GitHub release (and so no archives/checksums). The image digest
+# is attested separately by the release workflow.
+release:
+  disable: "true"
