@@ -135,6 +135,19 @@ func addpkgHandler(
 		return server.Result{}, aerr
 	}
 
+	// ---- Validate before broadcast
+	//
+	// A failed addpkg broadcast still burns gas — the node charges for the
+	// type-check or deploy-gate rejection at DeliverTx — which can strand a
+	// freshly-funded key. Simulate first so authoring bugs and unmet deploy
+	// gates (CLA, namespace) fail at zero cost; only then broadcast.
+	if !simulate {
+		if _, verr := c.AddPackage(ctx, signer, deployPath, files, true); verr != nil {
+			auditResult = "validate_err"
+			return server.Result{}, withCLAHint(fmt.Errorf("gno_addpkg validation (no gas spent): %w", verr))
+		}
+	}
+
 	// ---- Deploy
 
 	res, deployErr := c.AddPackage(ctx, signer, deployPath, files, simulate)

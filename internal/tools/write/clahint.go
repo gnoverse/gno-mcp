@@ -6,7 +6,12 @@ import (
 	"strings"
 
 	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
+
+	"github.com/gnoverse/gno-mcp/internal/server"
 )
+
+// claRealm is the canonical CLA realm path the agent signs to clear the gate.
+const claRealm = "gno.land/r/sys/cla"
 
 // claUnsignedLog is the substring the VM keeper puts in the deliver-tx log when
 // it rejects a deploy because the signer has not signed the chain's Contributor
@@ -25,10 +30,12 @@ const claHint = "This chain enforces a Contributor License Agreement (CLA) that 
 	"  1. Read the required hash: render gno.land/r/sys/cla (its output lists \"Required Hash\").\n" +
 	"  2. Call gno.land/r/sys/cla function Sign with that hash, signed by the same key."
 
-// withCLAHint appends claHint when err is the keeper's CLA-gate rejection, and
-// returns err unchanged otherwise. It mirrors gnokey's isCLAError: gate on the
-// typed error first, then disambiguate the CLA case from the namespace case by
-// the deliver-tx log. The original error stays wrapped.
+// withCLAHint converts the keeper's CLA-gate rejection into a typed
+// cla_unsigned ToolError carrying actionable guidance, and returns err unchanged
+// otherwise. It mirrors gnokey's isCLAError: gate on the typed error first, then
+// disambiguate the CLA case from the namespace case by the deliver-tx log. The
+// typed code matches the recovery-error convention used across the write tools,
+// so a client gets a machine-readable signal alongside the prose hint.
 func withCLAHint(err error) error {
 	if err == nil || !errors.Is(err, vm.UnauthorizedUserError{}) {
 		return err
@@ -36,7 +43,11 @@ func withCLAHint(err error) error {
 	if !mentionsCLA(err) {
 		return err
 	}
-	return fmt.Errorf("%w\n\n%s", err, claHint)
+	return &server.ToolError{
+		Code:    "cla_unsigned",
+		Message: err.Error() + "\n\n" + claHint,
+		Extra:   map[string]any{"sign_realm": claRealm},
+	}
 }
 
 // mentionsCLA reports whether the CLA-gate log appears anywhere in err's chain.

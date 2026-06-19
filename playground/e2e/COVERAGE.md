@@ -45,6 +45,7 @@ listed).
 | write.call | gno_call broadcast | 02 | covered |
 | write.simulate | gas estimate without broadcast | 02 | covered |
 | write.addpkg | gno_addpkg deploy | 02 | covered |
+| write.deploy-gates | deploy clears the genesis-activated namespace + CLA gates (own-address namespace + sign r/sys/cla); the gno_addpkg CLA hint guides recovery on the unsigned-CLA error | 14 | covered (live-only; simnet has the gates off) |
 | write.run | gno_run MsgRun script | 08 (deferred) | deferred with scenario 08 |
 | write.signer-reporting | answer names who signed (agent vs test1 vs session) | 02, 07, 09 | covered |
 | write.key-multi | multiple named agent keys per profile (cap GNOMCP_AGENT_MAX_KEYS) | 09 | covered |
@@ -144,18 +145,20 @@ tree: a regression shows up here only after it ships.
 ## External tier (real testnet)
 
 Scenarios 11–12 (install from scratch, GitHub egress — above) plus 13 (the live
-agent-faucet). Scenario 13 is the only one that drives the real test13 chain: it runs
-the `l2-gnomcp` image (gnomcp + skill, no simnet `profiles.toml` override), so the
-built-in `testnet` profile (`internal/profiles/config.go`) resolves to the live network
-(chain-id `test-13`, RPC `https://rpc.test13.testnets.gno.land:443`, faucet-service-url
-`https://faucet-agent.test13.testnets.gno.land`). It validates the zero-config testnet
-faucet default against the deployed service; `blocked` is tolerated when the live faucet
-is unreachable or rate-limits.
+agent-faucet) and 14 (the live deploy gates). Scenarios 13 and 14 drive the real test13
+chain: they run the `l2-gnomcp` image (gnomcp + skill, no simnet `profiles.toml` override),
+so the built-in `testnet` profile (`internal/profiles/config.go`) resolves to the live
+network (chain-id `test-13`, RPC `https://rpc.test13.testnets.gno.land:443`,
+faucet-service-url `https://faucet-agent.test13.testnets.gno.land`). 13 validates the
+zero-config faucet default; 14 covers what only the live chain exercises — the namespace +
+CLA deploy gates, which the simnet leaves off. `blocked` is tolerated when the live faucet
+or chain is unreachable or rate-limits.
 
 | Key | Feature | Scenarios | Status |
 |---|---|---|---|
 | external.faucet-live | gno_faucet_fund tier-2 against the LIVE test13 agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
 | external.testnet-key-cycle | built-in `testnet` profile end to end on the live network: generate agent key → faucet fund → balance | 13 | covered |
+| external.cla-sign | agent signs the live test13 CLA (`gno_call r/sys/cla Sign`) from its own key to clear the deploy gate | 14 | covered |
 
 ## Known harness constraints (not feature gaps)
 

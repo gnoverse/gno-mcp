@@ -74,6 +74,7 @@ COPY --from=builder /out/gnomcp /usr/local/bin/gnomcp
 COPY --chown=dev:dev .claude-plugin /opt/gnomcp/.claude-plugin
 COPY --chown=dev:dev skills         /opt/gnomcp/skills
 COPY --chown=dev:dev agents         /opt/gnomcp/agents
+COPY --chown=dev:dev --chmod=755 hooks /opt/gnomcp/hooks
 RUN claude plugin marketplace add /opt/gnomcp \
     && claude plugin install gnomcp@gnoverse --scope user \
     && claude mcp add gnomcp --scope user -- gnomcp

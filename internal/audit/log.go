@@ -16,7 +16,7 @@ type Entry struct {
 	Tool           string    `json:"tool"`
 	Profile        string    `json:"profile,omitempty"`
 	ArgsSummary    string    `json:"args_summary,omitempty"`
-	Result         string    `json:"result"`                    // ok / sim / sim_err / broadcast_err / tool_err
+	Result         string    `json:"result"`                    // ok / sim / sim_err / validate_err / broadcast_err / tool_err
 	Duration       int64     `json:"duration_ms"`               // milliseconds since the call started, populated via time.Duration.Milliseconds()
 	SessionAddress string    `json:"session_address,omitempty"` // non-empty only for session-signed (act-as-user) writes
 }

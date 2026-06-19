@@ -9,6 +9,8 @@ import (
 	tmerrors "github.com/gnolang/gno/tm2/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
 // The VM keeper gates addpkg behind two checks that share one error type
@@ -32,18 +34,23 @@ func TestWithCLAHint(t *testing.T) {
 	claErr := deployFailure("address g1abc has not signed the required CLA")
 	nsErr := deployFailure("g1abc is not authorized to deploy packages to namespace `myns`")
 
-	t.Run("appends actionable guidance to a CLA rejection", func(t *testing.T) {
+	t.Run("returns a typed cla_unsigned ToolError on a CLA rejection", func(t *testing.T) {
 		got := withCLAHint(claErr)
 		require.Error(t, got)
-		assert.ErrorIs(t, got, vm.UnauthorizedUserError{}, "the original typed error must remain wrapped")
-		assert.Contains(t, got.Error(), "Contributor License Agreement")
-		assert.Contains(t, got.Error(), "gno.land/r/sys/cla")
-		assert.Contains(t, got.Error(), "Sign")
+		var te *server.ToolError
+		require.ErrorAs(t, got, &te, "CLA rejections must surface as a typed ToolError, matching the codebase's recovery-error convention")
+		assert.Equal(t, "cla_unsigned", te.Code)
+		assert.Contains(t, te.Message, "Contributor License Agreement")
+		assert.Contains(t, te.Message, "gno.land/r/sys/cla")
+		assert.Contains(t, te.Message, "Sign")
+		assert.Equal(t, "gno.land/r/sys/cla", te.Extra["sign_realm"])
 	})
 
 	t.Run("leaves the namespace rejection untouched", func(t *testing.T) {
 		got := withCLAHint(nsErr)
-		assert.Equal(t, nsErr.Error(), got.Error(), "namespace errors must not gain CLA guidance")
+		var te *server.ToolError
+		assert.False(t, errors.As(got, &te), "namespace errors must not become a cla_unsigned ToolError")
+		assert.Equal(t, nsErr.Error(), got.Error(), "namespace errors must pass through unchanged")
 	})
 
 	t.Run("does not fire on the bare phrase without the typed error", func(t *testing.T) {
