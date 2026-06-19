@@ -30,7 +30,9 @@ the broadcast moment before sending anything for real. </HARD-GATE>
 Meet the user in their own vocabulary. If they know another stack, build the bridge from THAT
 stack — but ground every Gno-side claim by reading the relevant `../gno/references/` file
 first (`interrealm.md` for caller identity and crossing, `patterns.md` for idioms,
-`stdlib.md` for the API surface, `build.md` for project setup). Analogies are bridges, not
+`stdlib.md` for the API surface, `build.md` for project setup, `sysrealms.md` for how gno.land
+itself works — system realms, name registration, validators; query the live chain for specifics).
+Analogies are bridges, not
 specs: when one breaks (caller identity, storage model, the absence of a bytecode/source
 split), say so explicitly rather than letting the analogy carry the claim.
 

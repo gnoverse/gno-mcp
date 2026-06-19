@@ -50,6 +50,7 @@ This SKILL.md is a router. References are categorized by topic; load whichever f
 | Build, test, configure | `references/build.md` | Scaffolding a project; `gnomod.toml` and `gnowork.toml` fields; the `gno` binary; writing realm tests (the `cur realm` test signature, faking caller/coins, the `std`→`chain`/`testing` migration, resolving `/p/` test dependencies); the three test flavors (unit, filetest, integration); filetest directives; Go-Gno compatibility surface; deploy mechanics. |
 | Chain-matched toolchain | `references/toolchain.md` | Testing or linting local code against a live chain target; `gno` missing from `PATH` or its version doesn't match the target; fetching on-chain deps for local tests; the per-release binary store. |
 | MCP acceleration | `references/mcp.md` | A Gno MCP server (e.g. gnomcp) is connected and you want to fetch on-chain package source or discover packages. Optional — the skill works without it; load to see when to reach for it. |
+| Platform / sys realms | `references/sysrealms.md` | Reasoning about gno.land system realms (`r/sys/*`: names/users/namereg, validators, params, cla), namespace/name registration, the validator set, genesis-predeployed realms, GovDAO param governance, or why a sys realm differs across networks (test13 vs local vs betanet). Teaches the design; sends you to the live chain for concrete values. |
 
 ### Task hints (multi-reference loads)
 
@@ -61,6 +62,7 @@ This SKILL.md is a router. References are categorized by topic; load whichever f
 - *Auditing under gates (read-only, structured report, FP-filtered)* → dispatch the `gno-auditor` agent **by name** via the Task tool (it's a registered agent, defined at the plugin's top-level `agents/auditor.md`). It wraps `audit.md` with a read-only tool allowlist and a two-pass Task-tool dispatch for false-positive filtering.
 - *Setting up a new project* → `build.md` (scaffold, gnomod.toml, testing flavors) + `patterns.md` (package organization, `/r/` vs `/p/` vs `/e/`).
 - *Answering "what does X actually do?"* → `interrealm.md` for spec questions; `stdlib.md` for API questions; `render.md` for gnoweb markdown behavior; `memory.md` for persistence behavior; `build.md` for tooling behavior.
+- *Answering "how do I register a name / who are the validators / is enforcement on?" for a specific chain* → `sysrealms.md` (the sys-realm model + the trust-the-chain query discipline) + `mcp.md` (the query tools). The answer is a live query, not a recital.
 
 ## Quick reference
 

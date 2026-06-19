@@ -113,6 +113,9 @@ version-bound risk the current VM's behavior can't discharge.
 
 Report in this exact shape. Findings grouped by severity (RED first), sorted by location within group.
 
+**Rendering rules:** prefix every severity heading and finding heading with its badge
+— 🔴 RED, 🟡 YELLOW, 🟢 GREEN. Separate each `**Label**:` line with a blank line.
+
 ```markdown
 # Audit: <realm path> @ <live chain-id>
 
@@ -127,21 +130,27 @@ First-pass: <count> findings. After FP filter: <count> findings (Δ <count> down
 
 ## Findings
 
-### RED
+### 🔴 RED
 
-#### R1 — <name> — confidence: <0-100>%
+#### 🔴 R1 — <name> — confidence: <0-100>%
+
 **Location**: file:line(s)
+
 **Class**: cite `security.md` class number, e.g. `Class 4 closed-over-authority`. For operational signals: `security.md § operational`.
+
 **Evidence**: 1-2 sentences with the input → sink trace.
+
 **Why this is exploitable today**: 1-2 sentences.
+
 **Considered objection**: from the FP filter pass — what an experienced reviewer might say, and why it doesn't apply.
+
 **Recommendation**: action with skill-reference citation.
 
-### YELLOW
+### 🟡 YELLOW
 
 [same shape]
 
-### GREEN (noted, not blocking)
+### 🟢 GREEN (noted, not blocking)
 
 [shorter shape — just location + what's fine]
 
@@ -163,7 +172,6 @@ References loaded during this audit (security.md, interrealm.md, etc.).
 
 Procedure synthesized from:
 - `security.md` § Audit signals (the in-place checklist promoted into a standalone procedure)
-- Cursor security-review prompt design (evidence-gated severity) — `.mynote/gno-agentic/reference/20-code-audit-skills-survey.md`
-- claude-code-security-review's two-pass FP filter pattern — same source
-- pr-review-toolkit's confidence ≥80% threshold + severity grouping — `.mynote/gno-agentic/reference/21-superpowers-skill-architecture-deepdive.md`
-- RED-01 / RED-02 / RED-03 findings docs in `tests/` — empirical validation against synthetic and real fixtures
+- Cursor security-review prompt design (evidence-gated severity)
+- claude-code-security-review's two-pass false-positive filter pattern
+- pr-review-toolkit's confidence ≥80% threshold + severity grouping

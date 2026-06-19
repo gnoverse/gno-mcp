@@ -10,7 +10,10 @@ description: Run an explicit security audit of a Gno realm or pure package. Use 
    `../gno/references/interrealm.md` (audit.md treats it as always relevant). They own the
    method — this skill is only the entry point.
 2. Fetch the code on-chain (audit.md "Getting the source" owns the rules). A gnoweb URL or
-   realm path names a **specific** chain — resolve it from the URL with
+   realm path names a **specific** chain — if the target path is `r/sys/*` (a gno.land system
+   realm — names/users/namereg, validators, params, cla), also load `../gno/references/sysrealms.md`:
+   it carries the trust model (genesis activation, controller whitelist, GovDAO as bypass/trust-root,
+   single-writer gates) that a generic-realm audit will otherwise miss. Resolve it from the URL with
    `gno_profile_add(gnoweb_url=…)` before reading, not on whatever profile is connected
    (mainnet/betanet is admitted read-only, which is all an audit needs). The default `gno_read`
    is an **outline** (bodies elided) — navigation only, never evidence; audit evidence is whole
