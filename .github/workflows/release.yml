@@ -1,12 +1,22 @@
 name: Release
-# Manual-only: dispatch with a version input; the workflow validates, tags
-# HEAD of the chosen ref, and runs goreleaser in the same run (so the default
-# GITHUB_TOKEN suffices — no downstream tag-triggered workflow exists).
-# goreleaser builds the gnomcp + agentfaucet binaries (GitHub release archives)
-# and their multi-arch images (ghcr.io/gnoverse/{gnomcp,agentfaucet}).
+# Manual-only: dispatch with a component + version. gnomcp and agentfaucet release
+# on INDEPENDENT cadences and version lines — releasing one never rebuilds the
+# other. See docs/releasing.md.
+#
+# gnomcp is the primary product: plain semver tag (v<version>), full goreleaser
+# release (archives + GitHub release + image). agentfaucet is image-only: its git
+# tag is prefixed (agentfaucet/v<version>) for an independent line, and goreleaser
+# runs with GORELEASER_CURRENT_TAG=v<version> + release.disable so it builds and
+# pushes only the image. The whole run is one job (default GITHUB_TOKEN suffices —
+# no downstream tag-triggered workflow exists).
 on:
   workflow_dispatch:
     inputs:
+      component:
+        description: "Which component to release"
+        required: true
+        type: choice
+        options: [gnomcp, agentfaucet]
       version:
         description: "Release version, e.g. 0.2.0 (v prefix optional)"
         required: true
@@ -21,10 +31,12 @@ jobs:
       packages: write # push container images to ghcr.io
       id-token: write # sign the build provenance attestation (keyless OIDC)
       attestations: write # store the attestation
+    env:
+      COMPONENT: ${{ inputs.component }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with: { fetch-depth: 0 }
-      - name: Validate version and guard against existing tag
+      - name: Validate version and compute the tag
         env:
           RAW_VERSION: ${{ inputs.version }} # via env, never inlined: injection hygiene
         run: |
@@ -34,13 +46,20 @@ jobs:
             echo "::error::invalid version '$RAW_VERSION' (want X.Y.Z or X.Y.Z-pre)"
             exit 1
           fi
+          # gnomcp keeps a plain semver tag; agentfaucet gets a prefixed line.
+          if [ "$COMPONENT" = "gnomcp" ]; then tag="v$version"; else tag="$COMPONENT/v$version"; fi
           git fetch --tags --force
-          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-            echo "::error::tag v$version already exists; to re-release, delete it first: git push --delete origin v$version"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "::error::tag ${tag} already exists; to re-release, delete it first: git push --delete origin ${tag}"
             exit 1
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
-      - name: Check manifest versions match
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/gnoverse/${COMPONENT}" >> "$GITHUB_ENV"
+      # gnomcp ships as a plugin: its version lives in committed manifests, so guard
+      # against a tag/manifest mismatch. agentfaucet has no manifest (tag-versioned).
+      - name: Check manifest versions match (gnomcp only)
+        if: ${{ inputs.component == 'gnomcp' }}
         run: |
           set -euo pipefail
           if ! ./scripts/bump-version.sh --check "$VERSION"; then
@@ -64,19 +83,25 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "Release v$VERSION"
-          git push origin "v$VERSION"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
       - uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
         with:
           version: '~> v2'
-          args: release --clean
+          args: release --clean --config ".goreleaser.${{ inputs.component }}.yaml"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Attest release binaries
+          # agentfaucet's git tag (agentfaucet/v…) isn't semver, so tell goreleaser
+          # the clean version. Empty for gnomcp → goreleaser reads its plain v tag.
+          GORELEASER_CURRENT_TAG: ${{ inputs.component == 'agentfaucet' && format('v{0}', env.VERSION) || '' }}
+      # gnomcp publishes archives to a GitHub release; attest their checksums.
+      # agentfaucet is image-only (no archives) — its image is attested below.
+      - name: Attest release binaries (gnomcp only)
+        if: ${{ inputs.component == 'gnomcp' }}
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-checksums: dist/checksums.txt
-      - name: Collect pushed image digests
+      - name: Collect pushed image digest
         id: imgdigest
         run: |
           set -euo pipefail
@@ -84,29 +109,18 @@ jobs:
           # tag; the multi-arch index for the version tag carries .extra.Digest.
           # Match the exact versioned name to grab the index (not a per-arch entry
           # or the :latest duplicate); attesting the index digest covers all tags.
-          collect() {
-            jq -r --arg img "$1:$VERSION" '
-              [ .[] | select(.type == "Docker Image" and .name == $img) | .extra.Digest ]
-              | unique | .[0] // empty' dist/artifacts.json
-          }
-          gnomcp="$(collect ghcr.io/gnoverse/gnomcp)"
-          faucet="$(collect ghcr.io/gnoverse/agentfaucet)"
-          if [ -z "$gnomcp" ] || [ -z "$faucet" ]; then
-            echo "::error::could not resolve image digests from dist/artifacts.json"
+          digest="$(jq -r --arg img "${IMAGE}:${VERSION}" '
+            [ .[] | select(.type == "Docker Image" and .name == $img) | .extra.Digest ]
+            | unique | .[0] // empty' dist/artifacts.json)"
+          if [ -z "$digest" ]; then
+            echo "::error::could not resolve image digest from dist/artifacts.json"
             jq -r '.[] | select(.type | test("Docker")) | .type + "  " + .name + "  " + (.extra.Digest // "-")' dist/artifacts.json
             exit 1
           fi
-          echo "gnomcp=$gnomcp" >> "$GITHUB_OUTPUT"
-          echo "faucet=$faucet" >> "$GITHUB_OUTPUT"
-      - name: Attest gnomcp image
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Attest image
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-name: ghcr.io/gnoverse/gnomcp
-          subject-digest: ${{ steps.imgdigest.outputs.gnomcp }}
-          push-to-registry: true
-      - name: Attest agentfaucet image
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
-        with:
-          subject-name: ghcr.io/gnoverse/agentfaucet
-          subject-digest: ${{ steps.imgdigest.outputs.faucet }}
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.imgdigest.outputs.digest }}
           push-to-registry: true

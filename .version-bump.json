@@ -15,7 +15,8 @@
       "scripts",
       ".github/workflows/release.yml",
       "README.md",
-      "internal/server/README.md"
+      "internal/server/README.md",
+      "docs/releasing.md"
     ]
   }
 }
