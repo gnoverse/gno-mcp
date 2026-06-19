@@ -143,11 +143,19 @@ tree: a regression shows up here only after it ships.
 
 ## External tier (real testnet)
 
-Only scenarios 11–12 (install from scratch, GitHub egress — above). No real-testnet
-scenarios run here: they require the canonical test13 endpoints and live network
-egress. The built-in `testnet` profile (`internal/profiles/config.go`) points at
-test13 (chain-id `test-13`), so the zero-config testnet experience works against
-the live network.
+Scenarios 11–12 (install from scratch, GitHub egress — above) plus 13 (the live
+agent-faucet). Scenario 13 is the only one that drives the real test13 chain: it runs
+the `l2-gnomcp` image (gnomcp + skill, no simnet `profiles.toml` override), so the
+built-in `testnet` profile (`internal/profiles/config.go`) resolves to the live network
+(chain-id `test-13`, RPC `https://rpc.test13.testnets.gno.land:443`, faucet-service-url
+`https://faucet-agent.test13.testnets.gno.land`). It validates the zero-config testnet
+faucet default against the deployed service; `blocked` is tolerated when the live faucet
+is unreachable or rate-limits.
+
+| Key | Feature | Scenarios | Status |
+|---|---|---|---|
+| external.faucet-live | gno_faucet_fund tier-2 against the LIVE test13 agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
+| external.testnet-key-cycle | built-in `testnet` profile end to end on the live network: generate agent key → faucet fund → balance | 13 | covered |
 
 ## Known harness constraints (not feature gaps)
 
