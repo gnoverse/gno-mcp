@@ -145,7 +145,7 @@ func addpkgHandler(
 			errPrefix = "gno_addpkg simulate"
 			auditResult = "sim_err"
 		}
-		return server.Result{}, fmt.Errorf("%s: %w", errPrefix, deployErr)
+		return server.Result{}, withCLAHint(fmt.Errorf("%s: %w", errPrefix, deployErr))
 	}
 
 	auditResult = "ok"

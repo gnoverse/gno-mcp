@@ -89,6 +89,27 @@ that returns nothing is the most common way to answer "doesn't exist" when the t
 | `r/sys/txfees` | Reserved fee-bucket realm; a stub today — real fee collectors are `auth`/`vm` params, not this realm. | `Render(cur)` (its balance); don't infer fee routing from it |
 | `r/sys/rewards` | Reserved namespace for a future proof-of-contributions system; currently an empty stub. | `qfuncs` (expect ~no exports) — confirms it's still a placeholder |
 
+## Deploying through the sys gates (namespace + CLA)
+
+A package deploy (`addpkg`) must clear **two genesis-activated gates**, in this order. Both are
+per-network (I2): off on a fresh local chain, on where genesis switched them on — so **query, don't
+assume**, and prefer checking both *before* deploying rather than reading it off a failed tx.
+
+1. **Namespace** (`r/sys/names`). Enforced when `IsEnabled()` is true. The signer must be authorized
+   for the namespace segment of the path. Two ways to be authorized: deploy under your **own address**
+   namespace (`r/<your-g1address>/*` is always authorized — no registration), or hold a registered name
+   whose current owner is you (register via the live controller, e.g. `r/sys/namereg/v1`, if it's
+   deployed). Check: `IsAuthorizedAddressForNamespace(addr, ns)`.
+2. **CLA** (`r/sys/cla`). Enforced when a required hash is set. The signer must have signed the current
+   agreement. Check: `HasValidSignature(addr)`. To clear it, **sign once from the same key**: read the
+   required hash from `r/sys/cla`'s render (the `Required Hash` field), then call `Sign(hash)` with that
+   value. `Sign` is an ordinary crossing call — the agent key signs it directly; no human or session needed.
+
+Both gates reject with the **same error type** but distinct messages — tell them apart by the text:
+`…not authorized to deploy packages to namespace` (fix: own-address path or register a name) vs
+`…has not signed the required CLA` (fix: `Sign` the hash). Don't read "unauthorized" as one specific
+cause; read the message. On a fresh local chain both gates are typically off and neither applies.
+
 ## Reading a chain param value
 
 Raw chain params (fee collectors, storage price, halt height, restricted denoms) are **not** read
