@@ -77,6 +77,7 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	assert.Equal(t, "https://rpc.test13.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
 	assert.Equal(t, "https://test13.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
 	assert.Equal(t, "https://indexer.test13.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
+	assert.Equal(t, "https://faucet-agent.test13.testnets.gno.land", tn.FaucetServiceURL, "testnet default agent-faucet service url")
 	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
 }

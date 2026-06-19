@@ -89,6 +89,7 @@ const (
 	builtinTestnetChain   = "test-13"
 	builtinTestnetGnoweb  = "https://test13.testnets.gno.land"
 	builtinTestnetIndexer = "https://indexer.test13.testnets.gno.land/graphql/query"
+	builtinTestnetFaucet  = "https://faucet-agent.test13.testnets.gno.land"
 )
 
 // BuiltinProfiles returns the zero-config default profiles. Both are read-only
@@ -101,10 +102,11 @@ func BuiltinProfiles() map[string]Profile {
 			ChainID: builtinLocalChain,
 		},
 		"testnet": {
-			RPCURL:       builtinTestnetRPC,
-			ChainID:      builtinTestnetChain,
-			GnowebURL:    builtinTestnetGnoweb,
-			TxIndexerURL: builtinTestnetIndexer,
+			RPCURL:           builtinTestnetRPC,
+			ChainID:          builtinTestnetChain,
+			GnowebURL:        builtinTestnetGnoweb,
+			TxIndexerURL:     builtinTestnetIndexer,
+			FaucetServiceURL: builtinTestnetFaucet,
 		},
 	}
 }
