@@ -1,5 +1,5 @@
 .PHONY: build test test-integration lint fmt run test-e2e dev bump bump.gnomcp \
-	playground-fresh playground-gnomcp playground-full playground-sim \
+	playground-fresh playground-gnomcp playground-full playground-sim playground-sim-cla \
 	playground-e2e playground-e2e-external
 
 build:
@@ -57,6 +57,12 @@ playground-full:
 # Port override propagates: `make playground-sim GNOWEB_PORT=9999`.
 playground-sim:
 	$(MAKE) -C playground sim
+
+# Like playground-sim, but with the test13 CLA deploy gate seeded (local twin of
+# the deploy-gates scenario). Defaults to a 10 GNOT faucet drip, which clears the
+# flow at the minimum gas fee. Override with SIM_CLA_DRIP to stress a other grant.
+playground-sim-cla:
+	$(MAKE) -C playground sim-cla
 
 # Scenario selection goes to the driver via ARGS, which propagates to the
 # sub-make as a command-line variable: `make playground-e2e ARGS="--scenario chain-overview"`.

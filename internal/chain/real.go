@@ -412,15 +412,26 @@ func isSessionNotFoundErr(err error) bool {
 	return strings.Contains(err.Error(), "session not found")
 }
 
-// DefaultGasFeeUgnot is the ugnot amount of every write tx's GasFee. The chain
-// charges a session this full GasFee per tx (sessions are billed the offered
-// fee, not the gas actually used), so session spend tracking must deduct this —
-// not GasUsed — to stay in sync with the chain's accounting.
-const DefaultGasFeeUgnot int64 = 10_000_000
-
-// DefaultGasWanted is the gas limit of every write tx. The chain requires
-// 1ugnot of fee per 1000 gas, so DefaultGasFeeUgnot is sized to cover it.
+// DefaultGasWanted is the gas limit of every write tx; it must exceed the
+// heaviest tx's gas use (an AddPackage runs ~5M). Execution headroom lives
+// here, sized independently of the fee — a heavier tx needs more GasWanted,
+// never a bigger DefaultGasFeeUgnot.
 const DefaultGasWanted int64 = 10_000_000
+
+// minGasPriceDivisor is the chain's minGasPrice as gas-per-ugnot: test13 charges
+// 1 ugnot per 1000 gas. The ante check requires GasFee >= GasWanted / this. A
+// chain with a higher minGasPrice (smaller divisor) needs a higher fee — this
+// value, not just the chain config, must move when targeting such a chain.
+const minGasPriceDivisor int64 = 1000
+
+// DefaultGasFeeUgnot is the flat ugnot GasFee offered on every write tx. The
+// chain deducts the full offered fee, not the gas actually used (measured for
+// both standard and session txs), so session spend tracking deducts this
+// constant, not GasUsed, to stay in sync. It is the minimum the ante check
+// accepts — GasWanted / minGasPrice — so the fee buys no execution headroom
+// (that is DefaultGasWanted's job); any value above this floor only burns the
+// caller's balance.
+const DefaultGasFeeUgnot int64 = DefaultGasWanted / minGasPriceDivisor
 
 // DefaultMaxDepositUgnot caps the storage deposit for an agent AddPackage. Sufficient
 // for typical realms; a deploy rejected for an insufficient deposit is the signal to raise it.

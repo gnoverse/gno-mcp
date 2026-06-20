@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -268,8 +269,10 @@ func TestRun_updatesSessionSpend(t *testing.T) {
 
 	meta := mgr.Get("testnet5", sessionAddr)
 	require.NotNil(t, meta, "session not found after run")
-	// The chain bills the full GasFee (10M), not GasUsed (7000): 100M - 10M = 90M (guards #5).
-	assert.Equal(t, "90000000ugnot", meta.SpendRemaining, "deduct GasFee, not GasUsed")
+	// The chain bills the full GasFee, not GasUsed (7000): remaining must be
+	// limit - DefaultGasFeeUgnot, never limit - GasUsed (guards #5).
+	wantRemaining := fmt.Sprintf("%dugnot", 100_000_000-chain.DefaultGasFeeUgnot)
+	assert.Equal(t, wantRemaining, meta.SpendRemaining, "deduct GasFee, not GasUsed")
 }
 
 func TestRun_writesAuditEntry(t *testing.T) {

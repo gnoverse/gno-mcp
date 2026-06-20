@@ -1,6 +1,6 @@
 # Playground — Docker test harness. See README.md.
 # Run from here (`make full`) or via the root shortcuts (`make playground-full`).
-.PHONY: fresh gnomcp full sim e2e e2e-external
+.PHONY: fresh gnomcp full sim sim-cla e2e e2e-external
 
 DOCKER         ?= docker
 PLAYGROUND_IMG ?= gnomcp-playground
@@ -41,6 +41,16 @@ GNOWEB_PORT ?= 8688
 sim: | .env
 	$(DOCKER_BUILD) --target sim -t $(PLAYGROUND_IMG):sim ..
 	$(DOCKER_RUN) -p $(GNOWEB_PORT):8688 --add-host testnet.gnomcp.sim:127.0.0.1 $(PLAYGROUND_IMG):sim
+
+# Like sim, but with the test13 CLA deploy gate seeded — a local twin of the
+# deploy-gates scenario (a deploy must sign r/sys/cla first). Faucet drip defaults
+# to 10 GNOT (SIM_CLA_DRIP, in ugnot); at the minimum gas fee that clears the whole
+# Sign+deploy+bump flow. Override to stress a different grant: SIM_CLA_DRIP=50000000.
+SIM_CLA_DRIP ?= 10000000
+sim-cla: | .env
+	$(DOCKER_BUILD) --target sim-cla -t $(PLAYGROUND_IMG):sim-cla ..
+	$(DOCKER_RUN) -p $(GNOWEB_PORT):8688 --add-host testnet.gnomcp.sim:127.0.0.1 \
+	  -e SIMNET_GRANT=$(SIM_CLA_DRIP) $(PLAYGROUND_IMG):sim-cla
 
 # ---- e2e harness (the playground-driver agent owns scenario selection + lifecycle;
 # make is a thin passthrough + verdict gate). Selection flags go to the driver via ARGS:

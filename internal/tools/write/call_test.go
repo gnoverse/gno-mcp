@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -424,9 +425,11 @@ func TestCall_updatesSessionSpend(t *testing.T) {
 
 	meta := mgr.Get("testnet5", sessionAddr)
 	require.NotNil(t, meta, "session not found after call")
-	// The chain bills the full GasFee (10M), not GasUsed (3000): 100M - 10M = 90M.
-	// Guards #5: local spend tracking must match the chain's GasFee accounting.
-	assert.Equal(t, "90000000ugnot", meta.SpendRemaining, "deduct GasFee, not GasUsed")
+	// The chain bills the full GasFee, not GasUsed (3000): the remaining must be
+	// limit - DefaultGasFeeUgnot, never limit - GasUsed. Guards #5: local spend
+	// tracking must match the chain's GasFee accounting.
+	wantRemaining := fmt.Sprintf("%dugnot", 100_000_000-chain.DefaultGasFeeUgnot)
+	assert.Equal(t, wantRemaining, meta.SpendRemaining, "deduct GasFee, not GasUsed")
 }
 
 func TestCall_writesAuditEntry(t *testing.T) {

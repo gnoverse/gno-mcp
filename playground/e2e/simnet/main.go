@@ -19,11 +19,16 @@ func main() {
 		webListen    = flag.String("web-listen", "127.0.0.1:8688", "gnoweb HTTP listen address")
 		hostname     = flag.String("hostname", "testnet.gnomcp.sim", "alias hostname advertised in gnoconnect meta-tags")
 		grant        = flag.Int64("grant", 1_000_000_000, "faucet grant per request, in ugnot (default 1000 GNOT: gas fees are 10M, storage deposits caller-paid — a grant must fund several of each)")
+		claDir       = flag.String("cla-dir", "", "path to a gno.land/r/sys/cla package dir to seed the CLA deploy gate (empty = gate off); deps resolve from GNOROOT/examples")
+		claHash      = flag.String("cla-hash", "", "required CLA hash to activate enforcement (empty = realm deployed but gate disabled)")
 	)
 	flag.Parse()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	n, rpcAddr, err := Boot(logger, Config{RealmsDir: *realmsDir, ChainID: *chainID, RPCListen: *rpcListen})
+	n, rpcAddr, err := Boot(logger, Config{
+		RealmsDir: *realmsDir, ChainID: *chainID, RPCListen: *rpcListen,
+		CLAPkgDir: *claDir, CLARequiredHash: *claHash,
+	})
 	if err != nil {
 		logger.Error("simnet: node boot failed", "err", err)
 		os.Exit(1)
