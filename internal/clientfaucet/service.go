@@ -122,6 +122,13 @@ func FetchServiceLimits(ctx context.Context, p profiles.Profile, httpClient *htt
 		return nil, fmt.Errorf("faucet limits unreachable: %w", err)
 	}
 	defer resp.Body.Close()
+	// A faucet that doesn't serve /limits (an older deploy, or a third-party
+	// faucet) answers 404/405. That is "no policy advertised", not a failure:
+	// return no limits so the caller omits the faucet block rather than reporting
+	// an error. This keeps the client deploy-order-independent from the faucet.
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
+		return nil, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("faucet limits: unexpected status %s", resp.Status)
 	}

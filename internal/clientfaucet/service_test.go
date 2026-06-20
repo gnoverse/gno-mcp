@@ -96,6 +96,25 @@ func TestFetchServiceLimits_noServiceURL(t *testing.T) {
 	assert.Nil(t, lim, "no service faucet -> nothing to report, not an error")
 }
 
+// A faucet that does not implement /limits (an older deploy, or a third-party
+// faucet) answers 404/405. That is "no policy advertised", not a failure — the
+// caller (gno_status) then simply omits the faucet block rather than reporting
+// a faucet_error.
+func TestFetchServiceLimits_notImplemented(t *testing.T) {
+	for _, code := range []int{http.StatusNotFound, http.StatusMethodNotAllowed} {
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /limits", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(code)
+		})
+		srv := httptest.NewServer(mux)
+		lim, err := FetchServiceLimits(context.Background(),
+			profiles.Profile{FaucetServiceURL: srv.URL}, srv.Client())
+		srv.Close()
+		require.NoError(t, err, "a faucet without /limits is not an error (status %d)", code)
+		assert.Nil(t, lim, "no limits advertised -> no block (status %d)", code)
+	}
+}
+
 func TestServiceFaucet_rateLimited(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /fund", func(w http.ResponseWriter, r *http.Request) {
