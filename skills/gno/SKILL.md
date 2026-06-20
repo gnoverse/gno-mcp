@@ -51,6 +51,7 @@ This SKILL.md is a router. References are categorized by topic; load whichever f
 | Chain-matched toolchain | `references/toolchain.md` | Testing or linting local code against a live chain target; `gno` missing from `PATH` or its version doesn't match the target; fetching on-chain deps for local tests; the per-release binary store. |
 | MCP acceleration | `references/mcp.md` | A Gno MCP server (e.g. gnomcp) is connected and you want to fetch on-chain package source or discover packages. Optional — the skill works without it; load to see when to reach for it. |
 | Platform / sys realms | `references/sysrealms.md` | Reasoning about gno.land system realms (`r/sys/*`: names/users/namereg, validators, params, cla), namespace/name registration, the validator set, genesis-predeployed realms, GovDAO param governance, or why a sys realm differs across networks (test13 vs local vs betanet). Teaches the design; sends you to the live chain for concrete values. |
+| CLI / tx machinery | `references/gnokey.md` | Understanding what a write costs or why it failed — the `gnokey` CLI and the tx model behind every write: `--gas-wanted`/`--gas-fee` (the full fee is deducted, not gas-used), the price floor, out-of-gas vs insufficient-fee, storage deposit (`--max-deposit`), simulate-to-size-gas, account/sequence/chainid sig errors. Maps each `gnokey maketx` command to its gnomcp tool, and shows the equivalent command for a write. The "why gnomcp signs for you, don't shell out to gnokey" discipline. |
 
 ### Task hints (multi-reference loads)
 
@@ -63,6 +64,7 @@ This SKILL.md is a router. References are categorized by topic; load whichever f
 - *Setting up a new project* → `build.md` (scaffold, gnomod.toml, testing flavors) + `patterns.md` (package organization, `/r/` vs `/p/` vs `/e/`).
 - *Answering "what does X actually do?"* → `interrealm.md` for spec questions; `stdlib.md` for API questions; `render.md` for gnoweb markdown behavior; `memory.md` for persistence behavior; `build.md` for tooling behavior.
 - *Answering "how do I register a name / who are the validators / is enforcement on?" for a specific chain* → `sysrealms.md` (the sys-realm model + the trust-the-chain query discipline) + `mcp.md` (the query tools). The answer is a live query, not a recital.
+- *Answering "what does this write cost / why did my tx fail with gas/fee/sequence?" or "what's the gnokey equivalent?"* → `gnokey.md` (the `Fee = {GasWanted, GasFee}` model, the price floor, the failure-mode table, the gnomcp↔gnokey mapping) + `debug.md` for triaging a specific failed call.
 
 ## Quick reference
 
