@@ -30,7 +30,8 @@ func RegisterCall(s *server.Server, ks *keystore.Keystore, sessionMgr *session.M
 			"Pass simulate=true to dry-run without spending gas. Required args: profile, realm, func. " +
 			"Optional: args (array of strings), send (coins to attach for a payable function, e.g. \"5000000ugnot\"), " +
 			"simulate (bool), identity (\"agent\" or \"session\"). " +
-			"The result reports which identity signed; always tell the user which account performed the write.",
+			"The result reports which identity signed (tell the user which account performed the write) and an " +
+			"equivalent gnokey command for transparency — illustrative only, since gnomcp already signed and broadcast the tx.",
 		InputSchema: callInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -208,7 +209,15 @@ func callHandler(
 		return server.Result{}, err
 	}
 
-	return decorateWriteResult(buildCallResult(cr, realm), identity, signerAddr, master, profile.IsLocal()), nil
+	gkCmd := chain.GnokeyCmd{
+		Sub: "call", PkgPath: realm, Func: fn, Args: fnArgs, Send: send,
+		RPC: profile.RPCURL, ChainID: profile.ChainID,
+		Signer: signerAddr, Master: master, Simulate: simulate,
+	}.String()
+	return attachGnokeyCmd(
+		decorateWriteResult(buildCallResult(cr, realm), identity, signerAddr, master, profile.IsLocal()),
+		gkCmd,
+	), nil
 }
 
 // buildCallResult constructs the server.Result from a chain.CallResult. The

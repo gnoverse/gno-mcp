@@ -34,6 +34,8 @@ type Fake struct {
 	agentCalls      map[string]CallResult
 	agentRuns       map[string]RunResult
 	addPkgs         map[string]AddPackageResult
+	addPkgErrs      map[string]error          // key: deployPath; when set, AddPackage returns it (sim + broadcast)
+	addPkgBcasts    map[string]int            // key: deployPath; count of broadcast (simulate=false) calls
 	lastAddPkgFiles map[string][]*std.MemFile // key: deployPath; set on every AddPackage call
 	lastSend        string                    // send arg of the most recent Call/CallAsUser
 	lastAsUserMstr  string                    // master arg of the most recent CallAsUser/RunAsUser
@@ -67,6 +69,8 @@ func NewFake() *Fake {
 		agentCalls:      map[string]CallResult{},
 		agentRuns:       map[string]RunResult{},
 		addPkgs:         map[string]AddPackageResult{},
+		addPkgErrs:      map[string]error{},
+		addPkgBcasts:    map[string]int{},
 		lastAddPkgFiles: map[string][]*std.MemFile{},
 	}
 }
@@ -234,6 +238,12 @@ func (f *Fake) Run(_ context.Context, _ gnoclient.Signer, code string, simulate 
 // Records files so addpkg tests can assert the file list.
 func (f *Fake) AddPackage(_ context.Context, _ gnoclient.Signer, deployPath string, files []*std.MemFile, simulate bool) (AddPackageResult, error) {
 	f.lastAddPkgFiles[deployPath] = files
+	if !simulate {
+		f.addPkgBcasts[deployPath]++
+	}
+	if err, ok := f.addPkgErrs[deployPath]; ok {
+		return AddPackageResult{}, err
+	}
 	r, ok := f.addPkgs[deployPath]
 	if !ok {
 		return AddPackageResult{}, fmt.Errorf("fake: no addpackage for deployPath=%q", deployPath)
@@ -242,6 +252,19 @@ func (f *Fake) AddPackage(_ context.Context, _ gnoclient.Signer, deployPath stri
 		r.Simulated = true
 	}
 	return r, nil
+}
+
+// SetAddPackageError makes AddPackage(deployPath, …) return err for both the
+// validation (simulate) and broadcast calls — used to drive the
+// validate-before-broadcast path in handler tests.
+func (f *Fake) SetAddPackageError(deployPath string, err error) {
+	f.addPkgErrs[deployPath] = err
+}
+
+// AddPackageBroadcasts reports how many times AddPackage was called with
+// simulate=false for deployPath — 0 proves a deploy was never broadcast.
+func (f *Fake) AddPackageBroadcasts(deployPath string) int {
+	return f.addPkgBcasts[deployPath]
 }
 
 func (f *Fake) SetCall(realm, fn string, args []string, result CallResult) {

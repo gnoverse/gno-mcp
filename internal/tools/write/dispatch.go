@@ -146,6 +146,23 @@ func (d writeTxDispatch) txError(err error) error {
 	return fmt.Errorf("%s: %w", errPrefix, err)
 }
 
+// attachGnokeyCmd appends the illustrative `gnokey maketx` equivalent of the
+// write to the result — a transparency aid showing the tx gnomcp put on the
+// wire. It is intentionally self-contained (names only the gnokey CLI, no skill
+// or gnomcp-internal detail) so it is meaningful to any client. No-op on "".
+func attachGnokeyCmd(out server.Result, cmd string) server.Result {
+	if cmd == "" {
+		return out
+	}
+	out.Text += "\n\ngnokey equivalent (illustrative — gnomcp already signed and broadcast this; " +
+		"the signing key lives in gnomcp's keystore, not gnokey's):\n  " + cmd
+	if out.StructuredContent == nil {
+		out.StructuredContent = map[string]any{}
+	}
+	out.StructuredContent["gnokey_command"] = cmd
+	return out
+}
+
 // decorateWriteResult prefixes the signed-by line and attaches the identity
 // metadata every write result carries.
 func decorateWriteResult(out server.Result, identity, signerAddr, master string, local bool) server.Result {

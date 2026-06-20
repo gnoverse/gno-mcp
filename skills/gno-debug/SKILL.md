@@ -13,6 +13,11 @@ description: Diagnose and fix failed Gno transactions and calls. Use whenever a 
 5. Report which identity signed every write (agent key vs session). If the failure involves
    sessions, remember the session path is WIP — keep scopes tight.
 
+For a gas, fee, storage-deposit, or `account/sequence/chain-id` signature failure, pull
+`../gno/references/gnokey.md` — it has the `Fee = {GasWanted, GasFee}` model and the failure-mode
+table (out-of-gas vs insufficient-fee, "not enough deposit", the stale-binary cause of a sig-verify
+error), which explain *why* these fail and the exact fix.
+
 If nothing in the table matches, route through `../gno/SKILL.md`'s index instead of guessing
 (`security.md` for authorization questions, `interrealm.md` for caller/crossing semantics) —
 and say plainly what remains unknown.

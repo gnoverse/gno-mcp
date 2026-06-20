@@ -3,8 +3,11 @@ package write
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
+	tmerrors "github.com/gnolang/gno/tm2/pkg/errors"
 	"github.com/gnolang/gno/tm2/pkg/std"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,12 +61,69 @@ func TestAddPkg_happyPath(t *testing.T) {
 	})
 	require.NoError(t, err, "AddPkg")
 	assert.Contains(t, res.Text, "Signed by: agent test1 (g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5)")
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "gnokey maketx addpkg", "addpkg must wire its own subcommand")
+	assert.Contains(t, gk, "-pkgpath gno.land/r/test/foo")
+	assert.Contains(t, gk, "-pkgdir", "addpkg shows the source-dir placeholder")
 
 	// gnomod.toml must have been injected and files must be sorted.
 	files := fake.LastAddPackageFiles("gno.land/r/test/foo")
 	require.NotNil(t, files, "LastAddPackageFiles returned nil — AddPackage was not called")
 	assertHasGnomod(t, files)
 	assertSorted(t, files)
+}
+
+// A failed addpkg broadcast still burns gas on-chain (the node charges for the
+// type-check / gate rejection at DeliverTx), which can strand a freshly-funded
+// key. The handler must validate via simulate first and never broadcast when
+// that fails.
+func TestAddPkg_validatesBeforeBroadcast(t *testing.T) {
+	s := newLocalTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "", 5)
+
+	fake := chain.NewFake()
+	fake.SetAddPackageError("gno.land/r/test/bad", errors.New("type check errors: could not import fmt"))
+	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_addpkg", map[string]any{
+		"profile":     "local",
+		"deploy_path": "gno.land/r/test/bad",
+		"files":       []any{map[string]any{"name": "bad.gno", "body": "package bad\n"}},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "validation (no gas spent)", "must fail at validation, not broadcast")
+	assert.Equal(t, 0, fake.AddPackageBroadcasts("gno.land/r/test/bad"), "must not broadcast after validation fails")
+
+	entries := parseAuditEntries(t, &auditBuf)
+	require.Len(t, entries, 1, "a validation-denied deploy must still produce exactly one audit record")
+	assert.Equal(t, "validate_err", entries[0].Result, "the zero-gas pre-check failure is its own audit label")
+}
+
+// The CLA gate rejects during the validation simulate too, so the cla_unsigned
+// hint must reach the user at zero gas — before any broadcast.
+func TestAddPkg_claUnsignedCaughtAtValidation(t *testing.T) {
+	s := newLocalTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "", 5)
+
+	fake := chain.NewFake()
+	claErr := tmerrors.Wrapf(vm.UnauthorizedUserError{}, "deliver transaction failed: log:address g1abc has not signed the required CLA")
+	fake.SetAddPackageError("gno.land/r/test/cla", claErr)
+	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_addpkg", map[string]any{
+		"profile":     "local",
+		"deploy_path": "gno.land/r/test/cla",
+		"files":       []any{map[string]any{"name": "c.gno", "body": "package c\n"}},
+	})
+	require.Error(t, err)
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "cla_unsigned", te.Code)
+	assert.Equal(t, 0, fake.AddPackageBroadcasts("gno.land/r/test/cla"), "CLA caught at validation — no broadcast")
 }
 
 func TestAddPkg_agentIdentityUnavailable(t *testing.T) {

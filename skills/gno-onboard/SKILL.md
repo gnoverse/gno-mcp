@@ -60,8 +60,9 @@ their answers, not on the initial label.
    show the gas, then broadcast. Always say which identity signed.
 5. **Close:** match their goal — if it was deploying, close the loop with a `gno_addpkg`
    `simulate=true` of a ~10-line counter realm before pointing at docs; writing a realm →
-   the gno skill's `build.md`/`patterns.md`; safety review → `/gno-audit`; something
-   failed → `/gno-debug`.
+   the gno skill's `build.md`/`patterns.md`; "what is gnokey / why does a tx cost what it
+   costs / what's the gnokey command for this" → the gno skill's `gnokey.md`; safety review →
+   `/gno-audit`; something failed → `/gno-debug`.
 
 ## Rules
 

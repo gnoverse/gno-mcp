@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -119,6 +120,13 @@ func TestCall_happyPath(t *testing.T) {
 	assert.Contains(t, res.Text, "0xabc")
 	assert.Equal(t, "0xabc", res.StructuredContent["tx_hash"])
 	assert.Equal(t, false, res.StructuredContent["simulated"])
+
+	// The illustrative gnokey-equivalent rides along (session → -master).
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "gnokey maketx call")
+	assert.Contains(t, gk, "-pkgpath gno.land/r/test/counter")
+	assert.Contains(t, gk, "-master")
+	assert.Contains(t, res.Text, "gnokey equivalent")
 
 	// Audit entry written.
 	entries := parseAuditEntries(t, &auditBuf)
@@ -424,9 +432,11 @@ func TestCall_updatesSessionSpend(t *testing.T) {
 
 	meta := mgr.Get("testnet5", sessionAddr)
 	require.NotNil(t, meta, "session not found after call")
-	// The chain bills the full GasFee (10M), not GasUsed (3000): 100M - 10M = 90M.
-	// Guards #5: local spend tracking must match the chain's GasFee accounting.
-	assert.Equal(t, "90000000ugnot", meta.SpendRemaining, "deduct GasFee, not GasUsed")
+	// The chain bills the full GasFee, not GasUsed (3000): the remaining must be
+	// limit - DefaultGasFeeUgnot, never limit - GasUsed. Guards #5: local spend
+	// tracking must match the chain's GasFee accounting.
+	wantRemaining := fmt.Sprintf("%dugnot", 100_000_000-chain.DefaultGasFeeUgnot)
+	assert.Equal(t, wantRemaining, meta.SpendRemaining, "deduct GasFee, not GasUsed")
 }
 
 func TestCall_writesAuditEntry(t *testing.T) {

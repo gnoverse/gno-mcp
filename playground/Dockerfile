@@ -74,6 +74,7 @@ COPY --from=builder /out/gnomcp /usr/local/bin/gnomcp
 COPY --chown=dev:dev .claude-plugin /opt/gnomcp/.claude-plugin
 COPY --chown=dev:dev skills         /opt/gnomcp/skills
 COPY --chown=dev:dev agents         /opt/gnomcp/agents
+COPY --chown=dev:dev --chmod=755 hooks /opt/gnomcp/hooks
 RUN claude plugin marketplace add /opt/gnomcp \
     && claude plugin install gnomcp@gnoverse --scope user \
     && claude mcp add gnomcp --scope user -- gnomcp
@@ -114,3 +115,16 @@ COPY --chmod=755 playground/sim-init.sh /usr/local/bin/sim-init.sh
 ENV PLAYGROUND_LAYER=sim
 ENTRYPOINT ["sim-init.sh"]
 CMD ["zsh"]
+
+# ---- SIM-CLA: sim image with the test13 CLA deploy gate seeded (RUN TARGET: sim-cla)
+# Replicates the live-network CLA gate locally: simnet seeds gno.land/r/sys/cla
+# (render/addrset deps from GNOROOT/examples) and activates it with a required hash,
+# so a deploy must sign the CLA first — the local twin of scenario 14's deploy-gates.
+# The faucet drips 10 GNOT; with the gas fee at the chain minimum that clears the
+# whole Sign+deploy+bump flow with room to spare (raising the drip was never the fix
+# — the over-provisioned fee was). Override the drip with `make sim-cla SIM_CLA_DRIP=…`.
+FROM sim AS sim-cla
+COPY --chown=dev:dev playground/e2e/simnet/realms /opt/e2e/cla-realms
+ENV SIMNET_CLA_ARGS="-cla-dir /opt/e2e/cla-realms/gno.land/r/sys/cla -cla-hash e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+ENV SIMNET_GRANT=10000000
+ENV PLAYGROUND_LAYER=sim-cla
