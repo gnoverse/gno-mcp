@@ -44,7 +44,7 @@ Patterns to check against the realm source (see `security.md` Audit signals tabl
 - Storing a `realm`-typed value in struct field / map / package var → will panic at finalize; usually Class 2 misunderstanding
 - Slice element mutation after round-trip through external realm → readonly-taint round-trip (open issue #4765)
 - `crossing()` body marker → pre-0.9 stale spec (won't compile)
-- Map iteration order influencing execution → operational (non-determinism RED)
+- Map iteration order surfaced as `Render`/output ordering or pagination → operational YELLOW (Gno map iteration is insertion-order deterministic — *not* a consensus risk — but it's an impl detail, unstable under delete+reinsert, and rarely the order users want)
 - `math.MinInt` / `MaxInt` / `unsafe.Sizeof` → operational (platform divergence RED)
 
 Each hit is a candidate finding, not a confirmed one. Phase 2 verifies.

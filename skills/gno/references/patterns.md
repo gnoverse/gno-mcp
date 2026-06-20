@@ -11,8 +11,8 @@ Idiomatic shapes that fit Gno's grain. Most idioms here are not stylistic prefer
 
 | Force | Constraint it imposes | Patterns it drives |
 |---|---|---|
-| **Determinism** | Every node must produce the same result. Diverging on a single byte halts consensus. | `avl.Tree` over `map` (map iteration order); avoid `math.MinInt` / `MaxInt` (architecture-dependent); avoid float-format reliance; never let map iteration affect execution. |
-| **Gas metering** | Every read, allocation, and store op costs gas the caller pays. | Lazy allocation — don't create state until needed; minimize cross-realm reads (readonly taint forces copies); single top-level struct for state (one root pointer instead of many globals); avoid unnecessary AVL traversals. |
+| **Determinism** | Every node must produce the same result. Diverging on a single byte halts consensus. | avoid `math.MinInt` / `MaxInt` (architecture-dependent); avoid float-format reliance; don't branch on observed `append` capacity growth. (Map iteration is insertion-order deterministic — not a determinism hazard; see Gas metering for why to still prefer trees.) |
+| **Gas metering** | Every read, allocation, and store op costs gas the caller pays. | Lazy allocation — don't create state until needed; `avl.Tree`/`bptree` over `map` for growing keyed state (lazy load vs whole-map rewrite); minimize cross-realm reads (readonly taint forces copies); single top-level struct for state (one root pointer instead of many globals); avoid unnecessary AVL traversals. |
 | **Storage deposit** | Persisting bytes locks GNOT tokens; deleting refunds them. | Small structs, scalar types where possible, scheduled cleanup of expired data — refund-on-delete enables cleanup-as-revenue. |
 | **Refcount persistence** | Realm finalization assigns object IDs and refcounts to every reachable object. | Avoid cyclic references in persisted state; don't delete-and-recreate the same object identity within a tx (refcount accounting); prefer composition with `/p/` types over `/r/` types in state. |
 | **Cross-realm authority** | Realm boundaries are security boundaries. | Prefer non-crossing methods; never accept caller-supplied `func()` or `interface{}` in permission-gated paths; explicit `cross(cur)` for every external state mutation. |
@@ -185,9 +185,9 @@ users.Iterate("", "", func(key string, value any) bool {
 users := make(map[string]User)
 ```
 
-**AVL Trees**: O(log n) lookup, **lazy loading** (only the search path loads), **sorted iteration**, **deterministic**. Required for any keyed state that grows or that you iterate.
+**AVL Trees**: O(log n) lookup, **lazy loading** (only the search path loads), **sorted iteration** (a stable, semantically meaningful order you can paginate). Required for any keyed state that grows or that you iterate.
 
-**Maps**: O(1) lookup, type-safe values. Use only for **small bounded** in-memory state (e.g. config values). Never for persisted growth state — non-deterministic iteration is a consensus halt risk.
+**Maps**: O(1) lookup, type-safe values. Use only for **small bounded** in-memory state (e.g. config values). Never for persisted growth state — a persisted map rewrites wholesale on every mutation (gas/storage), and its insertion-order iteration is an impl detail you shouldn't expose as output ordering. (Iteration is deterministic, so this is a gas/design issue, not a consensus risk.)
 
 `gno.land/p/nt/bptree/v0` (B+tree) is an accepted alternative for ordered keyed state — used by `commondao` and others. Either is fine; pick one and stay consistent.
 

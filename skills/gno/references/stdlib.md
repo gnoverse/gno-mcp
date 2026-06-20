@@ -166,7 +166,7 @@ The packages below survived the test-13 quarantine (`examples/quarantined/` got 
 | Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` |
 | Non-fungible tokens | `gno.land/p/demo/tokens/grc721` |
 
-**Use `avl.Tree` (or `bptree`) instead of Go's `map`** — map iteration is non-deterministic and a consensus halt risk. See `patterns.md` § Determinism and `security.md` § operational signals.
+**Use `avl.Tree` (or `bptree`) instead of Go's `map`** for growing keyed state — a persisted map rewrites wholesale on every mutation, and its insertion-order iteration is an impl detail, not an ordering contract. (Iteration is deterministic, so it's a gas/design issue, not a consensus risk.) See `patterns.md` and `memory.md` § Map iteration order.
 
 ## What NOT to import
 

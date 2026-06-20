@@ -184,13 +184,15 @@ This copies values into a new array allocated under the current realm's `m.Realm
 
 ### Map iteration order — Gno vs Go
 
-Gno's `map` iterates in **insertion order**, not Go's randomized order. This makes the in-memory iteration deterministic. **However**:
+Gno's `map` iterates in **insertion order**, not Go's randomized order. The VM backs each map with an insertion-ordered linked list (for iteration) plus a Go map (for O(1) lookup); `range` walks the list, never the Go map. Iteration is therefore **deterministic** — it is **not** a consensus risk. **However, it is still the wrong thing to depend on**:
 
-1. Iteration order is still an implementation detail. Don't write code that depends on it.
-2. Maps are not persistence-friendly — every map mutation reloads and rewrites the whole map's persisted form. Use `avl.Tree` or `bptree` for any keyed state that grows.
-3. The deterministic iteration order is *not* portable to vanilla Go — code that runs under both must not rely on it.
+1. Insertion order is an unspecified implementation detail. Don't write code — or `Render` output, pagination, or ranked lists — that treats it as a contract.
+2. It is not even stable under mutation: deleting a key and re-adding it sends that key to the **tail**, so a row can move on an edit unrelated to ordering. (Updating an existing key's value keeps its position.)
+3. Insertion order is rarely the order users want (scores, time, alphabetical). For any order users observe, store explicit sortable keys in an `avl.Tree`/`bptree`.
+4. Maps are also not persistence-friendly — every map mutation reloads and rewrites the whole map's persisted form. Use `avl.Tree`/`bptree` for any keyed state that grows.
+5. The insertion-order behavior is *not* portable to vanilla Go — code that runs under both must not rely on it.
 
-See `patterns.md` § State shape for the AVL-over-map rule.
+See `patterns.md` for the AVL-over-map rule.
 
 ## Data structure cheat-sheet
 
