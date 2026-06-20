@@ -29,7 +29,8 @@ func RegisterAddPkg(s *server.Server, ks *keystore.Keystore, resolver chain.Reso
 			"local profiles use the built-in test1 key; testnet profiles use a key generated via " +
 			"gno_key_generate (run that first if no key exists). " +
 			"If the supplied file list omits gnomod.toml it is generated automatically. " +
-			"The result reports which identity signed; always tell the user which account performed the write.",
+			"The result reports which identity signed (tell the user which account performed the write) and an " +
+			"equivalent gnokey command for transparency — illustrative only, since gnomcp already signed and broadcast the tx.",
 		InputSchema: addpkgInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -183,7 +184,12 @@ func addpkgHandler(
 		fmt.Fprintln(&b, "(simulate=true — transaction was not broadcast)")
 	}
 
-	return server.Result{
+	gkCmd := chain.GnokeyCmd{
+		Sub: "addpkg", PkgPath: deployPath,
+		MaxDeposit: fmt.Sprintf("%dugnot", chain.DefaultMaxDepositUgnot),
+		RPC:        p.RPCURL, ChainID: p.ChainID, Signer: addr, Simulate: simulate,
+	}.String()
+	return attachGnokeyCmd(server.Result{
 		Text: b.String(),
 		StructuredContent: map[string]any{
 			"identity":       "agent",
@@ -193,7 +199,7 @@ func addpkgHandler(
 			"gas_used":       res.GasUsed,
 			"simulated":      res.Simulated,
 		},
-	}, nil
+	}, gkCmd), nil
 }
 
 // toMemFiles converts the raw JSON-decoded "files" arg into []*std.MemFile.

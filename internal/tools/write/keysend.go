@@ -25,7 +25,7 @@ func RegisterKeySend(s *server.Server, ks *keystore.Keystore, resolver chain.Res
 			"exists in this profile — create it with gno_key_generate and list keys with gno_key_list. " +
 			"Does NOT send to arbitrary external addresses and does NOT call realm functions " +
 			"(use gno_call with send= for a payable call). The source key must be funded. " +
-			"Returns the from/to addresses, the amount, and the tx hash.",
+			"Returns the from/to addresses, the amount, the tx hash, and an equivalent gnokey command (illustrative — gnomcp already signed it).",
 		InputSchema: keySendInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -145,7 +145,11 @@ func keySendHandler(ctx context.Context, args map[string]any, s *server.Server, 
 	}
 	auditResult = "ok"
 
-	return server.Result{
+	gkCmd := chain.GnokeyCmd{
+		Sub: "send", To: toAddr, Send: fmt.Sprintf("%dugnot", amount),
+		RPC: profile.RPCURL, ChainID: profile.ChainID, Signer: fromAddr,
+	}.String()
+	return attachGnokeyCmd(server.Result{
 		Text: fmt.Sprintf("Sent %d ugnot from %s to %s (tx %s).", amount, fromAddr, toAddr, res.TxHash),
 		StructuredContent: map[string]any{
 			"from_address": fromAddr,
@@ -154,5 +158,5 @@ func keySendHandler(ctx context.Context, args map[string]any, s *server.Server, 
 			"tx_hash":      res.TxHash,
 			"height":       res.Height,
 		},
-	}, nil
+	}, gkCmd), nil
 }

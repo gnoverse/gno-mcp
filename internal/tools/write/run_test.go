@@ -48,6 +48,8 @@ func TestRun_happyPath(t *testing.T) {
 	assert.Contains(t, res.Text, "0xrun1")
 	assert.Equal(t, "0xrun1", res.StructuredContent["tx_hash"])
 	assert.Equal(t, false, res.StructuredContent["simulated"])
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "gnokey maketx run", "run must wire its own subcommand")
 
 	entries := parseAuditEntries(t, &auditBuf)
 	require.Len(t, entries, 1)

@@ -121,6 +121,13 @@ func TestCall_happyPath(t *testing.T) {
 	assert.Equal(t, "0xabc", res.StructuredContent["tx_hash"])
 	assert.Equal(t, false, res.StructuredContent["simulated"])
 
+	// The illustrative gnokey-equivalent rides along (session → -master).
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "gnokey maketx call")
+	assert.Contains(t, gk, "-pkgpath gno.land/r/test/counter")
+	assert.Contains(t, gk, "-master")
+	assert.Contains(t, res.Text, "gnokey equivalent")
+
 	// Audit entry written.
 	entries := parseAuditEntries(t, &auditBuf)
 	require.Len(t, entries, 1)

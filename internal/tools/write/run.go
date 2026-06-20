@@ -30,7 +30,8 @@ func RegisterRun(s *server.Server, ks *keystore.Keystore, sessionMgr *session.Ma
 			"Pass identity=session to act as the user instead — that requires an active gnomcp session with allow_run=true (use gno_session_propose with allow_run=true). " +
 			"Pass simulate=true to dry-run without spending gas. Required args: " +
 			"profile, code. Optional: simulate (bool), identity (\"agent\" or \"session\"). " +
-			"The result reports which identity signed; always tell the user which account performed the write.",
+			"The result reports which identity signed (tell the user which account performed the write) and an " +
+			"equivalent gnokey command for transparency — illustrative only, since gnomcp already signed and broadcast the tx.",
 		InputSchema: runInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -173,7 +174,14 @@ func runHandler(
 		return server.Result{}, err
 	}
 
-	return decorateWriteResult(buildRunResult(rr, profileName), identity, signerAddr, master, profile.IsLocal()), nil
+	gkCmd := chain.GnokeyCmd{
+		Sub: "run", RPC: profile.RPCURL, ChainID: profile.ChainID,
+		Signer: signerAddr, Master: master, Simulate: simulate,
+	}.String()
+	return attachGnokeyCmd(
+		decorateWriteResult(buildRunResult(rr, profileName), identity, signerAddr, master, profile.IsLocal()),
+		gkCmd,
+	), nil
 }
 
 // buildRunResult constructs the server.Result from a chain.RunResult. MsgRun

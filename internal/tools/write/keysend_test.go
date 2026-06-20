@@ -33,6 +33,10 @@ func TestKeySend_movesFundsBetweenOwnKeys(t *testing.T) {
 	})
 	require.NoError(t, callErr)
 	assert.Contains(t, res.Text, "0xsend")
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "gnokey maketx send", "keysend must wire its own subcommand")
+	assert.Contains(t, gk, "-to "+to)
+	assert.Contains(t, gk, "-send 4000000ugnot")
 
 	sends := fake.BankSends()
 	require.Len(t, sends, 1)

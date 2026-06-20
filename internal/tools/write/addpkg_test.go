@@ -61,6 +61,10 @@ func TestAddPkg_happyPath(t *testing.T) {
 	})
 	require.NoError(t, err, "AddPkg")
 	assert.Contains(t, res.Text, "Signed by: agent test1 (g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5)")
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "gnokey maketx addpkg", "addpkg must wire its own subcommand")
+	assert.Contains(t, gk, "-pkgpath gno.land/r/test/foo")
+	assert.Contains(t, gk, "-pkgdir", "addpkg shows the source-dir placeholder")
 
 	// gnomod.toml must have been injected and files must be sorted.
 	files := fake.LastAddPackageFiles("gno.land/r/test/foo")
