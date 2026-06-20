@@ -226,6 +226,19 @@ func (l *Limiter) Snapshot() LimiterSnapshot {
 	return s
 }
 
+// LimiterPolicy is the limiter's static, non-sensitive configuration: safe to
+// publish. Unlike LimiterSnapshot it carries no live counters.
+type LimiterPolicy struct {
+	PerAddrMax    int
+	PerAddrWindow time.Duration
+}
+
+// Policy returns the static per-address configuration. These fields are set
+// once in NewLimiter and never mutated, so no lock is taken.
+func (l *Limiter) Policy() LimiterPolicy {
+	return LimiterPolicy{PerAddrMax: l.perAddrMax, PerAddrWindow: l.perAddrWindow}
+}
+
 // refillDrip adds tokens accrued since the last refill, capped at burst.
 // Callers must hold l.mu. The first call seeds dripLast without accruing.
 func (l *Limiter) refillDrip(now time.Time) {

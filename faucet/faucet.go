@@ -81,6 +81,40 @@ func New(chainID string, grantUgnot int64, d Dispenser, l *Limiter, opts ...Opti
 // IsTestnetChainID reports whether id matches the testnet chain-id pattern (test-?N).
 func IsTestnetChainID(id string) bool { return testChainRE.MatchString(id) }
 
+// FaucetLimits is the public, policy-only view served at GET /limits. It
+// deliberately omits per-IP, the daily cap, the drip bucket, and all live
+// remaining state — those are anti-abuse internals or metrics-only.
+type FaucetLimits struct {
+	GrantUgnot int64           `json:"grant_ugnot"`
+	PerAddress PerAddressLimit `json:"per_address"`
+}
+
+// PerAddressLimit is the only rate limit safe to disclose: a fresh key bypasses
+// it, so naming it defeats no anti-abuse control.
+type PerAddressLimit struct {
+	Max           int `json:"max"`
+	WindowSeconds int `json:"window_seconds"`
+}
+
+// Limits returns the published per-address policy for this faucet.
+func (f *Faucet) Limits() FaucetLimits {
+	p := f.limiter.Policy()
+	return FaucetLimits{
+		GrantUgnot: f.grantUgnot,
+		PerAddress: PerAddressLimit{Max: p.PerAddrMax, WindowSeconds: int(p.PerAddrWindow.Seconds())},
+	}
+}
+
+// retryAfterSeconds is the coarse, static back-off advertised on every 429:
+// floored at 24h, never the exact remaining time, so it leaks no timing oracle.
+func (f *Faucet) retryAfterSeconds() int {
+	const floor = 24 * 60 * 60
+	if w := int(f.limiter.Policy().PerAddrWindow.Seconds()); w > floor {
+		return w
+	}
+	return floor
+}
+
 // Fund validates the chain-id and recipient, applies rate-limits/cap, then
 // dispenses the grant. Check order: chain-id is-testnet -> chain-id matches this
 // faucet -> recipient is valid -> rate-limit -> dispense. The recipient is parsed

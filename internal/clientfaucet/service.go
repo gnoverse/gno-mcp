@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/gnoverse/gno-mcp/internal/profiles"
 )
 
 // maxFaucetRespBytes bounds the response we read from the faucet service: the
@@ -42,7 +43,7 @@ func (s *ServiceFaucet) Fund(ctx context.Context, address, chainID string) (Outc
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return Outcome{}, fmt.Errorf("faucet busy (rate-limited) — retry later")
+		return Outcome{}, rateLimitMessage(address, resp.Body)
 	}
 	if resp.StatusCode != http.StatusOK {
 		// The body is attacker-influenceable prose headed for LLM-visible error
@@ -66,6 +67,69 @@ func (s *ServiceFaucet) Fund(ctx context.Context, address, chainID string) (Outc
 		TxHash:       body.TxHash,
 		Instructions: fmt.Sprintf("Requested an automatic grant for %s (tx %s).", address, body.TxHash),
 	}, nil
+}
+
+// rateLimitMessage turns a 429 body into agent-facing guidance. A per_address
+// limit gets recovery-shaped, informative (not imperative — the address may
+// already hold funds) text naming the fresh-key escape hatch; every other limit
+// stays generic so the anti-abuse internals are not disclosed. The body is
+// untrusted: it is read bounded, and an unparseable body falls back to generic.
+func rateLimitMessage(address string, body io.Reader) error {
+	var rl struct {
+		Limit             string `json:"limit"`
+		RetryAfterSeconds int    `json:"retry_after_seconds"`
+	}
+	_ = json.NewDecoder(io.LimitReader(body, maxFaucetRespBytes)).Decode(&rl)
+	hours := rl.RetryAfterSeconds / 3600
+	if hours < 1 {
+		hours = 24 // body missing/garbage -> coarse default
+	}
+	if rl.Limit == "per_address" {
+		return fmt.Errorf(
+			"address %s has already drawn its per-address faucet grant for this window — "+
+				"it may already hold funds (check the balance). A different key is not subject "+
+				"to this address's cooldown (gno_key_generate) if you need a separate funded "+
+				"identity; otherwise retry this address after ~%dh", address, hours)
+	}
+	return fmt.Errorf("faucet rate-limited; retry after ~%dh", hours)
+}
+
+// FaucetLimits mirrors the faucet's GET /limits JSON. Defined here, not imported
+// from the faucet package, because gnomcp treats the faucet as an untrusted
+// external HTTP service rather than a linked dependency.
+type FaucetLimits struct {
+	GrantUgnot int64 `json:"grant_ugnot"`
+	PerAddress struct {
+		Max           int `json:"max"`
+		WindowSeconds int `json:"window_seconds"`
+	} `json:"per_address"`
+}
+
+// FetchServiceLimits returns the per-address policy published by p's automatic
+// faucet service, or (nil, nil) when p configures no such service. The body is
+// untrusted (plain http permitted): the read is bounded and the result is the
+// caller's to treat as best-effort.
+func FetchServiceLimits(ctx context.Context, p profiles.Profile, httpClient *http.Client) (*FaucetLimits, error) {
+	if p.FaucetServiceURL == "" {
+		return nil, nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.FaucetServiceURL+"/limits", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("faucet limits unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("faucet limits: unexpected status %s", resp.Status)
+	}
+	var lim FaucetLimits
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxFaucetRespBytes)).Decode(&lim); err != nil {
+		return nil, fmt.Errorf("faucet limits: bad response: %w", err)
+	}
+	return &lim, nil
 }
 
 func (s *ServiceFaucet) Funded(ctx context.Context, address string) (bool, error) {

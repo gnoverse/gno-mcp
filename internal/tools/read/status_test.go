@@ -2,6 +2,9 @@ package read
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -9,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/gnoverse/gno-mcp/internal/profiles"
+	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
 func TestStatus_reportsConfigAndLiveTip(t *testing.T) {
@@ -20,7 +25,7 @@ func TestStatus_reportsConfigAndLiveTip(t *testing.T) {
 	})
 
 	s := newBaseTestServer(t)
-	RegisterStatus(s, constResolver(f))
+	RegisterStatus(s, constResolver(f), http.DefaultClient)
 	res, err := s.Registry().Call(context.Background(), "gno_status", map[string]any{
 		"profile": "testnet5",
 	})
@@ -41,7 +46,7 @@ func TestStatus_flagsChainIDMismatch(t *testing.T) {
 	f.SetStatus(chain.NodeStatus{ChainID: "dev", Height: 7})
 
 	s := newBaseTestServer(t)
-	RegisterStatus(s, constResolver(f))
+	RegisterStatus(s, constResolver(f), http.DefaultClient)
 	res, err := s.Registry().Call(context.Background(), "gno_status", map[string]any{
 		"profile": "testnet5",
 	})
@@ -55,7 +60,7 @@ func TestStatus_nodeUnreachableStillReportsConfig(t *testing.T) {
 	f.SetStatusError(assert.AnError)
 
 	s := newBaseTestServer(t)
-	RegisterStatus(s, constResolver(f))
+	RegisterStatus(s, constResolver(f), http.DefaultClient)
 	res, err := s.Registry().Call(context.Background(), "gno_status", map[string]any{
 		"profile": "testnet5",
 	})
@@ -68,9 +73,57 @@ func TestStatus_nodeUnreachableStillReportsConfig(t *testing.T) {
 
 func TestStatus_unknownProfile(t *testing.T) {
 	s := newBaseTestServer(t)
-	RegisterStatus(s, constResolver(chain.NewFake()))
+	RegisterStatus(s, constResolver(chain.NewFake()), http.DefaultClient)
 	_, err := s.Registry().Call(context.Background(), "gno_status", map[string]any{
 		"profile": "nope",
 	})
 	require.Error(t, err)
+}
+
+// newFaucetStatusServer builds a server whose "testnet5" profile points its
+// faucet-service-url at faucetURL.
+func newFaucetStatusServer(t *testing.T, faucetURL string) *server.Server {
+	t.Helper()
+	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
+		"testnet5": {RPCURL: "http://127.0.0.1:26657", ChainID: "test5", FaucetServiceURL: faucetURL},
+	}}
+	_, err := cfg.Validate()
+	require.NoError(t, err)
+	return server.NewServer(cfg, "")
+}
+
+func TestStatus_surfacesFaucetLimits(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /limits", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"grant_ugnot": 10_000_000,
+			"per_address": map[string]any{"max": 1, "window_seconds": 86400},
+		})
+	})
+	fsrv := httptest.NewServer(mux)
+	defer fsrv.Close()
+
+	f := chain.NewFake()
+	f.SetStatus(chain.NodeStatus{ChainID: "test5", Height: 9})
+	s := newFaucetStatusServer(t, fsrv.URL)
+	RegisterStatus(s, constResolver(f), fsrv.Client())
+
+	res, err := s.Registry().Call(context.Background(), "gno_status", map[string]any{"profile": "testnet5"})
+	require.NoError(t, err)
+	require.NotNil(t, res.StructuredContent["faucet"])
+	assert.Contains(t, res.Text, "per address")
+	assert.Contains(t, res.Text, "GNOT")
+}
+
+func TestStatus_faucetUnreachableIsNonFatal(t *testing.T) {
+	// A profile pointing at a dead faucet URL: status still succeeds.
+	f := chain.NewFake()
+	f.SetStatus(chain.NodeStatus{ChainID: "test5", Height: 9})
+	s := newFaucetStatusServer(t, "http://127.0.0.1:1") // nothing listening
+	RegisterStatus(s, constResolver(f), &http.Client{})
+
+	res, err := s.Registry().Call(context.Background(), "gno_status", map[string]any{"profile": "testnet5"})
+	require.NoError(t, err, "a dead faucet is a finding, not a tool failure")
+	assert.NotEmpty(t, res.StructuredContent["faucet_error"])
+	assert.NotContains(t, res.StructuredContent, "faucet")
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -127,4 +128,31 @@ func TestFaucet_refundsCooldownAndCapOnDispenseFailure(t *testing.T) {
 	fd.err = nil
 	_, err = f.Fund(context.Background(), validAddr, "1.1.1.1", "test5")
 	require.NoError(t, err, "a refunded failure must leave the address fundable and the cap unspent")
+}
+
+func TestFaucet_Limits(t *testing.T) {
+	f := New("test5", 10_000_000, &fakeDispenser{}, NewLimiter(LimiterCfg{
+		PerAddrWindow: 24 * time.Hour, PerAddrMax: 1,
+		PerIPMax: 5, DailyCapUgnot: 1_000_000_000, GrantUgnot: 10_000_000,
+	}))
+	lim := f.Limits()
+	assert.Equal(t, int64(10_000_000), lim.GrantUgnot)
+	assert.Equal(t, 1, lim.PerAddress.Max)
+	assert.Equal(t, 86400, lim.PerAddress.WindowSeconds)
+}
+
+func TestFaucet_retryAfterSeconds_floor(t *testing.T) {
+	// default 24h window -> floored at 24h
+	f := New("test5", 1, &fakeDispenser{}, NewLimiter(LimiterCfg{
+		PerAddrWindow: 24 * time.Hour, PerAddrMax: 1, PerIPMax: 5,
+		DailyCapUgnot: 1, GrantUgnot: 1,
+	}))
+	assert.Equal(t, 86400, f.retryAfterSeconds())
+
+	// a window longer than the floor wins
+	f2 := New("test5", 1, &fakeDispenser{}, NewLimiter(LimiterCfg{
+		PerAddrWindow: 48 * time.Hour, PerAddrMax: 1, PerIPMax: 5,
+		DailyCapUgnot: 1, GrantUgnot: 1,
+	}))
+	assert.Equal(t, 172800, f2.retryAfterSeconds())
 }
