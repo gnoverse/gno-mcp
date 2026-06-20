@@ -10,7 +10,7 @@ A scenario is one markdown file under `e2e/scenarios/<tier>/`. Copy `e2e/TEMPLAT
 | category | reads, writes, connect, skill, audit, sessions, localdev, … | feature set; `--category` filters on it |
 | timeout-minutes | int | whole-scenario budget incl. debrief |
 | covers | list of feature keys | documentation only (driver never acts on it); keys are canonical in `e2e/COVERAGE.md` — update that ledger when adding/removing one |
-| image | e2e (default) \| l1-fresh \| l2-gnomcp \| l3-full | optional; Docker build target the AUT container runs (`up.sh <image>`). Non-e2e layers carry NO simnet/gnoquery/gnokey — Verify facts must be turn-log or container-state, never chain ground truth |
+| image | e2e (default) \| e2e-faucetcap \| l1-fresh \| l2-gnomcp \| l3-full | optional; Docker build target the AUT container runs (`up.sh <image>`). `e2e-faucetcap` is the e2e harness with the faucet's per-address cap tightened to 1 (a second fund of one address trips it) — same simnet/gnoquery, use it to exercise the per-address faucet limit. Non-e2e layers carry NO simnet/gnoquery/gnokey — Verify facts must be turn-log or container-state, never chain ground truth |
 
 ## Sections
 - Free text after the title = DRIVER-ONLY context (assumptions, what to watch).

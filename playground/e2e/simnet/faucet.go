@@ -24,6 +24,7 @@ type FaucetConfig struct {
 	ChainID    string
 	Listen     string // e.g. "127.0.0.1:8590"; "127.0.0.1:0" for tests
 	GrantUgnot int64
+	PerAddrMax int // grants per address per 24h; 0 -> 5 (generous default)
 }
 
 // StartFaucet starts an HTTP faucet serving POST /fund on cfg.Listen.
@@ -45,8 +46,12 @@ func StartFaucet(logger *slog.Logger, cfg FaucetConfig) (string, func(), error) 
 	cli := &gnoclient.Client{RPCClient: rpc, Signer: signer}
 	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(),
 		fmt.Sprintf("%dugnot", chain.DefaultGasFeeUgnot), chain.DefaultGasWanted)
+	perAddrMax := cfg.PerAddrMax
+	if perAddrMax == 0 {
+		perAddrMax = 5 // generous default; isolation comes from fresh containers
+	}
 	f := faucet.New(cfg.ChainID, cfg.GrantUgnot, disp, faucet.NewLimiter(faucet.LimiterCfg{
-		PerAddrMax:    5,
+		PerAddrMax:    perAddrMax,
 		PerIPMax:      100,
 		DailyCapUgnot: 1_000_000_000_000,
 		GrantUgnot:    cfg.GrantUgnot,
