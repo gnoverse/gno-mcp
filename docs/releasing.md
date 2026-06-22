@@ -24,8 +24,11 @@ and snapshot-validates the goreleaser configs.
   is the release tag alone — and needs **no** GitHub release. Its goreleaser config sets
   `release.disable`, and the workflow passes the clean version via
   `GORELEASER_CURRENT_TAG` (OSS goreleaser can't parse a version from the prefixed
-  `agentfaucet/v…` git tag). Keeping agentfaucet releases out of GitHub Releases is also
-  what keeps `/releases/latest` pointing at gnomcp, so `install.sh` is never disturbed.
+  `agentfaucet/v…` git tag). The agentfaucet run also passes `--skip=validate`: that
+  bare `v<version>` can match a same-numbered gnomcp tag on a different commit, which
+  would otherwise trip goreleaser's tag-on-HEAD check. Keeping agentfaucet releases out
+  of GitHub Releases is also what keeps `/releases/latest` pointing at gnomcp, so
+  `install.sh` is never disturbed.
 
 (The clean per-component tag-prefix convention is a goreleaser **Pro** feature; this is
 the OSS-compatible equivalent.)
