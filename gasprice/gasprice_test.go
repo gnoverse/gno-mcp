@@ -1,4 +1,4 @@
-package chain
+package gasprice
 
 import (
 	"testing"
@@ -14,9 +14,10 @@ func ugnotPrice(gas, amount int64) std.GasPrice {
 	return std.GasPrice{Gas: gas, Price: std.Coin{Denom: ugnot.Denom, Amount: amount}}
 }
 
-func TestComputeGasFee(t *testing.T) {
-	const floor = DefaultGasFeeUgnot // 10_000
-	const gasWanted = DefaultGasWanted
+func TestCompute(t *testing.T) {
+	const floor = 10_000
+	const gasWanted = 10_000_000
+	const marginNum, marginDen = 2, 1
 
 	cases := []struct {
 		name      string
@@ -26,29 +27,27 @@ func TestComputeGasFee(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			// Live test13 at 4ugnot/1000gas: min = 10M*4/1000 = 40_000, ×2 margin = 80_000.
+			// Live test13 at 4ugnot/1000gas: min = 10M*4/1000 = 40_000, ×2 = 80_000.
 			name:      "congested chain above floor",
 			price:     ugnotPrice(1000, 4),
 			gasWanted: gasWanted,
 			want:      80_000,
 		},
 		{
-			// Genesis floor 1ugnot/1000gas: min = 10_000, ×2 = 20_000 (still above the floor).
+			// Genesis floor 1ugnot/1000gas: min = 10_000, ×2 = 20_000 (above floor).
 			name:      "chain at genesis floor",
 			price:     ugnotPrice(1000, 1),
 			gasWanted: gasWanted,
 			want:      20_000,
 		},
 		{
-			// Non-exact division must round UP, else the offered fee underpays by a hair.
-			// min = ceil(10_000_000 / 3) = 3_333_334, ×2 = 6_666_668.
+			// Non-exact division must round UP: min = ceil(10M/3) = 3_333_334, ×2.
 			name:      "ceil rounding",
 			price:     ugnotPrice(3, 1),
 			gasWanted: gasWanted,
 			want:      6_666_668,
 		},
 		{
-			// A zero/empty on-chain price means the dynamic gate is inactive; fall back to the floor.
 			name:      "zero gas unit falls back to floor",
 			price:     ugnotPrice(0, 4),
 			gasWanted: gasWanted,
@@ -61,15 +60,13 @@ func TestComputeGasFee(t *testing.T) {
 			want:      floor,
 		},
 		{
-			// Margined minimum below the floor → floor wins.
 			name:      "margined min below floor clamps to floor",
 			price:     ugnotPrice(1000, 1),
 			gasWanted: 1,
 			want:      floor,
 		},
 		{
-			// An implausibly high price would overflow gasWanted*amount and wrap to
-			// a garbage positive fee; the guard must fall back to the floor instead.
+			// Implausible price would overflow gasWanted*amount; guard → floor.
 			name:      "overflowing price falls back to floor",
 			price:     ugnotPrice(1, 1_000_000_000_000),
 			gasWanted: gasWanted,
@@ -84,7 +81,7 @@ func TestComputeGasFee(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := computeGasFee(tc.price, tc.gasWanted, floor)
+			got, err := Compute(tc.price, tc.gasWanted, floor, marginNum, marginDen)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
@@ -95,18 +92,41 @@ func TestComputeGasFee(t *testing.T) {
 	}
 }
 
-// TestDecodeGasPrice_aminoJSON_roundTrip pins that auth/gasprice is amino-JSON
-// encoded (the chain marshals via amino.MarshalJSONIndent): the gas unit is a
-// string ("1000") and the price coin a string ("4ugnot"), neither of which
+// TestCompute_invalidParams rejects caller-programming errors (an operator's
+// -gas-wanted 0, or a bad margin) with an error instead of a divide-by-zero panic.
+func TestCompute_invalidParams(t *testing.T) {
+	price := ugnotPrice(1000, 4)
+	cases := []struct {
+		name                 string
+		gasWanted, floor     int64
+		marginNum, marginDen int64
+	}{
+		{"zero gasWanted", 0, 10_000, 2, 1},
+		{"negative gasWanted", -1, 10_000, 2, 1},
+		{"zero marginNum", 10_000_000, 10_000, 0, 1},
+		{"zero marginDen", 10_000_000, 10_000, 2, 0},
+		{"negative marginDen", 10_000_000, 10_000, 2, -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Compute(price, tc.gasWanted, tc.floor, tc.marginNum, tc.marginDen)
+			require.Error(t, err)
+		})
+	}
+}
+
+// TestDecode_aminoJSON_roundTrip pins that auth/gasprice is amino-JSON encoded
+// (the chain marshals via amino.MarshalJSONIndent): the gas unit is a string
+// ("1000") and the price coin a string ("4ugnot"), neither of which
 // encoding/json would parse into std.GasPrice.
-func TestDecodeGasPrice_aminoJSON_roundTrip(t *testing.T) {
+func TestDecode_aminoJSON_roundTrip(t *testing.T) {
 	original := ugnotPrice(1000, 4)
 
 	data, err := amino.MarshalJSONIndent(original, "", "  ")
 	require.NoError(t, err, "amino.MarshalJSONIndent")
 
-	got, err := decodeGasPrice(data)
-	require.NoError(t, err, "decodeGasPrice:\npayload:\n%s", data)
+	got, err := decode(data)
+	require.NoError(t, err, "decode:\npayload:\n%s", data)
 
 	assert.Equal(t, original.Gas, got.Gas)
 	assert.Equal(t, original.Price.Denom, got.Price.Denom)

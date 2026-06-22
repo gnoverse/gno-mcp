@@ -29,7 +29,7 @@ func TestAgentFaucet_helpListsFlags(t *testing.T) {
 	cmd := exec.Command("go", "run", ".", "-help")
 	cmd.Dir = srcDir()
 	out, _ := cmd.CombinedOutput() // -help exits non-zero; ignore err
-	for _, flag := range []string{"-rpc-url", "-chain-id", "-mnemonic", "-listen", "-grant", "-gas-fee", "-gas-wanted"} {
+	for _, flag := range []string{"-rpc-url", "-chain-id", "-mnemonic", "-listen", "-grant", "-gas-wanted"} {
 		assert.Contains(t, string(out), flag, "usage should list %s", flag)
 	}
 }

@@ -44,8 +44,7 @@ func StartFaucet(logger *slog.Logger, cfg FaucetConfig) (string, func(), error) 
 		return "", nil, fmt.Errorf("faucet signer info: %w", err)
 	}
 	cli := &gnoclient.Client{RPCClient: rpc, Signer: signer}
-	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(),
-		fmt.Sprintf("%dugnot", chain.DefaultGasFeeUgnot), chain.DefaultGasWanted)
+	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(), chain.DefaultGasWanted)
 	perAddrMax := cfg.PerAddrMax
 	if perAddrMax == 0 {
 		perAddrMax = 5 // generous default; isolation comes from fresh containers

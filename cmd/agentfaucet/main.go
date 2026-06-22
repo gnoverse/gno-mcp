@@ -48,9 +48,9 @@ func main() {
 	trustedProxies := flag.Int("trusted-proxies", 0, "number of trusted reverse-proxy hops for X-Forwarded-For client IP (0 = ignore XFF, use direct peer; set to the proxy count, e.g. 1 behind a single ALB)")
 	grant := flag.Int64("grant", 1_000_000_000, "ugnot amount granted per fund request")
 	// Gas is scoped to the faucet's only tx type — a bank send (~1.6M on test-13).
-	// Defaults mirror the gno faucet (1 GNOT fee, 5M wanted), far below the gnomcp
-	// write default that is sized for deploys; a faucet never deploys.
-	gasFee := flag.String("gas-fee", "1000000ugnot", "gas fee per dispense tx (e.g. 1000000ugnot)")
+	// The GasFee is not a flag: it is priced per dispense from the chain's live gas
+	// price (auth/gasprice), so the faucet adapts to congestion without overpaying.
+	// gas-wanted is the execution ceiling only, orthogonal to price.
 	gasWanted := flag.Int64("gas-wanted", 5_000_000, "gas limit per dispense tx")
 	perAddrCooldown := flag.Duration("per-addr-cooldown", 24*time.Hour, "cooldown window between grants to the same address")
 	perIPMax := flag.Int("per-ip-max", 60, "coarse anti-hammer guard: max grants per IP per per-ip-window (not a token-safety control — the faucet is typically called server-side, so all requests share one egress IP)")
@@ -76,6 +76,9 @@ func main() {
 	if !faucet.IsTestnetChainID(*chainID) {
 		fatal("chain-id is not a testnet (only test* is allowed)", "chain_id", *chainID)
 	}
+	if *gasWanted <= 0 {
+		fatal("gas-wanted must be positive", "gas_wanted", *gasWanted)
+	}
 
 	signer, err := gnoclient.SignerFromBip39(*mnemonic, *chainID, "", 0, 0)
 	if err != nil {
@@ -94,7 +97,7 @@ func main() {
 
 	cli := &gnoclient.Client{RPCClient: rpc, Signer: signer}
 
-	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(), *gasFee, *gasWanted)
+	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(), *gasWanted)
 	lim := faucet.NewLimiter(faucet.LimiterCfg{
 		PerAddrWindow:       *perAddrCooldown,
 		PerAddrMax:          1,

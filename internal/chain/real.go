@@ -431,7 +431,7 @@ const DefaultGasWanted int64 = 10_000_000
 // minGasPriceDivisor is gnomcp's assumed minGasPrice floor as gas-per-ugnot:
 // 1 ugnot per 1000 gas, the gno.land genesis default. It sets DefaultGasFeeUgnot,
 // the floor below which a write is never priced. The actual fee offered on a
-// broadcast is queried live from the chain (auth/gasprice → computeGasFee), so a
+// broadcast is queried live from the chain (auth/gasprice → gasprice.Compute), so a
 // congestion-raised price or a chain with a higher floor is handled at runtime;
 // this constant only backstops a chain that reports no gas price at all.
 const minGasPriceDivisor int64 = 1000

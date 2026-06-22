@@ -31,8 +31,7 @@ The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC`, never a flag default
 | `-metrics-addr` | *(empty — off)* | enable the Prometheus `/metrics` listener on this address (e.g. `127.0.0.1:8591`); a separate listener, so metrics stay off the public fund port. Opt-in: empty disables |
 | `-trusted-proxies` | `0` | number of trusted reverse-proxy hops for `X-Forwarded-For` client-IP extraction (`0` = ignore XFF, use the direct peer; set to the proxy count, e.g. `1` behind a single ALB) |
 | `-grant` | `1000000000` | ugnot dispensed per drip (1,000 GNOT — ugnot is micro-GNOT, 1 GNOT = 1,000,000 ugnot) |
-| `-gas-fee` | `1000000ugnot` | gas fee per dispense tx; a faucet send is cheap, so this is far below the gnomcp write default (sized for deploys) |
-| `-gas-wanted` | `5000000` | gas limit per dispense tx (a test-13 bank send burns ~1.6M) |
+| `-gas-wanted` | `5000000` | gas limit per dispense tx (a test-13 bank send burns ~1.6M). The GasFee is not a flag — it is priced per dispense from the chain's live gas price (`auth/gasprice`), so the faucet adapts to congestion without overpaying |
 | `-per-addr-cooldown` | `24h` | minimum time between grants to the same address |
 | `-per-ip-max` | `60` | max grants per IP per `-per-ip-window` |
 | `-per-ip-window` | `1h` | sliding window for the per-IP limit |

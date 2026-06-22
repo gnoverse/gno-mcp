@@ -27,7 +27,7 @@ func TestIntegration_faucetDispense(t *testing.T) {
 	cli := &gnoclient.Client{RPCClient: rpc, Signer: signer}
 	info, err := signer.Info()
 	require.NoError(t, err)
-	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(), "10000000ugnot", 10_000_000)
+	disp := faucet.NewGnoclientDispenser(cli, info.GetAddress(), 10_000_000)
 
 	// The faucet service. Its chain-id guard requires a test* id; the node is
 	// "tendermint_test" (which the guard rejects), so use "test5" as the guard

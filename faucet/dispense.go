@@ -1,6 +1,7 @@
 // Package faucet is a standalone automatic testnet faucet service. It imports
-// only the gno toolchain and stdlib — no gno-mcp internals — so it can be
-// extracted to its own repo later.
+// only the gno toolchain, stdlib, and the toolchain-only gno-mcp/gasprice helper
+// (no gno-mcp internals) — so it can be extracted to its own repo later, taking
+// gasprice with it.
 package faucet
 
 import (
@@ -15,6 +16,8 @@ import (
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 	"github.com/gnolang/gno/tm2/pkg/sdk/bank"
 	"github.com/gnolang/gno/tm2/pkg/std"
+
+	"github.com/gnoverse/gno-mcp/gasprice"
 )
 
 // Dispenser sends a ugnot grant to an address and returns the tx hash. This
@@ -24,18 +27,39 @@ type Dispenser interface {
 	Send(ctx context.Context, to string, amountUgnot int64) (txHash string, err error)
 }
 
+// Gas-fee policy for a dispense. The fee is priced from the chain's live gas
+// price (gasprice.Compute) rather than a fixed amount, so the faucet neither
+// overpays at the chain minimum nor gets rejected when the price rises.
+const (
+	// dispenseGasFeeMarginNum / dispenseGasFeeMarginDen scale the queried minimum
+	// fee for safety; the chain bills the full offered fee and the price can rise
+	// before inclusion.
+	dispenseGasFeeMarginNum int64 = 2
+	dispenseGasFeeMarginDen int64 = 1
+	// genesisGasPriceDivisor is the gno genesis min gas price as gas-per-ugnot
+	// (1 ugnot per 1000 gas); it sets the fee floor used when the chain reports no
+	// live price.
+	genesisGasPriceDivisor int64 = 1000
+)
+
 type gnoclientDispenser struct {
 	mu        sync.Mutex // serialises sends so concurrent grants don't race the account sequence
 	cli       *gnoclient.Client
 	from      crypto.Address
-	gasFee    string // e.g. "10000000ugnot"
-	gasWanted int64  // e.g. 10_000_000
+	gasWanted int64 // execution ceiling; a test-13 bank send burns ~1.6M
+	floor     int64 // ugnot fee floor at the genesis price (gasWanted / genesisGasPriceDivisor)
 }
 
 // NewGnoclientDispenser builds the production Dispenser: a bank.MsgSend sender
-// signing with the funding key behind cli, paying the given gas.
-func NewGnoclientDispenser(cli *gnoclient.Client, from crypto.Address, gasFee string, gasWanted int64) Dispenser {
-	return &gnoclientDispenser{cli: cli, from: from, gasFee: gasFee, gasWanted: gasWanted}
+// signing with the funding key behind cli. gasWanted is the execution ceiling;
+// the GasFee is priced per send from the chain's live gas price.
+func NewGnoclientDispenser(cli *gnoclient.Client, from crypto.Address, gasWanted int64) Dispenser {
+	return &gnoclientDispenser{
+		cli:       cli,
+		from:      from,
+		gasWanted: gasWanted,
+		floor:     gasWanted / genesisGasPriceDivisor,
+	}
 }
 
 // Send ignores ctx: gnoclient has no context support (same limitation as chain.Real).
@@ -49,12 +73,22 @@ func (d *gnoclientDispenser) Send(_ context.Context, to string, amountUgnot int6
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
+	price, err := gasprice.Fetch(d.cli)
+	if err != nil {
+		return "", fmt.Errorf("faucet: gas price: %w", err)
+	}
+	fee, err := gasprice.Compute(price, d.gasWanted, d.floor, dispenseGasFeeMarginNum, dispenseGasFeeMarginDen)
+	if err != nil {
+		return "", fmt.Errorf("faucet: gas price: %w", err)
+	}
+
 	msg := bank.MsgSend{
 		FromAddress: d.from,
 		ToAddress:   toAddr,
 		Amount:      std.Coins{{Denom: ugnot.Denom, Amount: amountUgnot}},
 	}
-	res, err := d.cli.Send(gnoclient.BaseTxCfg{GasFee: d.gasFee, GasWanted: d.gasWanted}, msg)
+	res, err := d.cli.Send(gnoclient.BaseTxCfg{GasFee: fmt.Sprintf("%dugnot", fee), GasWanted: d.gasWanted}, msg)
 	if err != nil {
 		return "", fmt.Errorf("faucet: send: %w", err)
 	}
