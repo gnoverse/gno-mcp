@@ -162,10 +162,10 @@ func runHandler(
 			rr, opErr = c.Run(ctx, signer, code, simulate)
 			return opErr
 		},
-		sessionOp: func(ctx context.Context, signer chain.Signer, master string) error {
+		sessionOp: func(ctx context.Context, signer chain.Signer, master string) (int64, error) {
 			var opErr error
 			rr, opErr = c.RunAsUser(ctx, signer, master, code, simulate)
-			return opErr
+			return rr.GasFeeUgnot, opErr
 		},
 		auditResult: &auditResult,
 		sessionAddr: &sessionAddr,
@@ -177,6 +177,7 @@ func runHandler(
 	gkCmd := chain.GnokeyCmd{
 		Sub: "run", RPC: profile.RPCURL, ChainID: profile.ChainID,
 		Signer: signerAddr, Master: master, Simulate: simulate,
+		GasFeeUgnot: rr.GasFeeUgnot,
 	}.String()
 	return attachGnokeyCmd(
 		decorateWriteResult(buildRunResult(rr, profileName), identity, signerAddr, master, profile.IsLocal()),

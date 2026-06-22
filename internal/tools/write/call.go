@@ -197,10 +197,10 @@ func callHandler(
 			cr, opErr = c.Call(ctx, signer, realm, fn, fnArgs, send, simulate)
 			return opErr
 		},
-		sessionOp: func(ctx context.Context, signer chain.Signer, master string) error {
+		sessionOp: func(ctx context.Context, signer chain.Signer, master string) (int64, error) {
 			var opErr error
 			cr, opErr = c.CallAsUser(ctx, signer, master, realm, fn, fnArgs, send, simulate)
-			return opErr
+			return cr.GasFeeUgnot, opErr
 		},
 		auditResult: &auditResult,
 		sessionAddr: &sessionAddr,
@@ -213,6 +213,7 @@ func callHandler(
 		Sub: "call", PkgPath: realm, Func: fn, Args: fnArgs, Send: send,
 		RPC: profile.RPCURL, ChainID: profile.ChainID,
 		Signer: signerAddr, Master: master, Simulate: simulate,
+		GasFeeUgnot: cr.GasFeeUgnot,
 	}.String()
 	return attachGnokeyCmd(
 		decorateWriteResult(buildCallResult(cr, realm), identity, signerAddr, master, profile.IsLocal()),

@@ -5,8 +5,9 @@ import (
 	"testing"
 )
 
-// The rendered command must always carry the pinned gas flags and target the
-// given chain, so a reader sees exactly the tx gnomcp put on the wire.
+// The rendered command must carry the gas flags and target the given chain, so a
+// reader sees exactly the tx gnomcp put on the wire. With no GasFeeUgnot set the
+// fee falls back to the floor.
 func TestGnokeyCommand_callBroadcast(t *testing.T) {
 	got := GnokeyCmd{
 		Sub: "call", PkgPath: "gno.land/r/demo/counter", Func: "Bump",
@@ -19,7 +20,7 @@ func TestGnokeyCommand_callBroadcast(t *testing.T) {
 		"-pkgpath gno.land/r/demo/counter",
 		"-func Bump",
 		"-args 1",
-		"-gas-fee 10000ugnot",  // the pinned floor (DefaultGasFeeUgnot)
+		"-gas-fee 10000ugnot",  // the floor fallback (DefaultGasFeeUgnot)
 		"-gas-wanted 10000000", // DefaultGasWanted
 		"-remote http://localhost:26657",
 		"-chainid dev",
@@ -31,6 +32,21 @@ func TestGnokeyCommand_callBroadcast(t *testing.T) {
 	}
 	if strings.Contains(got, "-simulate") {
 		t.Errorf("a broadcast command must not carry -simulate\ngot: %s", got)
+	}
+}
+
+// A set GasFeeUgnot is echoed verbatim, so the displayed command matches the fee
+// gnomcp actually offered (the chain's live, possibly congestion-raised price).
+func TestGnokeyCommand_usesOfferedFee(t *testing.T) {
+	got := GnokeyCmd{
+		Sub: "call", PkgPath: "gno.land/r/demo/counter", Func: "Bump",
+		RPC: "rpc", ChainID: "dev", Signer: "g1alice", GasFeeUgnot: 80_000,
+	}.String()
+	if !strings.Contains(got, "-gas-fee 80000ugnot") {
+		t.Errorf("expected the offered fee in -gas-fee\ngot: %s", got)
+	}
+	if strings.Contains(got, "-gas-fee 10000ugnot") {
+		t.Errorf("must not fall back to the floor when a fee is set\ngot: %s", got)
 	}
 }
 

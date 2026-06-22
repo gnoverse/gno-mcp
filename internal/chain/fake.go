@@ -41,6 +41,7 @@ type Fake struct {
 	lastAsUserMstr  string                    // master arg of the most recent CallAsUser/RunAsUser
 	bankSends       []SendRecord              // every bank/MsgSend via Send, in order
 	sendErr         error                     // when set, Send returns it
+	gasFee          int64                     // GasFeeUgnot result; default DefaultGasFeeUgnot (genesis floor)
 }
 
 // SendRecord captures one bank/MsgSend made through the Fake (test introspection).
@@ -72,6 +73,7 @@ func NewFake() *Fake {
 		addPkgErrs:      map[string]error{},
 		addPkgBcasts:    map[string]int{},
 		lastAddPkgFiles: map[string][]*std.MemFile{},
+		gasFee:          DefaultGasFeeUgnot,
 	}
 }
 
@@ -146,6 +148,7 @@ func (f *Fake) CallAsUser(_ context.Context, _ Signer, master, realm, fn string,
 	if simulate {
 		r.Simulated = true
 	}
+	r.GasFeeUgnot = f.withFee(r.GasFeeUgnot)
 	return r, nil
 }
 
@@ -162,6 +165,7 @@ func (f *Fake) RunAsUser(_ context.Context, _ Signer, master, code string, simul
 	if simulate {
 		r.Simulated = true
 	}
+	r.GasFeeUgnot = f.withFee(r.GasFeeUgnot)
 	return r, nil
 }
 
@@ -219,6 +223,7 @@ func (f *Fake) Call(_ context.Context, _ gnoclient.Signer, realm, fn string, arg
 	if simulate {
 		r.Simulated = true
 	}
+	r.GasFeeUgnot = f.withFee(r.GasFeeUgnot)
 	return r, nil
 }
 
@@ -231,6 +236,7 @@ func (f *Fake) Run(_ context.Context, _ gnoclient.Signer, code string, simulate 
 	if simulate {
 		r.Simulated = true
 	}
+	r.GasFeeUgnot = f.withFee(r.GasFeeUgnot)
 	return r, nil
 }
 
@@ -251,6 +257,7 @@ func (f *Fake) AddPackage(_ context.Context, _ gnoclient.Signer, deployPath stri
 	if simulate {
 		r.Simulated = true
 	}
+	r.GasFeeUgnot = f.withFee(r.GasFeeUgnot)
 	return r, nil
 }
 
@@ -310,7 +317,7 @@ func (f *Fake) Send(_ context.Context, signer gnoclient.Signer, toAddr string, a
 		}
 	}
 	f.balances[toAddr] += amountUgnot
-	return SendResult{TxHash: "0xsend", Height: 1, GasUsed: 1}, nil
+	return SendResult{TxHash: "0xsend", Height: 1, GasUsed: 1, GasFeeUgnot: f.gasFee}, nil
 }
 
 // SetSendError makes Send return err for all subsequent calls until reset (it is
@@ -360,6 +367,22 @@ func (f *Fake) Status(_ context.Context) (NodeStatus, error) {
 		return NodeStatus{}, fmt.Errorf("fake: no status seeded")
 	}
 	return f.status, nil
+}
+
+// SetGasFee overrides the GasFeeUgnot the Fake reports and stamps onto broadcast
+// results, simulating a chain whose live gas price differs from the genesis floor.
+func (f *Fake) SetGasFee(ugnot int64) { f.gasFee = ugnot }
+
+// GasFeeUgnot returns the Fake's configured fee (default DefaultGasFeeUgnot).
+func (f *Fake) GasFeeUgnot(_ context.Context) (int64, error) { return f.gasFee, nil }
+
+// withFee stamps the Fake's configured fee onto a broadcast result that left it
+// unset, so seeded results carry the offered fee that real broadcasts do.
+func (f *Fake) withFee(fee int64) int64 {
+	if fee == 0 {
+		return f.gasFee
+	}
+	return fee
 }
 
 func callKey(realm, fn string, args []string) string {
