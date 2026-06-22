@@ -184,23 +184,35 @@ func addpkgHandler(
 		fmt.Fprintln(&b, "(simulate=true — transaction was not broadcast)")
 	}
 
+	// Hand the agent the exact gnoweb URL of the deployed realm so it need not
+	// guess the host. Only on a real deploy and only when the profile has a
+	// usable gnoweb host (a local node has none).
+	var viewURL string
+	if !res.Simulated {
+		viewURL = p.RealmViewURL(deployPath)
+	}
+	if viewURL != "" {
+		fmt.Fprintf(&b, "View:    %s\n", viewURL)
+	}
+
 	gkCmd := chain.GnokeyCmd{
 		Sub: "addpkg", PkgPath: deployPath,
 		MaxDeposit: fmt.Sprintf("%dugnot", chain.DefaultMaxDepositUgnot),
 		RPC:        p.RPCURL, ChainID: p.ChainID, Signer: addr, Simulate: simulate,
 		GasFeeUgnot: res.GasFeeUgnot,
 	}.String()
-	return attachGnokeyCmd(server.Result{
-		Text: b.String(),
-		StructuredContent: map[string]any{
-			"identity":       "agent",
-			"signer_address": addr,
-			"tx_hash":        res.TxHash,
-			"height":         res.Height,
-			"gas_used":       res.GasUsed,
-			"simulated":      res.Simulated,
-		},
-	}, gkCmd), nil
+	sc := map[string]any{
+		"identity":       "agent",
+		"signer_address": addr,
+		"tx_hash":        res.TxHash,
+		"height":         res.Height,
+		"gas_used":       res.GasUsed,
+		"simulated":      res.Simulated,
+	}
+	if viewURL != "" {
+		sc["gnoweb_url"] = viewURL
+	}
+	return attachGnokeyCmd(server.Result{Text: b.String(), StructuredContent: sc}, gkCmd), nil
 }
 
 // toMemFiles converts the raw JSON-decoded "files" arg into []*std.MemFile.

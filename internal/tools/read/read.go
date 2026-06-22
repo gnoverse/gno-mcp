@@ -86,7 +86,7 @@ func readHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 
 		gnowebURL := ""
 		if p, ok := s.Config().Profiles[profile]; ok {
-			gnowebURL = gnowebURLFor(p.RPCURL, path, "")
+			gnowebURL = gnowebURLFor(p, path, "")
 		}
 
 		switch {

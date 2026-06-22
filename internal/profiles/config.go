@@ -5,6 +5,9 @@ package profiles
 import (
 	"fmt"
 	"io"
+	"net"
+	"net/url"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -46,6 +49,46 @@ func (p Profile) IsTestnet() bool { return ChainIDWritable(p.ChainID) && !p.IsLo
 // Read-only profiles are readable via the read tools but excluded from every
 // write tool's profile enum.
 func (p Profile) IsReadOnly() bool { return !ChainIDWritable(p.ChainID) }
+
+// RealmViewURL returns the gnoweb URL where pkgPath is viewable, or "" when this
+// profile has no usable gnoweb host (e.g. a local node). It prefers the
+// configured GnowebURL and otherwise derives the host from RPCURL by dropping
+// the "rpc." prefix and the :443 port. gnoweb serves realm "gno.land/r/x" at
+// "/r/x", so the "gno.land/" path prefix is dropped.
+func (p Profile) RealmViewURL(pkgPath string) string {
+	base := p.gnowebBase()
+	if base == "" {
+		return ""
+	}
+	return base + "/" + strings.TrimPrefix(pkgPath, "gno.land/")
+}
+
+// gnowebBase returns the base gnoweb URL for this profile (no trailing slash):
+// the configured GnowebURL when set, otherwise the RPC host with the "rpc."
+// prefix and the :443 port stripped. Returns "" when neither yields a public
+// http host (a local node has no gnoweb to point at).
+func (p Profile) gnowebBase() string {
+	if p.GnowebURL != "" {
+		return strings.TrimSuffix(p.GnowebURL, "/")
+	}
+	base := strings.Replace(p.RPCURL, "://rpc.", "://", 1)
+	base = strings.TrimSuffix(base, ":443")
+	u, err := url.Parse(base)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || !isPublicHost(u.Hostname()) {
+		return ""
+	}
+	return strings.TrimSuffix(base, "/")
+}
+
+// isPublicHost reports whether host is a routable public gnoweb host: not a
+// loopback/unspecified/private/link-local IP, and not a bare dotless name
+// (localhost, a container alias) that has no public gnoweb to point at.
+func isPublicHost(host string) bool {
+	if ip := net.ParseIP(host); ip != nil {
+		return !ip.IsLoopback() && !ip.IsUnspecified() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast()
+	}
+	return strings.Contains(host, ".")
+}
 
 // Kind returns "local", "testnet", or "read-only" for display (signed-by lines,
 // clamp warnings, startup instructions).

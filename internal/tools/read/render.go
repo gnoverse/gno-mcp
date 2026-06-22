@@ -57,7 +57,7 @@ func renderHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 		}
 		gnowebURL := ""
 		if p, ok := s.Config().Profiles[profile]; ok {
-			gnowebURL = gnowebURLFor(p.RPCURL, realm, path)
+			gnowebURL = gnowebURLFor(p, realm, path)
 		}
 		source := realm
 		if path != "" {

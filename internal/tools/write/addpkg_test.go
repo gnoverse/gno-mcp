@@ -15,6 +15,7 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/audit"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/keystore"
+	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
@@ -241,6 +242,73 @@ func TestAddPkg_agentTestnet_funded(t *testing.T) {
 	})
 	require.NoError(t, pkgErr, "expected success for funded account")
 	assert.Contains(t, res.Text, "0xaddpkg")
+}
+
+// A successful deploy must hand the agent the exact gnoweb URL where the new
+// realm is viewable, derived from the profile — the agent should never have to
+// guess the host.
+func TestAddPkg_surfacesGnowebURL(t *testing.T) {
+	webProfile := profiles.Profile{
+		RPCURL:    "http://127.0.0.1:26657",
+		ChainID:   "test9999",
+		GnowebURL: "https://test9999.gno.land",
+	}
+	s := newTestnetServerFromProfiles(t, map[string]profiles.Profile{"testnet9999": webProfile})
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "", 5)
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", webProfile)
+	require.NoError(t, err, "GenerateForProfile")
+
+	fake := chain.NewFake()
+	fake.SetBalance(agentAddr, 10_000_000)
+	fake.SetAddPackage("gno.land/r/test/foo", chain.AddPackageResult{
+		TxHash: "0xaddpkg", Height: 4, GasUsed: 8000,
+	})
+	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
+
+	res, pkgErr := s.Registry().Call(context.Background(), "gno_addpkg", map[string]any{
+		"profile":     "testnet9999",
+		"deploy_path": "gno.land/r/test/foo",
+		"files":       []any{map[string]any{"name": "foo.gno", "body": "package foo\n"}},
+	})
+	require.NoError(t, pkgErr)
+
+	const want = "https://test9999.gno.land/r/test/foo"
+	assert.Contains(t, res.Text, want, "deploy result must show the realm's gnoweb URL")
+	assert.Equal(t, want, res.StructuredContent["gnoweb_url"], "structured content must carry the gnoweb URL")
+}
+
+// A simulate run deploys nothing, so it must not advertise a view URL.
+func TestAddPkg_simulateOmitsGnowebURL(t *testing.T) {
+	webProfile := profiles.Profile{
+		RPCURL:    "http://127.0.0.1:26657",
+		ChainID:   "test9999",
+		GnowebURL: "https://test9999.gno.land",
+	}
+	s := newTestnetServerFromProfiles(t, map[string]profiles.Profile{"testnet9999": webProfile})
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "", 5)
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", webProfile)
+	require.NoError(t, err, "GenerateForProfile")
+
+	fake := chain.NewFake()
+	fake.SetBalance(agentAddr, 10_000_000)
+	fake.SetAddPackage("gno.land/r/test/foo", chain.AddPackageResult{Simulated: true})
+	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
+
+	res, pkgErr := s.Registry().Call(context.Background(), "gno_addpkg", map[string]any{
+		"profile":     "testnet9999",
+		"deploy_path": "gno.land/r/test/foo",
+		"files":       []any{map[string]any{"name": "foo.gno", "body": "package foo\n"}},
+		"simulate":    true,
+	})
+	require.NoError(t, pkgErr)
+	assert.NotContains(t, res.Text, "test9999.gno.land/r/test/foo", "simulate must not advertise a view URL")
+	assert.Nil(t, res.StructuredContent["gnoweb_url"], "simulate must not carry a gnoweb URL")
 }
 
 // assertHasGnomod fails t if no file named "gnomod.toml" is in files.

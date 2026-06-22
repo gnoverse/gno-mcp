@@ -109,6 +109,70 @@ func TestProfile_LocalityDerivedFromChainID(t *testing.T) {
 	assert.Equal(t, "testnet", tn.Kind())
 }
 
+func TestProfile_RealmViewURL(t *testing.T) {
+	const pkg = "gno.land/r/g1abc/tictactoe"
+	tests := []struct {
+		name    string
+		profile Profile
+		pkgPath string
+		want    string
+	}{
+		{
+			name:    "configured gnoweb-url",
+			profile: Profile{GnowebURL: "https://test13.testnets.gno.land", RPCURL: "https://rpc.test13.testnets.gno.land:443"},
+			pkgPath: pkg,
+			want:    "https://test13.testnets.gno.land/r/g1abc/tictactoe",
+		},
+		{
+			name:    "configured gnoweb-url wins over rpc derivation",
+			profile: Profile{GnowebURL: "https://gnoweb.example.com", RPCURL: "https://rpc.test13.testnets.gno.land:443"},
+			pkgPath: pkg,
+			want:    "https://gnoweb.example.com/r/g1abc/tictactoe",
+		},
+		{
+			name:    "configured gnoweb-url trailing slash trimmed",
+			profile: Profile{GnowebURL: "https://test13.testnets.gno.land/"},
+			pkgPath: pkg,
+			want:    "https://test13.testnets.gno.land/r/g1abc/tictactoe",
+		},
+		{
+			name:    "derived from rpc when gnoweb-url unset",
+			profile: Profile{RPCURL: "https://rpc.test13.testnets.gno.land:443"},
+			pkgPath: pkg,
+			want:    "https://test13.testnets.gno.land/r/g1abc/tictactoe",
+		},
+		{
+			name:    "local node not derivable",
+			profile: Profile{RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
+			pkgPath: pkg,
+			want:    "",
+		},
+		{
+			name:    "no gnoweb-url and no derivable rpc",
+			profile: Profile{RPCURL: "http://localhost:26657"},
+			pkgPath: pkg,
+			want:    "",
+		},
+		{
+			name:    "unspecified host not derivable",
+			profile: Profile{RPCURL: "http://0.0.0.0:26657"},
+			pkgPath: pkg,
+			want:    "",
+		},
+		{
+			name:    "private host not derivable",
+			profile: Profile{RPCURL: "http://192.168.1.10:26657"},
+			pkgPath: pkg,
+			want:    "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.profile.RealmViewURL(tt.pkgPath))
+		})
+	}
+}
+
 func TestLoad_rejectsChainTypeKey(t *testing.T) {
 	src := `
 [local]
