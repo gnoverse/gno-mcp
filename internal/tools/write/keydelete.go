@@ -154,7 +154,9 @@ func sweepBeforeDelete(ctx context.Context, ks *keystore.Keystore, c chain.Clien
 	}
 	// Reserve the chain's live gas fee, not the pinned floor: the sweep tx pays
 	// the current price, so leaving only the floor behind would underfund it on a
-	// congested chain and strand the difference.
+	// congested chain and strand the difference. Send re-queries the price, so a
+	// rise between this reserve and the broadcast surfaces as a send error (key NOT
+	// deleted, retryable) rather than silent underfunding.
 	fee, err := c.GasFeeUgnot(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("gno_key_delete: query gas fee: %w", err)

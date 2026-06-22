@@ -27,7 +27,7 @@ func TestCompute(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			// Live test13 at 4ugnot/1000gas: min = 10M*4/1000 = 40_000, ×2 = 80_000.
+			// A congested chain at 4ugnot/1000gas (4× the genesis floor): min = 10M*4/1000 = 40_000, ×2 = 80_000.
 			name:      "congested chain above floor",
 			price:     ugnotPrice(1000, 4),
 			gasWanted: gasWanted,
