@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,6 +54,78 @@ func TestServer_fund(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 400, resp4.StatusCode)
 	resp4.Body.Close()
+}
+
+func TestServer_limits(t *testing.T) {
+	f := New("test5", 10_000_000, &fakeDispenser{}, NewLimiter(LimiterCfg{
+		PerAddrWindow: 24 * time.Hour, PerAddrMax: 1,
+		PerIPMax: 5, DailyCapUgnot: 1_000_000_000, GrantUgnot: 10_000_000,
+	}))
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/limits")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var got FaucetLimits
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Equal(t, int64(10_000_000), got.GrantUgnot)
+	assert.Equal(t, 1, got.PerAddress.Max)
+	assert.Equal(t, 86400, got.PerAddress.WindowSeconds)
+}
+
+func TestServer_fund429_perAddressNamed(t *testing.T) {
+	f := New("test5", 1_000_000, &fakeDispenser{}, NewLimiter(LimiterCfg{
+		PerAddrWindow: 24 * time.Hour, PerAddrMax: 1,
+		PerIPMax: 10, DailyCapUgnot: 1_000_000_000, GrantUgnot: 1_000_000,
+	}))
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+
+	body := `{"address":"` + validAddr + `","chain_id":"test5"}`
+	require.Equal(t, http.StatusOK, postFund(t, srv.URL, body))
+
+	// second request, same address -> per-address cooldown
+	resp, err := http.Post(srv.URL+"/fund", "application/json", strings.NewReader(body))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	assert.Equal(t, "86400", resp.Header.Get("Retry-After"))
+
+	var rl rateLimitResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&rl))
+	assert.Equal(t, "per_address", rl.Limit)
+	assert.Equal(t, 86400, rl.RetryAfterSeconds)
+}
+
+func TestServer_fund429_genericNotNamed(t *testing.T) {
+	// DailyCap = exactly one grant, per-address/per-IP set high. The same address
+	// can repeat (no cooldown) but the 2nd grant hits the daily cap — a limit that
+	// must stay generic (no limit field), proving only per-address is ever named.
+	f := New("test5", 1_000_000, &fakeDispenser{}, NewLimiter(LimiterCfg{
+		PerAddrWindow: 24 * time.Hour, PerAddrMax: 100,
+		PerIPWindow: time.Hour, PerIPMax: 100,
+		DailyCapUgnot: 1_000_000, GrantUgnot: 1_000_000,
+	}))
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+
+	body := `{"address":"` + validAddr + `","chain_id":"test5"}`
+	require.Equal(t, http.StatusOK, postFund(t, srv.URL, body))
+
+	// same address again -> daily cap reached -> generic 429 (no limit field)
+	resp, err := http.Post(srv.URL+"/fund", "application/json", strings.NewReader(body))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	assert.Equal(t, "86400", resp.Header.Get("Retry-After"))
+
+	var rl rateLimitResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&rl))
+	assert.Empty(t, rl.Limit, "non-per-address limits must stay generic")
+	assert.Equal(t, 86400, rl.RetryAfterSeconds)
 }
 
 func TestServer_health(t *testing.T) {

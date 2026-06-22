@@ -146,6 +146,38 @@ func TestKeyDelete_sweepToRecoversFundsThenDeletes(t *testing.T) {
 	assert.Equal(t, "main", keys[0].Name)
 }
 
+// TestKeyDelete_sweepReservesQueriedFee proves the sweep leaves behind the
+// chain's live gas fee, not the pinned floor: on a congested chain whose fee is
+// above DefaultGasFeeUgnot, reserving only the floor would underfund the sweep
+// tx and strand the difference.
+func TestKeyDelete_sweepReservesQueriedFee(t *testing.T) {
+	s := newTestnetTestServer(t)
+	ks := keystore.New(t.TempDir(), "", 5)
+	main, err := ks.GenerateForProfile("testnet9999", "main", testnet9999Profile())
+	require.NoError(t, err)
+	bob, err := ks.GenerateForProfile("testnet9999", "bob", testnet9999Profile())
+	require.NoError(t, err)
+
+	fake := chain.NewFake()
+	const balance = 985_000_000
+	const liveFee = 80_000 // 8× the floor — a congested chain
+	fake.SetBalance(bob, balance)
+	fake.SetGasFee(liveFee)
+	RegisterKeyDelete(s, ks, constChainResolver(fake))
+
+	res, callErr := s.Registry().Call(context.Background(), "gno_key_delete", map[string]any{
+		"profile":  "testnet9999",
+		"key":      "bob",
+		"sweep_to": "main",
+	})
+	require.NoError(t, callErr)
+
+	wantSwept := int64(balance - liveFee)
+	assert.Equal(t, wantSwept, res.StructuredContent["swept_ugnot"], "sweep must reserve the queried fee, not the floor")
+	mainBal, _ := fake.Balance(context.Background(), main)
+	assert.Equal(t, wantSwept, mainBal, "main received balance minus the live fee")
+}
+
 func TestKeyDelete_sweepSendFailurePreservesKey(t *testing.T) {
 	s := newTestnetTestServer(t)
 	ks := keystore.New(t.TempDir(), "", 5)

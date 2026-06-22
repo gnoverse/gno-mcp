@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/gnoverse/gno-mcp/internal/profiles"
 )
 
 func TestServiceFaucet_Fund(t *testing.T) {
@@ -69,6 +70,51 @@ func TestServiceFaucet_errorBodyLabeledUntrusted(t *testing.T) {
 		"the embedded faucet body must be labeled as untrusted")
 }
 
+func TestFetchServiceLimits(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /limits", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"grant_ugnot": 10_000_000,
+			"per_address": map[string]any{"max": 1, "window_seconds": 86400},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	lim, err := FetchServiceLimits(context.Background(),
+		profiles.Profile{FaucetServiceURL: srv.URL}, srv.Client())
+	require.NoError(t, err)
+	require.NotNil(t, lim)
+	assert.Equal(t, int64(10_000_000), lim.GrantUgnot)
+	assert.Equal(t, 1, lim.PerAddress.Max)
+	assert.Equal(t, 86400, lim.PerAddress.WindowSeconds)
+}
+
+func TestFetchServiceLimits_noServiceURL(t *testing.T) {
+	lim, err := FetchServiceLimits(context.Background(), profiles.Profile{}, http.DefaultClient)
+	require.NoError(t, err)
+	assert.Nil(t, lim, "no service faucet -> nothing to report, not an error")
+}
+
+// A faucet that does not implement /limits (an older deploy, or a third-party
+// faucet) answers 404/405. That is "no policy advertised", not a failure — the
+// caller (gno_status) then simply omits the faucet block rather than reporting
+// a faucet_error.
+func TestFetchServiceLimits_notImplemented(t *testing.T) {
+	for _, code := range []int{http.StatusNotFound, http.StatusMethodNotAllowed} {
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /limits", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(code)
+		})
+		srv := httptest.NewServer(mux)
+		lim, err := FetchServiceLimits(context.Background(),
+			profiles.Profile{FaucetServiceURL: srv.URL}, srv.Client())
+		srv.Close()
+		require.NoError(t, err, "a faucet without /limits is not an error (status %d)", code)
+		assert.Nil(t, lim, "no limits advertised -> no block (status %d)", code)
+	}
+}
+
 func TestServiceFaucet_rateLimited(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /fund", func(w http.ResponseWriter, r *http.Request) {
@@ -80,4 +126,43 @@ func TestServiceFaucet_rateLimited(t *testing.T) {
 	sf := &ServiceFaucet{url: srv.URL, http: srv.Client(), chain: chain.NewFake()}
 	_, err := sf.Fund(context.Background(), "g1abc", "test5")
 	require.Error(t, err) // transient; the tool surfaces "faucet busy"
+}
+
+func TestServiceFaucet_Fund_perAddress429(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /fund", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": "rate limited", "limit": "per_address", "retry_after_seconds": 86400,
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	sf := &ServiceFaucet{url: srv.URL, http: srv.Client(), chain: chain.NewFake()}
+	_, err := sf.Fund(context.Background(), "g1abc", "test5")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "per-address")
+	assert.Contains(t, err.Error(), "gno_key_generate", "must name the fresh-key recovery")
+	assert.Contains(t, err.Error(), "24h")
+}
+
+func TestServiceFaucet_Fund_generic429(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /fund", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": "rate limited", "retry_after_seconds": 86400,
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	sf := &ServiceFaucet{url: srv.URL, http: srv.Client(), chain: chain.NewFake()}
+	_, err := sf.Fund(context.Background(), "g1abc", "test5")
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "per-address", "a non-address limit must stay generic")
+	assert.Contains(t, err.Error(), "24h")
 }

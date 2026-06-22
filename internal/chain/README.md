@@ -167,9 +167,15 @@ Verified from `tm2/pkg/crypto/globals.go` (defaults set by `setBech32Defaults`):
 `crypto.PubKeyToBech32(pub)` and `crypto.PubKeyFromBech32(str)` are the
 canonical encode/decode functions (amino-marshals the pubkey bytes).
 
-## GasFee / GasWanted defaults
+## GasFee / GasWanted
 
-Recommended placeholders (calibrate via e2e):
+Two independent axes (see `gasfee.go` + `real.go`):
 
-- `GasFee`: `"1ugnot"`
-- `GasWanted`: `5_000_000`
+- **`GasWanted`** = `DefaultGasWanted` (10M), the execution limit; must exceed the
+  heaviest tx's gas use (AddPackage ~5M).
+- **`GasFee`** is queried per broadcast from `auth/gasprice` (the chain's live,
+  congestion-adjusted minimum gas price), scaled by a ×2 safety margin and
+  floored at `DefaultGasFeeUgnot` (the genesis 1ugnot/1000gas floor → 10K ugnot).
+  The chain bills the full offered fee, not gas used, so the offered value is
+  carried back on each result (`GasFeeUgnot`) and drives session spend tracking
+  and the key-sweep reserve. Simulations skip the query and use the floor.

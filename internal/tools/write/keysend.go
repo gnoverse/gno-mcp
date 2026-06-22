@@ -148,6 +148,7 @@ func keySendHandler(ctx context.Context, args map[string]any, s *server.Server, 
 	gkCmd := chain.GnokeyCmd{
 		Sub: "send", To: toAddr, Send: fmt.Sprintf("%dugnot", amount),
 		RPC: profile.RPCURL, ChainID: profile.ChainID, Signer: fromAddr,
+		GasFeeUgnot: res.GasFeeUgnot,
 	}.String()
 	return attachGnokeyCmd(server.Result{
 		Text: fmt.Sprintf("Sent %d ugnot from %s to %s (tx %s).", amount, fromAddr, toAddr, res.TxHash),

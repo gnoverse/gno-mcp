@@ -23,6 +23,7 @@ listed).
 | read.packages | gno_packages namespace listing (vm/qpaths) | 04 | covered |
 | read.account | gno_account balance/sequence/exists:false-is-normal | 04 | covered (watch in 02 funding flow) |
 | read.status | gno_status declared vs live chain, tip freshness | 04 | covered |
+| read.faucet-limits | gno_status surfaces the faucet's per-address policy (grant size + per-address cap) for a profile with a faucet service | 10 | covered |
 | read.connect-preview | gno_connect preview without adding a profile | 04 | covered |
 | read.error-quality | nonexistent realm → clean error, no hallucination | 04 | covered |
 
@@ -42,6 +43,7 @@ listed).
 | write.key-address | gno_key_address | 02 | covered (alt path) |
 | write.faucet-fund | gno_faucet_fund tier-2 automatic funding | 02 | covered |
 | write.funds-recovery | insufficient_funds error → faucet → retry, unprompted | 02 | covered |
+| write.faucet-per-address-recovery | per-address faucet 429 → agent reads it as per-address (fresh key recovers), not a global outage | 10, 11 | covered (e2e-faucetcap image: per-address cap = 1; 10 primes via discovery, 11 is the cold/no-priming variant) |
 | write.call | gno_call broadcast | 02 | covered |
 | write.simulate | gas estimate without broadcast | 02 | covered |
 | write.addpkg | gno_addpkg deploy | 02 | covered |

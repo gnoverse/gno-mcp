@@ -128,3 +128,13 @@ COPY --chown=dev:dev playground/e2e/simnet/realms /opt/e2e/cla-realms
 ENV SIMNET_CLA_ARGS="-cla-dir /opt/e2e/cla-realms/gno.land/r/sys/cla -cla-hash e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 ENV SIMNET_GRANT=10000000
 ENV PLAYGROUND_LAYER=sim-cla
+
+# ---- E2E-FAUCETCAP: e2e harness with the faucet's per-address cap tightened to 1
+# (RUN TARGET: e2e-faucetcap, via the playground-driver `image:` selector). The e2e
+# stage runs `simnet` via CMD, so this stage only overrides CMD to pass
+# -faucet-per-addr 1 — a single re-fund of one address then trips the per-address
+# cap, exercising the structured 429 + the agent's fresh-key recovery (faucet-limits
+# scenario). Everything else (node, gnoweb, profiles, gnoquery) is the e2e image.
+FROM e2e AS e2e-faucetcap
+ENV PLAYGROUND_LAYER=e2e-faucetcap
+CMD ["simnet", "-faucet-per-addr", "1"]

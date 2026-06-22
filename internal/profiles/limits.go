@@ -14,11 +14,12 @@ type HardLimits struct {
 }
 
 const (
-	// hardDefaultSpendLimit must comfortably exceed the per-call gas-fee
-	// reservation (the chain's session ante reserves the full tx GasFee, 10M
-	// ugnot here, against the spend-limit before execution — see auth.ante
-	// Phase 2a). At 100M a default session covers ~10 calls. Only dev/test
-	// chains are allowed, so the spend-limit guards testnet funds only.
+	// hardDefaultSpendLimit must comfortably exceed the per-call cost the session
+	// ante charges against the spend-limit before execution: the tx GasFee (the
+	// chain's live gas price, floored at chain.DefaultGasFeeUgnot ~10K ugnot) plus
+	// any coins the call sends — see auth.ante Phase 2a/2b. At 100M a default
+	// session covers many fee-only calls with ample headroom for sends. Only
+	// dev/test chains are allowed, so the spend-limit guards testnet funds only.
 	hardDefaultSpendLimit = "100000000ugnot"
 	hardDefaultExpiresIn  = time.Hour
 )

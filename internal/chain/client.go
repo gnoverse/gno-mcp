@@ -36,36 +36,42 @@ var ErrSimulateUnsupported = errors.New("chain: simulate not supported by curren
 var ErrSessionQueryUnsupported = errors.New("chain: session query not supported")
 
 // CallResult is the outcome of a vm/MsgCall broadcast (or simulation).
+// GasFeeUgnot is the ugnot GasFee offered on the tx (the chain bills the full
+// offered fee, not GasUsed); the floor for simulations, which pay no fee.
 type CallResult struct {
-	TxHash    string
-	Height    int64
-	Result    string
-	GasUsed   int64
-	Simulated bool
+	TxHash      string
+	Height      int64
+	Result      string
+	GasUsed     int64
+	GasFeeUgnot int64
+	Simulated   bool
 }
 
 // RunResult is the outcome of a vm/MsgRun broadcast (or simulation).
 type RunResult struct {
-	TxHash    string
-	Height    int64
-	Output    string
-	GasUsed   int64
-	Simulated bool
+	TxHash      string
+	Height      int64
+	Output      string
+	GasUsed     int64
+	GasFeeUgnot int64
+	Simulated   bool
 }
 
 // AddPackageResult is the outcome of a vm/MsgAddPackage broadcast (or simulation).
 type AddPackageResult struct {
-	TxHash    string
-	Height    int64
-	GasUsed   int64
-	Simulated bool
+	TxHash      string
+	Height      int64
+	GasUsed     int64
+	GasFeeUgnot int64
+	Simulated   bool
 }
 
 // SendResult is the outcome of a bank/MsgSend broadcast.
 type SendResult struct {
-	TxHash  string
-	Height  int64
-	GasUsed int64
+	TxHash      string
+	Height      int64
+	GasUsed     int64
+	GasFeeUgnot int64
 }
 
 // NodeStatus is the node-reported chain identity and sync tip.
@@ -180,6 +186,12 @@ type Client interface {
 	// Status returns the node-reported chain-id and latest block height/time.
 	// Backed by the RPC /status endpoint.
 	Status(ctx context.Context) (NodeStatus, error)
+
+	// GasFeeUgnot returns the ugnot GasFee gnomcp would offer on a write against
+	// this chain right now — the chain's live minimum gas price scaled for a
+	// DefaultGasWanted-sized tx. Callers that must reserve the fee before a send
+	// (e.g. sweeping a key's full balance) use it to leave exactly enough behind.
+	GasFeeUgnot(ctx context.Context) (int64, error)
 }
 
 // Resolver returns the Client to use for a given profile name.

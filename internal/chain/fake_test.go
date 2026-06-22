@@ -83,11 +83,12 @@ func (fakeSignerStub) Sign(_ []byte) ([]byte, error) { return nil, nil }
 
 func TestFake_Call_returnsSeededResult(t *testing.T) {
 	f := NewFake()
-	want := CallResult{TxHash: "0xabc", Result: "ok"}
-	f.SetCallAsUser("gno.land/r/x", "Foo", []string{"hi"}, want)
+	f.SetCallAsUser("gno.land/r/x", "Foo", []string{"hi"}, CallResult{TxHash: "0xabc", Result: "ok"})
 
 	got, err := f.CallAsUser(context.Background(), fakeSignerStub{}, "", "gno.land/r/x", "Foo", []string{"hi"}, "", false)
 	require.NoError(t, err, "CallAsUser")
+	// A broadcast result carries the offered fee (the Fake's configured gas fee).
+	want := CallResult{TxHash: "0xabc", Result: "ok", GasFeeUgnot: DefaultGasFeeUgnot}
 	assert.Equal(t, want, got)
 }
 
@@ -122,11 +123,12 @@ func TestFake_Call_setCallErrorTakesPriority(t *testing.T) {
 
 func TestFake_Run_returnsSeededResult(t *testing.T) {
 	f := NewFake()
-	want := RunResult{TxHash: "0xdef", Output: "hello"}
-	f.SetRunAsUser("package main\nfunc main() {}", want)
+	f.SetRunAsUser("package main\nfunc main() {}", RunResult{TxHash: "0xdef", Output: "hello"})
 
 	got, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", false)
 	require.NoError(t, err, "RunAsUser")
+	// A broadcast result carries the offered fee (the Fake's configured gas fee).
+	want := RunResult{TxHash: "0xdef", Output: "hello", GasFeeUgnot: DefaultGasFeeUgnot}
 	assert.Equal(t, want, got)
 }
 

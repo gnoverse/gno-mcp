@@ -38,10 +38,11 @@ func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, 
 	return sb.String()
 }
 
-// Defaults baked into the emitted gnokey commands so the user can paste and run
-// without hunting for flag values. Sourced from chain.Real's BaseTxCfg constants
-// so gnokey broadcasts behave the same as gnomcp's session-signed ones — drift
-// here would desync session spend accounting.
+// Defaults baked into the emitted session create/revoke gnokey commands so the
+// user can paste and run without hunting for flag values. These master-signed,
+// infrequent admin txs use the gas-fee floor; on a congested chain the user
+// bumps --gas-fee from gnokey's insufficient-fee error. (gnomcp's own write
+// broadcasts query the chain's live gas price — see chain.currentGasFee.)
 var (
 	defaultGnokeyGasFee    = fmt.Sprintf("%dugnot", chain.DefaultGasFeeUgnot)
 	defaultGnokeyGasWanted = chain.DefaultGasWanted

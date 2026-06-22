@@ -152,14 +152,23 @@ func sweepBeforeDelete(ctx context.Context, ks *keystore.Keystore, c chain.Clien
 		}
 		return 0, fmt.Errorf("gno_key_delete: resolve sweep_to %q: %w", sweepToKey, err)
 	}
-	if bal <= chain.DefaultGasFeeUgnot {
+	// Reserve the chain's live gas fee, not the pinned floor: the sweep tx pays
+	// the current price, so leaving only the floor behind would underfund it on a
+	// congested chain and strand the difference. Send re-queries the price, so a
+	// rise between this reserve and the broadcast surfaces as a send error (key NOT
+	// deleted, retryable) rather than silent underfunding.
+	fee, err := c.GasFeeUgnot(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("gno_key_delete: query gas fee: %w", err)
+	}
+	if bal <= fee {
 		return 0, nil // sub-gas dust: nothing the transfer can cover
 	}
 	signer, err := ks.SignerForProfile(profileName, keyName, p)
 	if err != nil {
 		return 0, fmt.Errorf("gno_key_delete: signer for %q: %w", keyName, err)
 	}
-	amount := bal - chain.DefaultGasFeeUgnot
+	amount := bal - fee
 	if _, err := c.Send(ctx, signer, toAddr, amount); err != nil {
 		return 0, fmt.Errorf("gno_key_delete: sweep to %q failed (key NOT deleted): %w", sweepToKey, err)
 	}

@@ -3,10 +3,12 @@ package read
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/gnoverse/gno-mcp/internal/budget"
 	"github.com/gnoverse/gno-mcp/internal/chain"
+	"github.com/gnoverse/gno-mcp/internal/clientfaucet"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
@@ -17,7 +19,7 @@ import (
 // profile: declared config (chain-id, RPC URL) plus the node's live tip. A
 // node that reports a different chain-id than the profile declares is flagged
 // as a mismatch — the same trust check gno_profile_add applies at add time.
-func RegisterStatus(s *server.Server, resolve chain.Resolver) {
+func RegisterStatus(s *server.Server, resolve chain.Resolver, httpClient *http.Client) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_status",
 		Description: "Reports connection status for a chain profile: declared chain-id and RPC URL from config, " +
@@ -31,11 +33,11 @@ func RegisterStatus(s *server.Server, resolve chain.Resolver) {
 		OutputKind:  server.OutputText,
 		Capability:  server.CapBaseRead,
 		Annotations: server.Annotations{ReadOnly: true, Idempotent: true, OpenWorld: true},
-		Handler:     statusHandler(s, resolve),
+		Handler:     statusHandler(s, resolve, httpClient),
 	})
 }
 
-func statusHandler(s *server.Server, resolve chain.Resolver) server.Handler {
+func statusHandler(s *server.Server, resolve chain.Resolver, httpClient *http.Client) server.Handler {
 	return func(ctx context.Context, args map[string]any) (server.Result, error) {
 		profile, err := server.StringArg(args, "profile")
 		if err != nil {
@@ -77,6 +79,28 @@ func statusHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 			if st.ChainID != p.ChainID {
 				text += fmt.Sprintf(" WARNING: chain-id mismatch — node reports %q but profile declares %q.", st.ChainID, p.ChainID)
 			}
+		}
+
+		// Best-effort: surface the faucet's per-address policy so an agent is
+		// oriented before it ever hits the per-address cap. A dead or absent
+		// faucet is a finding (faucet_error), never a tool failure — same
+		// posture as the node-status block above. A short timeout keeps a
+		// routable-but-silent faucet from stalling status.
+		fctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if lim, ferr := clientfaucet.FetchServiceLimits(fctx, p, httpClient); ferr != nil {
+			structured["faucet_error"] = ferr.Error()
+			text += fmt.Sprintf(" Faucet limits query FAILED: %v.", ferr)
+		} else if lim != nil {
+			structured["faucet"] = map[string]any{
+				"grant_ugnot": lim.GrantUgnot,
+				"per_address": map[string]any{
+					"max":            lim.PerAddress.Max,
+					"window_seconds": lim.PerAddress.WindowSeconds,
+				},
+			}
+			text += fmt.Sprintf(" Faucet: %g GNOT per grant, max %d per address per %gh.",
+				float64(lim.GrantUgnot)/1e6, lim.PerAddress.Max, float64(lim.PerAddress.WindowSeconds)/3600)
 		}
 
 		wrapped, _ := budget.Wrapped(text, "", "status", profile)

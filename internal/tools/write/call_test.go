@@ -439,6 +439,42 @@ func TestCall_updatesSessionSpend(t *testing.T) {
 	assert.Equal(t, wantRemaining, meta.SpendRemaining, "deduct GasFee, not GasUsed")
 }
 
+// TestCall_sessionSpendUsesQueriedFee proves the session spend deduction tracks
+// the fee the tx actually offered (the chain's live price), not the pinned floor:
+// on a congested chain the local SpendRemaining must still match the chain.
+func TestCall_sessionSpendUsesQueriedFee(t *testing.T) {
+	s := newBaseTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+
+	fake := chain.NewFake()
+	const liveFee = 80_000 // 8× the floor
+	fake.SetGasFee(liveFee)
+	fake.SetCallAsUser("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{
+		TxHash: "0xdef", GasUsed: 3000, Result: "ok",
+	})
+
+	var sessionAddr string
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "100000000ugnot")
+	})
+
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"identity": "session",
+	})
+	require.NoError(t, err, "Call")
+
+	meta := mgr.Get("testnet5", sessionAddr)
+	require.NotNil(t, meta, "session not found after call")
+	wantRemaining := fmt.Sprintf("%dugnot", 100_000_000-liveFee)
+	assert.Equal(t, wantRemaining, meta.SpendRemaining, "deduct the queried GasFee, not the floor")
+}
+
 func TestCall_writesAuditEntry(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer

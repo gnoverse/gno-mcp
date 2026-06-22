@@ -221,6 +221,10 @@ func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn st
 	if err != nil {
 		return CallResult{}, err
 	}
+	fee, err := r.feeForTx(simulate)
+	if err != nil {
+		return CallResult{}, fmt.Errorf("call as user: %w", err)
+	}
 	out, err := r.asUserTx(signer, master, "call as user", func(masterAddr crypto.Address) (*std.Tx, error) {
 		msg := vm.MsgCall{
 			Caller:  masterAddr,
@@ -229,37 +233,43 @@ func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn st
 			Func:    fn,
 			Args:    args,
 		}
-		return gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
+		return gnoclient.NewCallTx(baseTxCfg(fee), msg)
 	}, simulate)
 	if err != nil {
 		return CallResult{}, err
 	}
 	return CallResult{
-		Simulated: out.Simulated,
-		TxHash:    out.TxHash,
-		Height:    out.Height,
-		Result:    out.Data,
-		GasUsed:   out.GasUsed,
+		Simulated:   out.Simulated,
+		TxHash:      out.TxHash,
+		Height:      out.Height,
+		Result:      out.Data,
+		GasUsed:     out.GasUsed,
+		GasFeeUgnot: fee,
 	}, nil
 }
 
 // RunAsUser broadcasts (or simulates) a session-signed vm/MsgRun. The code is
 // wrapped in a single-file MemPackage with package name "main".
 func (r *Real) RunAsUser(_ context.Context, signer Signer, master, code string, simulate bool) (RunResult, error) {
+	fee, err := r.feeForTx(simulate)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("run as user: %w", err)
+	}
 	out, err := r.asUserTx(signer, master, "run as user", func(masterAddr crypto.Address) (*std.Tx, error) {
 		files := []*std.MemFile{{Name: "main.gno", Body: code}}
 		msg := vm.NewMsgRun(masterAddr, nil, files)
-		return gnoclient.NewRunTx(defaultBaseTxCfg(), msg)
+		return gnoclient.NewRunTx(baseTxCfg(fee), msg)
 	}, simulate)
 	if err != nil {
 		return RunResult{}, err
 	}
 	return RunResult{
-		Simulated: out.Simulated,
-		TxHash:    out.TxHash,
-		Height:    out.Height,
-		Output:    out.Data,
-		GasUsed:   out.GasUsed,
+		Simulated:   out.Simulated,
+		TxHash:      out.TxHash,
+		Height:      out.Height,
+		Output:      out.Data,
+		GasUsed:     out.GasUsed,
+		GasFeeUgnot: fee,
 	}, nil
 }
 
@@ -415,22 +425,23 @@ func isSessionNotFoundErr(err error) bool {
 // DefaultGasWanted is the gas limit of every write tx; it must exceed the
 // heaviest tx's gas use (an AddPackage runs ~5M). Execution headroom lives
 // here, sized independently of the fee — a heavier tx needs more GasWanted,
-// never a bigger DefaultGasFeeUgnot.
+// never a bigger GasFee.
 const DefaultGasWanted int64 = 10_000_000
 
-// minGasPriceDivisor is the chain's minGasPrice as gas-per-ugnot: test13 charges
-// 1 ugnot per 1000 gas. The ante check requires GasFee >= GasWanted / this. A
-// chain with a higher minGasPrice (smaller divisor) needs a higher fee — this
-// value, not just the chain config, must move when targeting such a chain.
+// minGasPriceDivisor is gnomcp's assumed minGasPrice floor as gas-per-ugnot:
+// 1 ugnot per 1000 gas, the gno.land genesis default. It sets DefaultGasFeeUgnot,
+// the floor below which a write is never priced. The actual fee offered on a
+// broadcast is queried live from the chain (auth/gasprice → gasprice.Compute), so a
+// congestion-raised price or a chain with a higher floor is handled at runtime;
+// this constant only backstops a chain that reports no gas price at all.
 const minGasPriceDivisor int64 = 1000
 
-// DefaultGasFeeUgnot is the flat ugnot GasFee offered on every write tx. The
-// chain deducts the full offered fee, not the gas actually used (measured for
-// both standard and session txs), so session spend tracking deducts this
-// constant, not GasUsed, to stay in sync. It is the minimum the ante check
-// accepts — GasWanted / minGasPrice — so the fee buys no execution headroom
-// (that is DefaultGasWanted's job); any value above this floor only burns the
-// caller's balance.
+// DefaultGasFeeUgnot is the floor ugnot GasFee — the minimum a write is ever
+// priced at, used when the chain reports no live gas price and by the Fake.
+// It is the ante minimum at the genesis floor, GasWanted / minGasPrice, so the
+// fee buys no execution headroom (that is DefaultGasWanted's job). The chain
+// bills the full offered fee, not the gas used, so session spend tracking
+// deducts the fee actually offered (CallResult.GasFeeUgnot), not GasUsed.
 const DefaultGasFeeUgnot int64 = DefaultGasWanted / minGasPriceDivisor
 
 // DefaultMaxDepositUgnot caps the storage deposit for an agent AddPackage. Sufficient
@@ -486,21 +497,25 @@ func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string
 	if err != nil {
 		return CallResult{}, err
 	}
+	fee, err := r.feeForTx(simulate)
+	if err != nil {
+		return CallResult{}, fmt.Errorf("call: %w", err)
+	}
 	msg := vm.MsgCall{Caller: caller, Send: sendCoins, PkgPath: realm, Func: fn, Args: args}
 	if simulate {
 		out, err := agentSimulate(cli, "call", func() (*std.Tx, error) {
-			return gnoclient.NewCallTx(defaultBaseTxCfg(), msg)
+			return gnoclient.NewCallTx(baseTxCfg(fee), msg)
 		})
 		if err != nil {
 			return CallResult{}, err
 		}
-		return CallResult{Simulated: true, GasUsed: out.GasUsed, Result: out.Data}, nil
+		return CallResult{Simulated: true, GasUsed: out.GasUsed, Result: out.Data, GasFeeUgnot: fee}, nil
 	}
-	res, err := cli.Call(defaultBaseTxCfg(), msg)
+	res, err := cli.Call(baseTxCfg(fee), msg)
 	if err != nil {
 		return CallResult{}, fmt.Errorf("call: broadcast: %w", err)
 	}
-	return CallResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, Result: string(res.DeliverTx.Data), GasUsed: res.DeliverTx.GasUsed}, nil
+	return CallResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, Result: string(res.DeliverTx.Data), GasUsed: res.DeliverTx.GasUsed, GasFeeUgnot: fee}, nil
 }
 
 // Run broadcasts (or simulates) a STANDARD vm/MsgRun signed by the agent key.
@@ -510,22 +525,26 @@ func (r *Real) Run(_ context.Context, signer gnoclient.Signer, code string, simu
 	if err != nil {
 		return RunResult{}, err
 	}
+	fee, err := r.feeForTx(simulate)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("run: %w", err)
+	}
 	files := []*std.MemFile{{Name: "main.gno", Body: code}}
 	msg := vm.NewMsgRun(caller, nil, files)
 	if simulate {
 		out, err := agentSimulate(cli, "run", func() (*std.Tx, error) {
-			return gnoclient.NewRunTx(defaultBaseTxCfg(), msg)
+			return gnoclient.NewRunTx(baseTxCfg(fee), msg)
 		})
 		if err != nil {
 			return RunResult{}, err
 		}
-		return RunResult{Simulated: true, GasUsed: out.GasUsed, Output: out.Data}, nil
+		return RunResult{Simulated: true, GasUsed: out.GasUsed, Output: out.Data, GasFeeUgnot: fee}, nil
 	}
-	res, err := cli.Run(defaultBaseTxCfg(), msg)
+	res, err := cli.Run(baseTxCfg(fee), msg)
 	if err != nil {
 		return RunResult{}, fmt.Errorf("run: broadcast: %w", err)
 	}
-	return RunResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, Output: string(res.DeliverTx.Data), GasUsed: res.DeliverTx.GasUsed}, nil
+	return RunResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, Output: string(res.DeliverTx.Data), GasUsed: res.DeliverTx.GasUsed, GasFeeUgnot: fee}, nil
 }
 
 // AddPackage broadcasts (or simulates) a vm/MsgAddPackage signed by the agent key.
@@ -536,23 +555,27 @@ func (r *Real) AddPackage(_ context.Context, signer gnoclient.Signer, deployPath
 	if err != nil {
 		return AddPackageResult{}, err
 	}
+	fee, err := r.feeForTx(simulate)
+	if err != nil {
+		return AddPackageResult{}, fmt.Errorf("addpackage: %w", err)
+	}
 	slices.SortFunc(files, func(a, b *std.MemFile) int { return strings.Compare(a.Name, b.Name) })
 	msg := vm.NewMsgAddPackage(creator, deployPath, files)
 	msg.MaxDeposit = std.Coins{{Denom: ugnot.Denom, Amount: DefaultMaxDepositUgnot}}
 	if simulate {
 		out, err := agentSimulate(cli, "addpackage", func() (*std.Tx, error) {
-			return gnoclient.NewAddPackageTx(defaultBaseTxCfg(), msg)
+			return gnoclient.NewAddPackageTx(baseTxCfg(fee), msg)
 		})
 		if err != nil {
 			return AddPackageResult{}, err
 		}
-		return AddPackageResult{Simulated: true, GasUsed: out.GasUsed}, nil
+		return AddPackageResult{Simulated: true, GasUsed: out.GasUsed, GasFeeUgnot: fee}, nil
 	}
-	res, err := cli.AddPackage(defaultBaseTxCfg(), msg)
+	res, err := cli.AddPackage(baseTxCfg(fee), msg)
 	if err != nil {
 		return AddPackageResult{}, fmt.Errorf("addpackage: broadcast: %w", err)
 	}
-	return AddPackageResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, GasUsed: res.DeliverTx.GasUsed}, nil
+	return AddPackageResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, GasUsed: res.DeliverTx.GasUsed, GasFeeUgnot: fee}, nil
 }
 
 // Send broadcasts a bank/MsgSend of amountUgnot from the agent key to toAddr.
@@ -573,11 +596,15 @@ func (r *Real) Send(_ context.Context, signer gnoclient.Signer, toAddr string, a
 		ToAddress:   to,
 		Amount:      std.Coins{{Denom: ugnot.Denom, Amount: amountUgnot}},
 	}
-	res, err := cli.Send(defaultBaseTxCfg(), msg)
+	fee, err := r.currentGasFee()
+	if err != nil {
+		return SendResult{}, fmt.Errorf("send: %w", err)
+	}
+	res, err := cli.Send(baseTxCfg(fee), msg)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("send: broadcast: %w", err)
 	}
-	return SendResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, GasUsed: res.DeliverTx.GasUsed}, nil
+	return SendResult{TxHash: hex.EncodeToString(res.Hash), Height: res.Height, GasUsed: res.DeliverTx.GasUsed, GasFeeUgnot: fee}, nil
 }
 
 // Balance returns the ugnot balance of a bech32 address.
@@ -610,14 +637,6 @@ func (r *Real) Account(_ context.Context, bech32 string) (AccountInfo, error) {
 		AccountNumber: acct.GetAccountNumber(),
 		Exists:        true,
 	}, nil
-}
-
-// defaultBaseTxCfg returns the gas/fee defaults for write txs.
-func defaultBaseTxCfg() gnoclient.BaseTxCfg {
-	return gnoclient.BaseTxCfg{
-		GasFee:    fmt.Sprintf("%dugnot", DefaultGasFeeUgnot),
-		GasWanted: DefaultGasWanted,
-	}
 }
 
 // ValidateSendCoins reports whether send is a coin amount Call/CallAsUser will

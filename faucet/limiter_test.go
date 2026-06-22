@@ -199,3 +199,13 @@ func TestLimiterSnapshotDripDisabled(t *testing.T) {
 	assert.False(t, s.DripEnabled)
 	assert.Equal(t, float64(0), s.DripTokens)
 }
+
+func TestLimiter_Policy(t *testing.T) {
+	l := NewLimiter(LimiterCfg{
+		PerAddrWindow: 24 * time.Hour, PerAddrMax: 1,
+		PerIPMax: 5, DailyCapUgnot: 1_000_000_000, GrantUgnot: 1_000_000,
+	})
+	p := l.Policy()
+	assert.Equal(t, 1, p.PerAddrMax)
+	assert.Equal(t, 24*time.Hour, p.PerAddrWindow)
+}

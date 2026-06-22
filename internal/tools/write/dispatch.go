@@ -38,9 +38,11 @@ type writeTxDispatch struct {
 	// ToolError; returning nil falls back to the generic wrap.
 	mapPickErr func(error) error
 	// agentOp / sessionOp perform the chain operation with the acquired signer.
-	// sessionOp receives the session's master so it signs as the right account.
+	// sessionOp receives the session's master so it signs as the right account,
+	// and returns the ugnot GasFee the tx offered so the dispatcher deducts the
+	// exact amount the chain billed (the chain bills the full offered fee).
 	agentOp   func(ctx context.Context, signer gnoclient.Signer) error
-	sessionOp func(ctx context.Context, signer chain.Signer, master string) error
+	sessionOp func(ctx context.Context, signer chain.Signer, master string) (feeUgnot int64, err error)
 
 	// Audit fields owned by the handler's deferred audit record; the dispatcher
 	// mutates them so denials and outcomes are recorded on every return path.
@@ -105,7 +107,8 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 		// master-less profile whose user supplied an address at propose time.
 		master = sessMaster
 
-		if opErr := d.sessionOp(ctx, signer, master); opErr != nil {
+		feeUgnot, opErr := d.sessionOp(ctx, signer, master)
+		if opErr != nil {
 			if d.simulate && errors.Is(opErr, chain.ErrSimulateUnsupported) {
 				return identity, signerAddr, master, &server.ToolError{
 					Code:    "simulate_unsupported",
@@ -117,10 +120,10 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 		}
 
 		// Update spend (simulate skips it). The chain bills the session the full
-		// GasFee per tx, not GasUsed, so deduct that to keep local SpendRemaining
-		// in sync with the chain (see chain.DefaultGasFeeUgnot).
+		// GasFee per tx, not GasUsed, so deduct the fee the tx actually offered to
+		// keep local SpendRemaining in sync with the chain.
 		if !d.simulate {
-			_ = d.sessionMgr.UpdateSpend(d.profileName, *d.sessionAddr, chain.DefaultGasFeeUgnot)
+			_ = d.sessionMgr.UpdateSpend(d.profileName, *d.sessionAddr, feeUgnot)
 		}
 
 	default:
