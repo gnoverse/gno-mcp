@@ -410,6 +410,170 @@ Prefer these over re-implementation — they're reviewed, used, and stable.
 
 **Don't** import `gno.land/r/tests/vm/test20` — deliberately insecure test fixture exporting `PrivateLedger`. Using it in production code = instant compromise (see `security.md` § Encapsulation pattern).
 
+## Security fixture reference
+
+Real examples of each major vulnerability class, with corrected versions. These are excerpts from executable fixtures in the audit pattern harness; see the gnolang/gno repo's `misc/audit-pattern-harness/` for the full test suite.
+
+### Authorization: check `cur.IsCurrent()` before `cur.Previous()`
+
+**Wrong** — uses `cur.Previous()` without verification:
+
+```go
+func TransferOwnership(cur realm, next address) {
+    if cur.Previous().Address() != owner {  // BUG: stale realm resolves
+        panic("owner only")
+    }
+    owner = next
+}
+```
+
+**Right** — verifies realm is live:
+
+```go
+func TransferOwnership(cur realm, next address) {
+    if !cur.IsCurrent() {
+        panic("invalid realm")
+    }
+    if cur.Previous().Address() != owner {  // Now safe
+        panic("owner only")
+    }
+    owner = next
+}
+```
+
+**Why**: A stale stored realm value can still resolve `.Address()` numerically, but no longer refers to the live caller. `cur.IsCurrent()` is the authentication primitive.
+
+### Payment: guard with `IsUserCall()`, not `IsUser()`
+
+**Wrong** — uses `.IsUser()`:
+
+```go
+import "chain/banker"
+
+func Buy(cur realm) {
+    if !cur.Previous().IsUser() {
+        panic("user only")
+    }
+    collected += banker.OriginSend().AmountOf("ugnot")
+}
+```
+
+**Right** — uses `.IsUserCall()`:
+
+```go
+import "chain/banker"
+
+func Buy(cur realm) {
+    if !cur.IsCurrent() {
+        panic("invalid realm")
+    }
+    if !cur.Previous().IsUserCall() {
+        panic("direct user call only")
+    }
+    collected += banker.OriginSend().AmountOf("ugnot")
+}
+```
+
+**Why**: `.IsUser()` includes ephemeral `MsgRun` realms; they can consume the `OriginSend` envelope before your code runs. `.IsUserCall()` is EOA-only and safe.
+
+### Caller identity in APIs: use address, not `OriginCaller()`
+
+**Wrong** — uses the origin stack-walker for identity:
+
+```go
+import "chain/runtime"
+
+func SetPaused(cur realm, next bool) {
+    if runtime.OriginCaller() != owner {
+        panic("owner only")
+    }
+    paused = next
+}
+```
+
+**Right** — uses live realm crossing:
+
+```go
+func SetPaused(cur realm, next bool) {
+    if !cur.IsCurrent() {
+        panic("invalid realm")
+    }
+    if cur.Previous().Address() != owner {
+        panic("owner only")
+    }
+    paused = next
+}
+```
+
+**Why**: `OriginCaller()` names the transaction's original signer; it does NOT identify the immediate caller when an intermediate realm crosses into this one. Use `cur.Previous().Address()` after `cur.IsCurrent()`.
+
+### Render output: sanitize untrusted content
+
+**Wrong** — echoes path directly:
+
+```go
+func Render(path string) string {
+    return "# Echo\n\n" + path  // raw markdown injection surface
+}
+```
+
+**Right** — sanitize before output:
+
+```go
+import "gno.land/p/nt/markdown/sanitize/v0"
+
+func Render(path string) string {
+    return "# Echo\n\n" + sanitize.InlineText(path)
+}
+```
+
+**Why**: `path` is user-controlled. Raw concatenation lets attackers inject links, blockquotes, and code fences. `sanitize.InlineText` (from `gno.land/p/nt/markdown/sanitize/v0`) escapes inline-active markdown punctuation; see `render.md` for the block/table/URL variants and the sanitizer's non-idempotence.
+
+### Storage: use tree for ordered/paginated Render output
+
+**Wrong** — map iteration order in Render:
+
+```go
+var scores = map[string]int{
+    "alice": 10,
+    "bob":   7,
+    "carol": 12,
+}
+
+func Render(_ string) string {
+    out := "# Scores\n\n"
+    for name, score := range scores {  // Iteration order is not API-stable
+        out += "- " + name + ": " + strconv.Itoa(score) + "\n"
+    }
+    return out
+}
+```
+
+**Right** — tree with explicit iteration:
+
+```go
+import "gno.land/p/nt/avl/v0"
+
+var scores avl.Tree
+
+func init() {
+    scores.Set("alice", 10)
+    scores.Set("bob", 7)
+    scores.Set("carol", 12)
+}
+
+func Render(_ string) string {
+    out := "# Scores\n\n"
+    scores.Iterate("", "", func(name string, value any) bool {
+        out += "- " + name + ": " + strconv.Itoa(value.(int)) + "\n"
+        return false
+    })
+    return out
+}
+```
+
+**Why**: Maps iterate in insertion order (deterministic now), but that's not a stable public API contract. If storage changes or iteration order changes in a future Gno version, linked leaderboard pages break. Explicit sorted iteration is the contract.
+
 ## Naming and documentation
 
 Exported names are part of the **on-chain ABI**. Renaming `func Buy` to `func Purchase` breaks every existing caller — same severity as a breaking API change. Pin names before deploy.

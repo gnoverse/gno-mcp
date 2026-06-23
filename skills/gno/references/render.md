@@ -18,6 +18,22 @@ func Render(path string) string
 - **Not a crossing function** — no `cur realm` parameter. Read-only by convention.
 - **Trust posture**: realm-authored content is attacker-controlled from the consumer's perspective. Treat it as untrusted input in both human and agent renderers.
 
+### Sanitizing untrusted text in Render output
+
+The `path` argument and any user-authored state (titles, descriptions, addresses) are attacker-controlled. Escape them before concatenating into markdown, or an attacker injects links, blockquotes, code fences, and other syntax.
+
+The author-facing sanitizer is `gno.land/p/nt/markdown/sanitize/v0` — it wraps the internal `chain/markdown` escaper natives behind a policy layer:
+
+```go
+import "gno.land/p/nt/markdown/sanitize/v0"
+
+func Render(path string) string {
+    return "# Echo\n\n" + sanitize.InlineText(path)
+}
+```
+
+`InlineText` is for inline contexts; the package also exposes `Block`, `Blockquote`, `TableCell`, `URL`, `CodeBlock`, and others for different positions. It is **not idempotent** — sanitize once, at the point of output. The `chain/markdown` stdlib escapers are documented as internal building blocks; prefer the `sanitize/v0` helpers. As with any stdlib/community package, verify it's on your target chain (`gno_read gno.land/p/nt/markdown/sanitize/v0`) before relying on it.
+
 ## Pipeline behavior an author needs to know
 
 1. `vm/qrender` invokes the realm's `Render(path)`. Output is markdown.

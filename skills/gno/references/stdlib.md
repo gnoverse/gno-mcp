@@ -27,7 +27,7 @@ The 0.9 release reorganized the stdlib into a `chain/...` family. Old code that 
 | `chain/runtime` | Realm-context observation — `CurrentRealm()`, `PreviousRealm()`, `AssertOriginCall()`, `ChainID()`, `ChainDomain()`, `ChainHeight()`, `OriginCaller()` |
 | `chain/runtime/unsafe` | Legacy stack-walking forms of `CurrentRealm()`/`PreviousRealm()` — see § Caller-identity, below |
 | `chain/banker` | Coin handling — `NewBanker()`, `OriginSend()`, `SendCoins()`, `GetCoins()`, `IssueCoin()`, `RemoveCoin()` |
-| `chain/markdown` | Native markdown sanitization (see `render.md`) |
+| `chain/markdown` | Markdown escaper natives — internal building blocks; realm authors use the `gno.land/p/nt/markdown/sanitize/v0` helpers layered on top (see `render.md`) |
 | `testing` | Test scaffolding — `SkipHeights`, `SetOriginCaller`, `SetOriginSend`, `IssueCoins`, `SetRealm`, `NewUserRealm`, `NewCodeRealm` |
 
 ## Uverse — builtins always in scope
@@ -132,9 +132,9 @@ Security-relevant primitives:
 
 **Gotcha**: a realm that consumes `OriginSend()` but never `SendCoins`/`Withdraw` locks funds at the realm address. See `security.md` § Operational signals.
 
-## `chain/markdown` — render sanitization
+## `chain/markdown` — render sanitization natives
 
-Native sanitization for markdown emitted by `Render()`. See `render.md` for details on extension surface, alerts, forms, image validation, and untrusted-content posture.
+Low-level escaper natives (`EscapeInline`, `EscapeTitle`, `PercentEncodeURL`, `StripBidiAndZeroWidth`, `NormalizeBreaks`, …) for markdown emitted by `Render()`. These are internal building blocks — realm authors use the `gno.land/p/nt/markdown/sanitize/v0` helpers (`sanitize.InlineText`, `.Block`, `.URL`, …) that wrap them with the policy layer. See `render.md` § Sanitizing untrusted text and the extension surface.
 
 ## `testing` — test scaffolding
 

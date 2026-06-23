@@ -84,6 +84,23 @@ This SKILL.md is a router. References are categorized by topic; load whichever f
 | PkgID | Stamped on every object at allocation time. **Storage = Authority** — the realm that allocated an object owns it. |
 | `panic` | Use for unrecoverable contract state — aborts the transaction cleanly, reverts all state. `error` does NOT revert state. |
 
+## Security patterns quick check
+
+Before writing or reviewing crossing functions, check these common mistakes:
+
+| Trigger | What to look for | Fix |
+|---|---|---|
+| **Authorization check** | `cur.Previous()` without `cur.IsCurrent()` | Check `cur.IsCurrent()` first |
+| **Payment handling** | `OriginSend` without `cur.Previous().IsUserCall()` | Guard with `.IsUserCall()`, not `.IsUser()` |
+| **Caller identity** | Using `OriginCaller()` in crossing function | Use `cur.Previous().Address()` after `IsCurrent()` |
+| **Render output** | Raw `path` concatenated into markdown | Sanitize with `sanitize.InlineText` (`gno.land/p/nt/markdown/sanitize/v0`); see `render.md` |
+| **Callback params** | Function accepts `func()` from caller | Replace with explicit state-mutation methods |
+| **Interface methods** | Interface signature contains `cur realm` | Take `address` instead; caller derives from `cur.Previous()` |
+| **Pointer getters** | Exported function returns `*privateState` | Return values, not pointers |
+| **Render storage** | `Render` iterates over `map` | Use `avl.Tree` with `.Iterate()` for deterministic order |
+
+Load `security.md` for detailed threat model and exploitation mechanics.
+
 ## Anti-pattern reflex
 
 If you find yourself thinking *"this is just like Solidity's `msg.sender`…"* — **stop**. Gno's caller-identity model is not stack-walking by default. Specifically:

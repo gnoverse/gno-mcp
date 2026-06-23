@@ -110,6 +110,13 @@ Both gates reject with the **same error type** but distinct messages — tell th
 `…has not signed the required CLA` (fix: `Sign` the hash). Don't read "unauthorized" as one specific
 cause; read the message. On a fresh local chain both gates are typically off and neither applies.
 
+## Agent guidance — namespace defaults
+
+Agents should deploy under their own address namespace (`r/<agent-g1address>/*`) by default. It
+clears the namespace gate on every chain with no registration, no controller queries, no pricing (the
+CLA gate, if enforced, still applies). Only register a name when the user explicitly requests it; names
+are semi-permanent and agent behavior should not burn them without consent.
+
 ## Reading a chain param value
 
 Raw chain params (fee collectors, storage price, halt height, restricted denoms) are **not** read
