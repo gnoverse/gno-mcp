@@ -118,6 +118,7 @@ type gnoclient.Signer interface {
     Sign(SignCfg) (*std.Tx, error)
     Info() (keys.Info, error)    // returns address + pubkey
     Validate() error
+    GetMaster() crypto.Address   // master address if a session account, else zero
 }
 
 type gnoclient.SignCfg struct {
