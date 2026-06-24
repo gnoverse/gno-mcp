@@ -24,9 +24,9 @@ The 0.9 release reorganized the stdlib into a `chain/...` family. Old code that 
 | Import path | Purpose |
 |---|---|
 | `chain` | Core types — `Coin`, `Coins`, `Emit`, `PackageAddress`, `CoinDenom` |
-| `chain/runtime` | Realm-context observation — `CurrentRealm()`, `PreviousRealm()`, `AssertOriginCall()`, `ChainID()`, `ChainDomain()`, `ChainHeight()`, `OriginCaller()` |
-| `chain/runtime/unsafe` | Legacy stack-walking forms of `CurrentRealm()`/`PreviousRealm()` — see § Caller-identity, below |
-| `chain/banker` | Coin handling — `NewBanker()`, `OriginSend()`, `SendCoins()`, `GetCoins()`, `IssueCoin()`, `RemoveCoin()` |
+| `chain/runtime` | Chain/realm observation — `AssertOriginCall()`, `ChainID()`, `ChainDomain()`, `ChainHeight()`, `GetSessionInfo()` |
+| `chain/runtime/unsafe` | Stack-walking caller identity — `OriginCaller()`, `CurrentRealm()`, `PreviousRealm()`, `OriginSend()`. |
+| `chain/banker` | Coin handling — `NewBanker()`, `SendCoins()`, `GetCoins()`, `IssueCoin()`, `RemoveCoin()` |
 | `chain/markdown` | Markdown escaper natives — internal building blocks; realm authors use the `gno.land/p/nt/markdown/sanitize/v0` helpers layered on top (see `render.md`) |
 | `testing` | Test scaffolding — `SkipHeights`, `SetOriginCaller`, `SetOriginSend`, `IssueCoins`, `SetRealm`, `NewUserRealm`, `NewCodeRealm` |
 
@@ -35,7 +35,7 @@ The 0.9 release reorganized the stdlib into a `chain/...` family. Old code that 
 These do not require an import:
 
 - **`address`** — bech32 address type. Methods: `IsValid() bool`, `String() string`.
-- **`realm`** — the capability token surfaced as the `cur realm` parameter on crossing functions. Methods: `Address()`, `PkgPath()`, `Previous()`, `IsCurrent()`, `IsCode()`, `IsUser()`, `IsUserCall()`, `IsUserRun()`, `IsEphemeral()`, `CoinDenom()`, `String()`. See `interrealm.md`.
+- **`realm`** — the capability token surfaced as the `cur realm` parameter on crossing functions. Methods: `Address()`, `PkgPath()`, `Previous()`, `IsCurrent()`, `IsCode()`, `IsUser()`, `IsUserCall()`, `IsUserRun()`, `IsEphemeral()`, `String()`. See `interrealm.md`.
 - **`cross(rlm)`** — uverse function used to mark cross-calls: `bakery.MakeBread(cross(cur), "flour", "water")`. See `interrealm.md`.
 - **`revive(fn)`** — boundary-aware recover; currently enabled only in test/filetest mode.
 
@@ -51,14 +51,14 @@ A crossing function `func F(cur realm, ...)` receives a typed capability token. 
 func Buy(cur realm) {
     if !cur.IsCurrent() { panic("spoofed realm") }
     if !cur.Previous().IsUserCall() { panic("not an EOA call") }
-    coins := banker.OriginSend()
+    coins := unsafe.OriginSend()   // import "chain/runtime/unsafe"
     // ...
 }
 ```
 
 The `IsCurrent()` check is the authentication primitive — see `security.md` Class 2 (designation-forgery).
 
-### Legacy: `chain/runtime/unsafe`
+### Stack-walking: `chain/runtime/unsafe`
 
 ```go
 import "chain/runtime/unsafe"
@@ -72,11 +72,11 @@ func F() {
 
 The `unsafe` package name reflects what these primitives do: **stack-walking** that returns the realm prior to the most recent boundary, regardless of which function you're in. **Calling `unsafe.PreviousRealm()` inside a non-crossing function does NOT identify the immediate caller** — it returns whatever was previous at the last realm boundary, possibly an unrelated frame upstream.
 
-Use `chain/runtime/unsafe` only:
-- In code paths that intentionally need the stack-walking semantics.
-- When migrating older code that hasn't been updated to use `cur`.
+Use `chain/runtime/unsafe` only when you genuinely need the stack-walking form:
+- A non-crossing function with no `cur` in scope (remembering it returns the last-boundary realm, not the direct caller — see the warning above).
+- Code that deliberately wants the realm before the most recent boundary.
 
-For new code: prefer `cur` parameters and `cur.Previous()` under `cur.IsCurrent()`. The `unsafe` import name is intentional.
+`OriginCaller`, `CurrentRealm`, `PreviousRealm`, and `OriginSend` are exported only from `chain/runtime/unsafe` — there is no `runtime.OriginCaller()` or `banker.OriginSend()`. Inside a crossing function, `cur.Previous()` under `cur.IsCurrent()` identifies the immediate caller; `unsafe.PreviousRealm()` stack-walks to the last boundary instead (the distinction above).
 
 ### The trichotomy — `IsUserCall` vs `IsUserRun` vs `IsUser`
 
@@ -142,7 +142,7 @@ Filetest helpers for realm tests. Common entries:
 
 - `SetOriginCaller(addr)` — fake the EOA for a test.
 - `SetOriginSend(coins)` — fake an inbound `OriginSend` envelope.
-- `SetRealm(realm)` — install a fake realm for a test frame.
+- `SetRealm(realm)` — install a fake realm on the **calling frame** (popped on return — call it directly in each test, never via a helper; see `build.md`).
 - `NewUserRealm(addr)` / `NewCodeRealm(pkgPath)` — construct test realm values.
 - `SkipHeights(n)` — advance the simulated block height.
 - `IssueCoins(addr, coins)` — mint coins to an address for setup.
@@ -159,7 +159,7 @@ The packages below survived the test-13 quarantine (`examples/quarantined/` got 
 | B+tree (alternative for ordered keyed state) | `gno.land/p/nt/bptree/v0` |
 | Render-path routing (mux) | `gno.land/p/nt/mux/v0` |
 | Realm-path parsing | `gno.land/p/moul/realmpath` |
-| Ownership / single-owner pattern | `gno.land/p/nt/ownable` |
+| Ownership / single-owner pattern | `gno.land/p/nt/ownable/v0` |
 | Authorization patterns | `gno.land/p/moul/authz` |
 | Pagination | `gno.land/p/jeronimoalbi/pager` |
 | DAO primitives | `gno.land/p/nt/commondao/v0` |

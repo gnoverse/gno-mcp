@@ -85,7 +85,7 @@ so distinguishing them matters:
 |---|---|---|---|
 | `insufficient fees; got {Gas-Wanted:N, Gas-Fee:Mugnot}, fee required {Gas:1000 Price:1ugnot}` | `GasFee/GasWanted` below the price floor | **CheckTx** — rejected before execution, no state touched | Raise `GasFee` to ≥ `GasWanted × price` (or lower `GasWanted`) |
 | `out of gas in location: …; gasWanted: N, gasUsed: M` | tx burned more gas than `GasWanted` | **DeliverTx** — executed then aborted; fee gone | Raise `GasWanted` **well** above M — see note |
-| `invalid gas-wanted; got: N block-max-gas: 10000000` | `GasWanted` exceeds the block gas cap | CheckTx | Keep `GasWanted` under the chain's block max (~10M) |
+| `invalid gas-wanted; got: N block-max-gas: 3000000000` | `GasWanted` exceeds the block gas cap | CheckTx | Keep `GasWanted` under the chain's block max (~3B) |
 | `insufficient funds to pay for fees` | balance < `GasFee` | CheckTx/DeliverTx | Fund the key, or lower `GasFee` toward the floor |
 | `not enough deposit to cover the storage usage: requires D … for B bytes` | storage deposit cap < bytes × storage price | DeliverTx | Raise `--max-deposit` (see Storage deposit) |
 
@@ -161,7 +161,7 @@ two stores** — they don't see each other's keys.
 |---|---|---|
 | Overpaying `--gas-fee` (full fee is taken) | Offer the floor: `GasWanted × min price`, never more | #3805, #5086 |
 | `--gas-fee 1gnot` → "insufficient funds" | Use ugnot: `--gas-fee 10000ugnot` (denominations don't mix in the fee field) | #329 |
-| `--gas-wanted 200000000` → "invalid gas-wanted" | Keep under block-max-gas (~10M) | #329 |
+| `--gas-wanted 4000000000` → "invalid gas-wanted" | Keep under block-max-gas (~3B) | #329 |
 | Empty `--send ""` to a payable realm → "payment must not be less than …" | A required deposit must ride in `--send`; empty sends nothing | #329 |
 | `out of gas` → bump to just above the reported number, fails again | The number is gas-used-so-far; bump well above, or simulate | #3704 |
 | `signature verification failed; verify correct account, sequence, and chain-id` | First suspect a **stale gnokey binary** (a known cause); then check `--chainid`, and `--account-number`/`--sequence` from `gnokey query auth/accounts/<addr>` | #2109 |

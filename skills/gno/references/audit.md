@@ -36,7 +36,7 @@ Patterns to check against the realm source (see `security.md` Audit signals tabl
 - `IsUser()` co-occurring with `OriginSend` → payment-bypass via MsgRun
 - `cur.Previous()` / `cur.Address()` without prior `cur.IsCurrent()` check → Class 2 designation-forgery
 - Public method takes `caller address` / `pkgPath string` as identity parameter → Class 2 designation-forgery
-- `runtime.PreviousRealm()` inside a non-crossing function used as caller identity → Class 2 (stack-walker doesn't identify immediate caller)
+- `unsafe.PreviousRealm()` inside a non-crossing function used as caller identity → Class 2 (stack-walker doesn't identify immediate caller)
 - `interface { ... }` declared with `cur realm` parameter → Class 1a/1b cur-disclosure surface
 - `interface { ... }` accepted as parameter and methods invoked without canonical-type assert → Class 3 impl-substitution
 - `func(...)` parameters or function-typed state fields used in permission-gated paths → Class 4 closed-over-authority
@@ -54,10 +54,10 @@ Each hit is a candidate finding, not a confirmed one. Phase 2 verifies.
 For each exported function on the realm's public surface:
 
 1. **Crossing or not?** A function with `func F(cur realm, …)` signature is callable via MsgCall. Non-crossing functions are internal. Identify which is which.
-2. **Payment-accepting?** If the function consumes `banker.OriginSend()` or any banker primitive that handles inbound coins, verify the guard ordering (see `security.md` § Payment-guard canonical pattern). `cur.IsCurrent()` + `cur.Previous().IsUserCall()` *before* reading `OriginSend()`, *before* any state mutation.
+2. **Payment-accepting?** If the function consumes `unsafe.OriginSend()`, or any banker primitive that handles inbound coins, verify the guard ordering (see `security.md` § Payment-guard canonical pattern). `cur.IsCurrent()` + `cur.Previous().IsUserCall()` *before* reading `OriginSend()`, *before* any state mutation.
 3. **Interface or callback acceptance?** If the function takes an `interface{...}` or `func(...)` parameter, trace where the impl comes from. If caller-supplied, this is Class 3 or Class 4 territory — verify canonical-type gating, CEI ordering (checks → effects → interactions), and gate documentation.
 4. **State pointer leakage?** If the function returns a pointer or slice into internal state, check the cross-realm direction. External callers receive readonly-tainted references; mutating them panics (potentially after observable side effects).
-5. **Caller-identity check?** Any `cur.Previous()` usage must be preceded by `cur.IsCurrent()`. Any `runtime.PreviousRealm()` usage must be inside a crossing function — non-crossing `runtime.PreviousRealm()` doesn't identify the immediate caller and walks back to the last realm boundary.
+5. **Caller-identity check?** Any `cur.Previous()` usage must be preceded by `cur.IsCurrent()`. Any `unsafe.PreviousRealm()` usage must be inside a crossing function — non-crossing `unsafe.PreviousRealm()` doesn't identify the immediate caller and walks back to the last realm boundary.
 
 ### Phase 3 — Cross-realm flows (30+ minutes)
 

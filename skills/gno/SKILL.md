@@ -74,11 +74,11 @@ This SKILL.md is a router. References are categorized by topic; load whichever f
 | `cross(rlm)` | Uverse function marking a cross-call. `cross(cur)` is the canonical form; `cross(otherRealm)` names an explicit target. The bare `cross` keyword that existed during the 0.9 migration is gone. |
 | `cur.IsCurrent()` | **The authentication primitive.** Returns true only for the live crossing frame's `cur`. Check this before using `cur.Previous()`, `cur.Address()`, or `cur.PkgPath()` — otherwise a stale stored realm value still resolves numerically and forges identity. (security.md Class 2 designation-forgery.) |
 | `cur.Previous()` | Captured realm that was current before this crossing. Use `cur.Previous().Address()` to identify the caller after the `IsCurrent` check. |
-| `runtime.PreviousRealm()` | Imported from `chain/runtime/unsafe`. **Legacy stack-walker** — returns the realm prior to the most recent boundary regardless of which function you're in. Use `cur` in new code; reach for this only when you need stack-walking semantics. |
+| `unsafe.PreviousRealm()` | Imported from `chain/runtime/unsafe`. **Stack-walker** — returns the realm prior to the most recent boundary regardless of which function you're in. Prefer `cur` in crossing functions; reach for this only when you need stack-walking semantics. |
 | `IsUserCall()` | True only if caller is an EOA via `MsgCall`. Use this when guarding `OriginSend`. |
 | `IsUserRun()` | True only if caller is an EOA via `MsgRun` (in the ephemeral `/e/g1<user>/run` realm). |
 | `IsUser()` | True if `IsUserCall()` OR `IsUserRun()`. **Insufficient for payment guards** — the `MsgRun` ephemeral can consume the `OriginSend` envelope before forwarding control. |
-| `banker.OriginSend()` | Coins included with the originating transaction. Pair with `cur.Previous().IsUserCall()` and an amount check. |
+| `unsafe.OriginSend()` | Coins included with the originating transaction (from `chain/runtime/unsafe`). Pair with `cur.Previous().IsUserCall()` and an amount check. |
 | Readonly taint | When code reads a value across a realm-storage boundary, the value is tainted read-only. The taint is sticky and propagates through field access, indexing, slicing, copies, and conversions. Mutation panics. |
 | Borrow rules | Three implicit rules that set `m.Realm` per call: declaring-realm (#1, `/r/`-callables), storage-realm (#2, `/p/`/stdlib methods on real foreign-stamped receivers), closure-capability (#3, `/p/`-declared closures carry creator-realm authority). |
 | PkgID | Stamped on every object at allocation time. **Storage = Authority** — the realm that allocated an object owns it. |
@@ -106,8 +106,8 @@ Load `security.md` for detailed threat model and exploitation mechanics.
 If you find yourself thinking *"this is just like Solidity's `msg.sender`…"* — **stop**. Gno's caller-identity model is not stack-walking by default. Specifically:
 
 - `cur.Previous()` is only meaningful inside a **crossing function** AND only after `cur.IsCurrent()` returns true.
-- `runtime.PreviousRealm()` (from `chain/runtime/unsafe`) is a stack-walker — inside a non-crossing function it returns whatever was previous at the last realm boundary, possibly an unrelated frame upstream. It does NOT identify the immediate caller.
-- A `PreviousRealm().PkgPath() == "..."` check inside a non-crossing function is a **security bug** (security.md Class 2).
+- `unsafe.PreviousRealm()` (from `chain/runtime/unsafe`) is a stack-walker — inside a non-crossing function it returns whatever was previous at the last realm boundary, possibly an unrelated frame upstream. It does NOT identify the immediate caller.
+- A `unsafe.PreviousRealm().PkgPath() == "..."` check inside a non-crossing function is a **security bug** (security.md Class 2).
 
 Load `interrealm.md` § The `cur` capability token before emitting any caller-identity check.
 
