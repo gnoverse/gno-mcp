@@ -141,6 +141,12 @@ func (s *gnoclientSigner) Info() (keys.Info, error) {
 // external state to check.
 func (s *gnoclientSigner) Validate() error { return nil }
 
+// GetMaster reports a zero master address. gnoclient consults GetMaster only in
+// its built-in Sign to derive the session relationship; this adapter signs with
+// its own Sign and leaves Signature.SessionAddr for the caller to inject, so it
+// is not a session account from gnoclient's perspective.
+func (s *gnoclientSigner) GetMaster() crypto.Address { return crypto.Address{} }
+
 // sessionKeyInfo implements keys.Info for an in-memory session keypair.
 // All exported keys.Info constructors require a Keybase entry, so we satisfy
 // the interface directly. Path is unsupported (sessions are not derived from

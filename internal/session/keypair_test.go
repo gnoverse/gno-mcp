@@ -139,3 +139,15 @@ func TestKeypair_GnoclientSigner_Validate(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, kp.GnoclientSigner("test-chain").Validate())
 }
+
+// TestKeypair_GnoclientSigner_GetMaster verifies the adapter reports a zero
+// master address. gnoclient uses GetMaster only in its built-in Sign to set
+// the session relationship; this adapter signs with its own Sign and the
+// caller injects Signature.SessionAddr, so it is not a session account from
+// gnoclient's perspective.
+func TestKeypair_GnoclientSigner_GetMaster(t *testing.T) {
+	kp, err := NewKeypair()
+	require.NoError(t, err)
+	assert.True(t, kp.GnoclientSigner("test-chain").GetMaster().IsZero(),
+		"GnoclientSigner.GetMaster() should be zero (caller injects SessionAddr)")
+}

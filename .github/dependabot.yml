@@ -12,3 +12,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # gno is tracked at a master pseudo-version, which Dependabot orders below
+      # any v1.x release tag — so it perpetually proposes a "bump" to the latest
+      # tag that is actually older in commit history. Bump gno to master by hand.
+      - dependency-name: github.com/gnolang/gno
