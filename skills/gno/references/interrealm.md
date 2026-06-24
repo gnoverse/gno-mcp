@@ -13,7 +13,7 @@ Every executing frame in Gno carries **two pieces of state**:
 
 | Context | Determines | Changes on… | Surfaced by |
 |---|---|---|---|
-| **Realm-context** | identity / agency: who is the actor, who called them. Has an associated address that can send / receive coins. | explicit `fn(cross(cur), ...)` cross-calls into crossing functions | `cur` parameter (modern), `runtime.CurrentRealm()` / `runtime.PreviousRealm()` (legacy, imported from `chain/runtime/unsafe`) |
+| **Realm-context** | identity / agency: who is the actor, who called them. Has an associated address that can send / receive coins. | explicit `fn(cross(cur), ...)` cross-calls into crossing functions | `cur` parameter (preferred), `unsafe.CurrentRealm()` / `unsafe.PreviousRealm()` (stack-walking, imported from `chain/runtime/unsafe`) |
 | **Realm-storage-context** (`m.Realm` in VM internals) | who has write authority right now; determines which realm pays storage rent and which realm a mutation attributes to | explicit cross-calls AND implicit borrows (§ Borrow rules) | not directly accessible at runtime |
 
 The two diverge whenever a borrow is active. They re-align on the next cross-call.
@@ -30,7 +30,7 @@ The two diverge whenever a borrow is active. They re-align on the next cross-cal
 | Stdlib/`/p/` method on primitive/nil/unstamped receiver | unchanged | unchanged (no-anchor) | no | no |
 | Stdlib/`/p/` top-level function | unchanged | unchanged | no | no |
 
-† `runtime.CurrentRealm()` returns the same realm, but `runtime.PreviousRealm()` shifts — what was current becomes previous.
+† `unsafe.CurrentRealm()` returns the same realm, but `unsafe.PreviousRealm()` shifts — what was current becomes previous.
 
 ## Package types
 
@@ -99,16 +99,16 @@ cannot persist realm value: realm values are ephemeral and tied to a call frame
 
 `realm`-typed *parameter* and *return type* declarations are fine — the rule applies to **values**, not **types**. To remember a caller across transactions, capture `cur.Address()` or `cur.PkgPath()` (plain strings).
 
-### Parity with `runtime.{Current,Previous}Realm()`
+### Parity with `unsafe.{Current,Previous}Realm()`
 
 At every comparable position:
 
-- `cur.Address()` ≡ `runtime.CurrentRealm().Address()`
-- `cur.PkgPath()` ≡ `runtime.CurrentRealm().PkgPath()`
-- `cur.Previous().Address()` ≡ `runtime.PreviousRealm().Address()`
-- `cur.Previous().PkgPath()` ≡ `runtime.PreviousRealm().PkgPath()`
+- `cur.Address()` ≡ `unsafe.CurrentRealm().Address()`
+- `cur.PkgPath()` ≡ `unsafe.CurrentRealm().PkgPath()`
+- `cur.Previous().Address()` ≡ `unsafe.PreviousRealm().Address()`
+- `cur.Previous().PkgPath()` ≡ `unsafe.PreviousRealm().PkgPath()`
 
-The two APIs differ only in shape: `runtime.*` returns a struct, `cur realm` is the interface. They are **distinct types** — not assignable to each other — but surface the same identity. `runtime.PreviousRealm()` is imported from `chain/runtime/unsafe`; the rename signals the danger when using the stack-walking form outside a crossing-function frame.
+The two APIs differ only in shape: `unsafe.*` returns a struct (`runtime.Realm`), `cur realm` is the interface. They are **distinct types** — not assignable to each other — but surface the same identity. `unsafe.PreviousRealm()` is imported from `chain/runtime/unsafe`; the rename signals the danger when using the stack-walking form outside a crossing-function frame.
 
 ## The three borrow rules
 
@@ -176,7 +176,7 @@ Two cross-realm invariants enforced at `doOpConvert`:
 
 ## Realm boundaries and finalization
 
-A **realm boundary** is a transition where `m.Realm` (or `runtime.CurrentRealm()`) changes:
+A **realm boundary** is a transition where `m.Realm` (or `unsafe.CurrentRealm()`) changes:
 
 - Every `fn(cross(cur), ...)` is a boundary, even into the same realm.
 - Every borrow rule firing that changes storage-context is a boundary.
@@ -187,13 +187,15 @@ Boundaries control two things:
 1. **Realm-transaction finalization** runs at boundary exit: newly-reachable unreal objects are persisted under their PkgID, zero-refcount objects are GC'd, Merkle hashes recompute.
 2. **Cross-realm panic abort**: panics that cross a boundary on their unwind path abort the transaction. A `defer { recover() }` in the boundary-crossing caller does **not** catch a cross-boundary panic — only explicit `revive()` frames can. `revive(fn)` is currently test-only; future releases will give it transactional memory semantics.
 
-## `PreviousRealm()` — legacy stack-walker
+## `PreviousRealm()` — stack-walker
 
-`runtime.PreviousRealm()` (from `chain/runtime/unsafe`) returns the realm prior to the most recent **realm boundary**. A non-crossing function call does NOT create a boundary — so `PreviousRealm()` inside a non-crossing function returns whatever the caller's `PreviousRealm()` was, not the immediate caller.
+`unsafe.PreviousRealm()` (from `chain/runtime/unsafe`) returns the realm prior to the most recent **realm boundary**. A non-crossing function call does NOT create a boundary — so `PreviousRealm()` inside a non-crossing function returns whatever the caller's `PreviousRealm()` was, not the immediate caller.
 
 ```go
+import "chain/runtime/unsafe"
+
 func F(args ...) {                                // non-crossing — no cur realm param
-    if runtime.PreviousRealm().PkgPath() != "gno.land/r/trusted/admin" {
+    if unsafe.PreviousRealm().PkgPath() != "gno.land/r/trusted/admin" {
         panic("admin only")
     }
 }
@@ -205,7 +207,7 @@ The `unsafe` in the import path is intentional: this is the unconditional stack-
 
 ## `CurrentRealm()` and stage
 
-`runtime.CurrentRealm()` returns the active realm-context; its value depends on which **stage** the VM is in:
+`unsafe.CurrentRealm()` returns the active realm-context; its value depends on which **stage** the VM is in:
 
 | Stage | Triggered by | `CurrentRealm()` | `PreviousRealm()` |
 |---|---|---|---|
@@ -225,7 +227,7 @@ The `unsafe` in the import path is intentional: this is the unconditional stack-
 | `IsUserRun()` | ✗ | ✓ | ✗ |
 | `IsUser()` | ✓ | ✓ | ✗ |
 
-The `MsgRun` ephemeral realm can consume `banker.OriginSend()` and forward control — so `IsUser()` is the wrong guard for payment-gated paths. Use `IsUserCall()` (or `cur.Previous().IsUserCall()` in modern style). See `security.md` § payment-guard.
+The `MsgRun` ephemeral realm can consume `unsafe.OriginSend()` and forward control — so `IsUser()` is the wrong guard for payment-gated paths. Use `IsUserCall()` (or `cur.Previous().IsUserCall()` in modern style). See `security.md` § payment-guard.
 
 ## Method values
 
@@ -242,13 +244,13 @@ Two consequences:
 
 Invokes a single exported crossing function on a target realm. **Rejects** non-crossing functions and `/p/` functions — only crossing functions of `/r/` packages can be invoked directly. This prevents accidental non-crossing calls that would inherit the caller's realm-context.
 
-Inside the called function: `runtime.PreviousRealm()` is the origin user (pkgpath `""`); `runtime.CurrentRealm()` is the called realm.
+Inside the called function: `unsafe.PreviousRealm()` is the origin user (pkgpath `""`); `unsafe.CurrentRealm()` is the called realm.
 
 ### `MsgRun`
 
 Deploys an ephemeral `/e/g1<user>/run` package and invokes its `main()`. Inside `main`, the user is both the previous-realm (at the chain root) and shares the address with the ephemeral realm. The ephemeral can `realmA.PublicCrossing(cross)` to enter `realmA` properly.
 
-The address derivation makes coins sent to the ephemeral flow back to the user. The ephemeral can also consume `banker.OriginSend()` and forward control — which is why `IsUser()` (broad) is unsafe for payment guards.
+The address derivation makes coins sent to the ephemeral flow back to the user. The ephemeral can also consume `unsafe.OriginSend()` and forward control — which is why `IsUser()` (broad) is unsafe for payment guards.
 
 ### `MsgAddPackage`
 
@@ -269,7 +271,7 @@ See `security.md` for worked examples.
 
 - `security.md` — bug classes built on each of the above primitives (designation-forgery, callback substitution, attached-method privilege, payment-bypass, slice taint, the no-anchor laundering vector)
 - `patterns.md` — idioms that work *with* the model (crossing-function discipline, state shape, `/p/` vs `/r/`)
-- `stdlib.md` — `chain/runtime`, `chain/runtime/unsafe`, `chain/banker`, `chain/std` API surface
+- `stdlib.md` — `chain/runtime`, `chain/runtime/unsafe`, `chain/banker`, `chain` API surface
 - `render.md` — `Render(path string) string` is **not** a crossing function (no `cur realm` parameter)
 
 ## Source

@@ -41,7 +41,7 @@ There are many value types. A subset are also **objects** — they carry identit
 | **`MapValue`** | **yes** | |
 | **`BoundMethodValue`** | **yes** | func + receiver |
 | `TypeValue`, `PackageValue` | no | |
-| **`BlockValue`** | **yes** | for package, file, if, range, switch, func bodies |
+| **`Block`** | **yes** | for package, file, if, range, switch, func bodies |
 | `RefValue` | no | reference to an object stored on disk (lazy load) |
 | **`HeapItemValue`** | **yes** | invisible type for loopvars and closure captures |
 
@@ -86,10 +86,10 @@ The `Base` is always an object — that's how the realm finalizer knows what to 
 
 ## Blocks and heap items
 
-Every `{...}` block in Gno produces a `BlockValue`:
+Every `{...}` block in Gno produces a `Block`:
 
 ```go
-type BlockValue struct {
+type Block struct {
     ObjectInfo
     Source   BlockNode
     Values   []TypedValue   // one slot per declared var
@@ -99,7 +99,7 @@ type BlockValue struct {
 }
 ```
 
-The AST nodes that create a new block on execution: `FuncLitStmt`, `BlockStmt`, `ForStmt`, `IfCaseStmt`, `RangeStmt`, `SwitchCaseStmt`, `FuncDecl`, `FileNode`, `PackageNode`.
+The AST nodes that create a new block on execution: `FuncLitExpr`, `BlockStmt`, `ForStmt`, `IfCaseStmt`, `RangeStmt`, `SwitchClauseStmt`, `FuncDecl`, `FileNode`, `PackageNode`.
 
 **Heap items** are an invisible object type that wrap a single typed-value slot:
 

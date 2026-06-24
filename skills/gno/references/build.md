@@ -49,7 +49,7 @@ gno = "0.9"
 | `draft` | Marks the package as unimportable during normal operation. **Ignored at block 0** (genesis-only). Chain-creator flag. |
 | `private` | Marks the package as unimportable by any other package. Can be **re-uploaded** (new version overwrites). Memory/pointers/types from a private package cannot be stored in others. Typical use: `r/<user>/home`. Does not provide privacy — all code is still public. |
 | `ignore` | Marks the module as ignored by the toolchain but still usable in dev environments. |
-| `replace` | (coming soon) Local development; causes `addpkg` to fail on-chain. |
+| `replace` | `[[replace]]` (`old`/`new`) redirects an import to a local path for development; causes `addpkg` to fail on-chain. |
 | `[addpkg]` | On-chain metadata (creator address, block height). Filled by the VM keeper at deploy. Not for manual use off-chain. |
 
 ## `gnowork.toml`
@@ -87,7 +87,7 @@ Subcommands you actually use day-to-day:
 | `gno doc <pkgpath>` | Show package documentation |
 | `gno clean -modcache` | Remove `$GNOHOME/pkg/mod/` |
 
-`gno tool transpile` and `gno tool repl` exist for advanced cases — transpile to Go for benchmarking, REPL for ad-hoc evaluation.
+`gno tool transpile` and `gno repl` exist for advanced cases — transpile to Go for benchmarking, REPL for ad-hoc evaluation.
 
 Targeting a **live chain** (binary version-matched to the chain's release, deps fetched from that chain instead of the default remote): see `toolchain.md`.
 
@@ -146,6 +146,8 @@ func TestBid(cur realm, t *testing.T) {
 ```
 
 `NewUserRealm(addr)` fakes an EOA; `NewCodeRealm(pkgPath)` fakes a *calling realm* (use it for the payment-guard regression test below); `IssueCoins(addr, coins)` seeds a balance. `t.Run` subtests do **not** reset package globals — reset them in a helper yourself.
+
+**`SetRealm` affects the calling frame only — never wrap it in a helper.** It installs the realm override on the frame that calls it, and that frame is popped on return. So `func asUser(a address) { testing.SetRealm(testing.NewUserRealm(a)) }` sets the realm on `asUser`'s frame, not the test's; the test then runs with the default (code) realm and gated calls see `cur.Previous().IsUser() == false`. Call `SetRealm` directly in each test function. (Global-state reset belongs in a helper; realm setup does not.)
 
 **`package std is not in std`.** The realm-facing `std` package was removed: coin/event/address types live in `chain`, runtime calls in `chain/runtime` (+ `chain/runtime/unsafe`), and the test helpers (`SetRealm`, `NewUserRealm`, `NewCodeRealm`, `SetOriginCaller`, `SetOriginSend`, `IssueCoins`) in `testing`. The error names a non-existent stdlib path instead of saying "removed" — `gno fix` rewrites most call sites mechanically.
 
@@ -270,7 +272,7 @@ For the exhaustive table, load `docs/resources/go-gno-compatibility.md` from the
 Off-chain author tooling stops at the build. Deploy uses `gnokey maketx addpkg` against a chain. Recap:
 
 - The `module` field in `gnomod.toml` must match the path used in the `addpkg` transaction.
-- The deployer's address is captured at deploy time via `runtime.OriginCaller()` in `init()`. After init, the deployer is no longer accessible from realm code.
+- The deployer's address is captured at deploy time via `unsafe.OriginCaller()` (import `chain/runtime/unsafe`) in `init()`. After init, the deployer is no longer accessible from realm code.
 - Storage cost is paid out of the deployer's locked GNOT deposit. Use the `-max-deposit` flag to cap.
 
 For details on deploy mechanics, gnoweb interaction, and chain interaction surfaces, see the upstream `docs/users/` directory.

@@ -62,16 +62,16 @@ Reusable `/p/` packages should avoid `panic()` except in `Must*` / `Assert*` wra
 
 `init()` runs once during deploy (`MsgAddPackage`) and never again. It's the only chance the realm has to:
 
-1. Set up initial state (`admin = cur.Previous().Address()` — but in init the modern form is `runtime.OriginCaller()`).
+1. Set up initial state (`admin = cur.Previous().Address()` — but in init the modern form is `unsafe.OriginCaller()`).
 2. Register with other realms (`registry.Register(cross(cur), "myID", ...)`).
 
 ```go
-import "chain/runtime"
+import "chain/runtime/unsafe"
 
 var admin address
 
 func init() {
-    admin = runtime.OriginCaller()   // the deployer
+    admin = unsafe.OriginCaller()   // the deployer
 }
 ```
 
@@ -278,7 +278,7 @@ Coins are simpler and more constrained. GRC20 is the right choice when you need 
 
 ```go
 import (
-    "chain/banker"
+    "chain/runtime/unsafe"
 )
 
 func Buy(cur realm) {
@@ -286,7 +286,7 @@ func Buy(cur realm) {
     if !cur.Previous().IsUserCall() {
         panic("only EOA via MsgCall can fund this")
     }
-    if banker.OriginSend().AmountOf("ugnot") != price {
+    if unsafe.OriginSend().AmountOf("ugnot") != price {
         panic("incorrect amount")
     }
     // mutate state
@@ -338,15 +338,15 @@ func AdminOnly(cur realm) {
 
 Works for any caller (EOA or another realm). Use when the calling identity is what matters.
 
-### `runtime.OriginCaller()` — the tx-signing EOA
+### `unsafe.OriginCaller()` — the tx-signing EOA
 
 Returns the public address of the account that signed the transaction, regardless of intermediaries. Use when **the original user identity** is what matters (not whichever realm forwarded to you).
 
 ```go
-import "chain/runtime"
+import "chain/runtime/unsafe"
 
 func SignedByEOA() address {
-    return runtime.OriginCaller()
+    return unsafe.OriginCaller()
 }
 ```
 
@@ -356,7 +356,7 @@ Panics if anything but a direct `MsgCall` from an EOA reaches this function. Str
 
 ### Allowlist via `ownable` / `authz`
 
-For multi-admin or rotateable ownership, use the canonical packages: `gno.land/p/nt/ownable` (single-owner pattern) or `gno.land/p/moul/authz` (richer auth schemes).
+For multi-admin or rotateable ownership, use the canonical packages: `gno.land/p/nt/ownable/v0` (single-owner pattern) or `gno.land/p/moul/authz` (richer auth schemes).
 
 ## Cost-aware design
 
@@ -399,7 +399,7 @@ Packages that survived the `examples/quarantined/` cull — the test-13 safe-lis
 | B+tree (alternative for ordered keyed state) | `gno.land/p/nt/bptree/v0` |
 | Render-path routing (mux) | `gno.land/p/nt/mux/v0` |
 | Realm-path parsing | `gno.land/p/moul/realmpath` |
-| Ownership / single-owner pattern | `gno.land/p/nt/ownable` |
+| Ownership / single-owner pattern | `gno.land/p/nt/ownable/v0` |
 | Authorization patterns | `gno.land/p/moul/authz` |
 | Pagination | `gno.land/p/jeronimoalbi/pager` |
 | DAO primitives | `gno.land/p/nt/commondao/v0` |
@@ -448,20 +448,20 @@ func TransferOwnership(cur realm, next address) {
 **Wrong** — uses `.IsUser()`:
 
 ```go
-import "chain/banker"
+import "chain/runtime/unsafe"
 
 func Buy(cur realm) {
     if !cur.Previous().IsUser() {
         panic("user only")
     }
-    collected += banker.OriginSend().AmountOf("ugnot")
+    collected += unsafe.OriginSend().AmountOf("ugnot")
 }
 ```
 
 **Right** — uses `.IsUserCall()`:
 
 ```go
-import "chain/banker"
+import "chain/runtime/unsafe"
 
 func Buy(cur realm) {
     if !cur.IsCurrent() {
@@ -470,7 +470,7 @@ func Buy(cur realm) {
     if !cur.Previous().IsUserCall() {
         panic("direct user call only")
     }
-    collected += banker.OriginSend().AmountOf("ugnot")
+    collected += unsafe.OriginSend().AmountOf("ugnot")
 }
 ```
 
@@ -481,10 +481,10 @@ func Buy(cur realm) {
 **Wrong** — uses the origin stack-walker for identity:
 
 ```go
-import "chain/runtime"
+import "chain/runtime/unsafe"
 
 func SetPaused(cur realm, next bool) {
-    if runtime.OriginCaller() != owner {
+    if unsafe.OriginCaller() != owner {
         panic("owner only")
     }
     paused = next
@@ -628,7 +628,7 @@ Required. Match surrounding style.
 
 - `interrealm.md` — the model these patterns work *with* (crossing functions, borrow rules, `cur` capability, readonly taint)
 - `security.md` — the bug classes these idioms avoid (Classes 1a/1b/2/3/4, (A)/(B)/(C) safety hypothesis, encapsulation pattern)
-- `stdlib.md` — APIs the patterns rely on (`chain.Emit`, `avl.Tree`, `banker.OriginSend`, `chain/runtime`)
+- `stdlib.md` — APIs the patterns rely on (`chain.Emit`, `avl.Tree`, `unsafe.OriginSend`, `chain/runtime`)
 - `render.md` — Render() and gnoweb-specific patterns
 - `build.md` — project setup, testing flavors, Go-Gno compatibility
 - `memory.md` — typed value model and persistence semantics

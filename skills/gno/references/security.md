@@ -223,7 +223,7 @@ func Buy(cur realm) {
     if !cur.Previous().IsUserCall() {
         panic("only EOA via MsgCall can fund this")
     }
-    coins := banker.OriginSend()
+    coins := unsafe.OriginSend()
     if coins.AmountOf("ugnot") != price {
         panic("incorrect amount")
     }
@@ -241,7 +241,7 @@ Three predicates that look interchangeable but aren't:
 
 `IsUser()` accepts both EOAs and the user's ephemeral `gno.land/e/g1<user>/run` realm created by `MsgRun`. The ephemeral can consume the `OriginSend` envelope **before** forwarding control, bypassing the receipt invariant. Use `IsUserCall()` for payment-gated paths.
 
-**Detection**: file contains `banker.OriginSend(` AND `IsUser(` (no `Call` suffix). Both in the same function = high severity. `OriginSend` purely read-for-display = low severity.
+**Detection**: file contains `unsafe.OriginSend(` AND `IsUser(` (no `Call` suffix). Both in the same function = high severity. `OriginSend` purely read-for-display = low severity.
 
 **Status**: HISTORIC. No genuine example realm guards an `OriginSend` payment with `IsUser()` in the same function on current master; the only files referencing both predicates are deliberate test fixtures under `r/tests/vm/`, and there each predicate sits in a separate helper. The dangerous pattern still appears in older deployed realms and external code, so the auditor agent should expect to find it in user-supplied input.
 
@@ -293,7 +293,7 @@ The (C)-class vector. Even `func()` is dangerous — the callback body can call 
 
 ### Sealing is not a security boundary
 
-Unexported marker methods on an interface (`isCanonical()` etc.) are **bypassable via embedding** in Gno. See `examples/gno.land/p/test/seal/filetests/z_seal_*_filetest.gno` for the four working bypass tests.
+Unexported marker methods on an interface (`isCanonical()` etc.) are **bypassable via embedding** in Gno. See `examples/quarantined/gno.land/p/test/seal/filetests/z_seal_*_filetest.gno` for the four working bypass tests.
 
 **Rule**: sealing is documentation, not defense. For real allowlists, use a concrete-type switch (`switch v.(type) { case *MyImpl: ... }`) at the boundary function.
 
@@ -336,7 +336,7 @@ Quick-reference grep checklist. Run these from the realm root.
 | `IsUser()` co-occurring with `OriginSend` | RED | payment-bypass via MsgRun |
 | `cur.Previous()` / `cur.Address()` without prior `cur.IsCurrent()` check | RED | Class 2 — designation-forgery |
 | Public method takes `caller address` / `pkgPath string` as identity parameter | RED | Class 2 — designation-forgery |
-| `runtime.PreviousRealm()` inside a non-crossing function used as caller identity | RED | Class 2 — does not identify the immediate caller |
+| `unsafe.PreviousRealm()` inside a non-crossing function used as caller identity | RED | Class 2 — does not identify the immediate caller |
 | `interface { ... }` with `cur realm` parameter declared anywhere | YELLOW | Class 1a/1b — cur-disclosure surface |
 | `interface { ... }` accepted as parameter and methods invoked without canonical-type assert | YELLOW | Class 3 — impl-substitution |
 | `func(...)` parameters or function-typed state fields used in permission-gated paths | YELLOW | Class 4 — closed-over-authority |
@@ -354,7 +354,7 @@ Not Gno-language bug classes, but real audit signals an auditor should catch alo
 
 | Pattern | Signal | Action |
 |---|---|---|
-| `banker.OriginSend()` consumed with no `SendCoins` / `Withdraw` / auto-forward elsewhere in the realm | RED | Funds lock in realm address. Either implement guarded withdraw, auto-forward to a treasury, or document burn-on-receipt intent. |
+| `unsafe.OriginSend()` consumed with no `SendCoins` / `Withdraw` / auto-forward elsewhere in the realm | RED | Funds lock in realm address. Either implement guarded withdraw, auto-forward to a treasury, or document burn-on-receipt intent. |
 | Hardcoded `admin address` with no `TransferAdmin(cur realm, ...)` | YELLOW | Key loss = permanent loss of privileged ops. Ship rotation or document trade-off. |
 | `_ := someAvl.Get(k)` / `n, _ := v.(int)` swallowing the second return | YELLOW | Silent fallback on missing key or wrong type. Future state-shape change corrupts the read invisibly. |
 | `avl.Tree` storing only a single statically-named key | YELLOW | Over-typed; collapse to a scalar or expose multi-key API. Don't ship the middle. |
@@ -463,4 +463,4 @@ Attackers can read `Value()` (returns a copy), call `Increment(cur)` (D1 keeps `
 - `docs/resources/gno-security.md` — five-class taxonomy (class numbers used in chain code comments).
 - `docs/resources/gno-security-guide.md` — four structural defenses, safety hypothesis (A/B/C), encapsulation pattern, anti-patterns, surprising properties, checklist.
 - `gnovm/tests/files/zrealm_launder_*.gno` — ~64 exploit-attempt filetests, each annotated with mechanism and outcome.
-- `examples/gno.land/p/test/seal/filetests/z_seal_*_filetest.gno` — four bypass tests showing why sealing is documentation, not defense.
+- `examples/quarantined/gno.land/p/test/seal/filetests/z_seal_*_filetest.gno` — four bypass tests showing why sealing is documentation, not defense.
