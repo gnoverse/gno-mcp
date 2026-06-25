@@ -1,7 +1,8 @@
 # Interrealm semantics
 
 > **Category: spec / model.** Update when the interrealm specification changes in master.
-> **Authoritative spec**: `docs/resources/gno-interrealm-v2.md` in the `gnolang/gno` repo. This reference is a load-bearing summary, not a replacement. When an audit hinges on exact semantics or a subtle invariant, load the spec.
+> **Authoritative spec**: `gnovm/adr/interrealm_v2.md` and `docs/resources/gno-interrealm-v2.md` in the `gnolang/gno` repo. This reference is a load-bearing summary, not a replacement. When an audit hinges on exact semantics or a subtle invariant, load the spec.
+> **Source nuance**: `docs/resources/gno-interrealm-v2.md` phrases the public API checklist broadly ("does it check `cur.IsCurrent()` before using `cur.Previous()`?"). For the specific `_ int, rlm realm` helper pattern, `gnovm/adr/interrealm_v2.md` is more precise: crossing functions do not require `cur.IsCurrent()` on their first `cur realm`, while secondary/helper `rlm realm` values often require `rlm.IsCurrent()`.
 
 ## Why this reference exists
 
@@ -83,11 +84,11 @@ Inside a crossing function body, the `cur realm` parameter is a **typed capabili
 | `Address() address` | bech32 address derived from the realm's pkgpath |
 | `PkgPath() string` | pkgpath, or `""` at chain root (EOA) |
 | `Previous() realm` | the captured realm that was current before this crossing |
-| `IsCurrent() bool` | **true only when this `cur` matches the topmost live crossing frame's identity**. Stale or stored realm values return `false` |
+| `IsCurrent() bool` | **true only when this realm value matches the topmost live crossing frame's identity**. The first `cur realm` of a crossing function is current by runtime construction; stale, previous, or otherwise forwarded realm values return `false` |
 | `IsCode() / IsUser() / IsUserCall() / IsUserRun() / IsEphemeral()` | classification by address and pkgpath |
 | `String() string` | debug representation |
 
-**`IsCurrent()` is the authentication primitive.** Any public entry point that uses `cur` to derive caller identity (`cur.Previous().Address()`, `cur.Previous().PkgPath()`) **must** check `cur.IsCurrent()` first. Without that check, a stale or attacker-supplied realm value's `Address()` and `PkgPath()` still resolve numerically — they just no longer refer to the live caller. This is the **designation-forgery** class (see `security.md`).
+**`IsCurrent()` is the guard for secondary realm parameters.** The resources guide describes `IsCurrent()` as the authentication primitive for public APIs that derive caller identity from `cur`; read that as broad checklist guidance, then apply the ADR distinction at the exact call shape. The official ADR notes that `rlm.IsCurrent()` is often required when a non-crossing helper accepts `_ int, rlm realm`; otherwise the caller can pass `cur.Previous()` or another realm value and change the meaning. Crossing functions do **not** require `cur.IsCurrent()` for their first `cur realm` because the runtime ensures that value is current. Without the check on secondary/helper realm parameters, a stale or attacker-supplied realm value's `Address()` and `PkgPath()` still resolve numerically — they just no longer refer to the live caller. This is the **designation-forgery** class (see `security.md`).
 
 ### Realm values are ephemeral
 
@@ -201,7 +202,7 @@ func F(args ...) {                                // non-crossing — no cur rea
 }
 ```
 
-This is **insecure**. If a non-crossing function in some other realm calls `F(...)`, `PreviousRealm()` is whatever was previous *before that other call* — possibly the admin realm two frames back. Always perform caller-identity checks inside **crossing functions** (`func F(cur realm, ...)`) and use `cur.IsCurrent() + cur.Previous()`.
+This is **insecure**. If a non-crossing function in some other realm calls `F(...)`, `PreviousRealm()` is whatever was previous *before that other call* — possibly the admin realm two frames back. Prefer caller-identity checks inside **crossing functions** (`func F(cur realm, ...)`) using the runtime-current `cur.Previous()`. If identity must flow into a non-crossing helper, use the `_ int, rlm realm` secondary-parameter pattern and check `rlm.IsCurrent()` before trusting `rlm.Address()`, `rlm.PkgPath()`, or `rlm.Previous()`.
 
 The `unsafe` in the import path is intentional: this is the unconditional stack-walking primitive. Modern code uses `cur`.
 
@@ -260,7 +261,8 @@ A new realm's `init()` and global-var declarations run with `PreviousRealm()` = 
 
 For every exported function or method:
 
-- Does it take `cur realm`? If yes, does it check `cur.IsCurrent()` before using `cur.Previous()`, `cur.Address()`, or `cur.PkgPath()`?
+- Is this a crossing function's first `cur realm`? The runtime guarantees it is current.
+- Is this a helper/secondary `rlm realm` parameter? Check `rlm.IsCurrent()` before using `rlm.Previous()`, `rlm.Address()`, or `rlm.PkgPath()` for authority.
 - Does it return a pointer that aliases internal mutable state? If yes, expect attackers to invoke any method on the returned pointer type that borrow rule #2 routes back to you.
 - Does it accept an interface or function-value parameter? If yes, gate with a canonical-type check (`t.(*MyConcrete)` or an `IsCanonicalX` predicate). Embedding-based seal patterns are bypassable.
 - Does it accept a `func(*MyPType)` callback for any `/p/`-declared `MyPType`? Retype to use one of your own `/r/`-declared types as the parameter — otherwise `/p/`-attackers can launder authority through the no-anchor case.
