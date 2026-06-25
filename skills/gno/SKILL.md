@@ -19,7 +19,7 @@ Gno is an interpreted Go-derived VM where source code lives on-chain. Every code
 
 Two callers reach realms: an **EOA** (externally-owned account) via `MsgCall` or `MsgRun`, or another **realm** via a cross-call. Identity, authority, and storage attribution all hinge on which.
 
-**Core principle.** Pattern-matching from Solidity, Cosmos, or vanilla Go produces wrong answers here. Gno has its own model: **`cur realm` is a capability token**, the storage realm of an object is its allocator (PkgID at allocation = authority), cross-realm references carry a sticky **readonly taint**, and "receiver attachment is a privilege grant" is a deliberate design choice rather than a fixable bug. Always check `cur.IsCurrent()` before using `cur.Previous()`.
+**Core principle.** Pattern-matching from Solidity, Cosmos, or vanilla Go produces wrong answers here. Gno has its own model: **`cur realm` is a capability token**, the storage realm of an object is its allocator (PkgID at allocation = authority), cross-realm references carry a sticky **readonly taint**, and "receiver attachment is a privilege grant" is a deliberate design choice rather than a fixable bug. Crossing entrypoints receive a runtime-current first `cur realm`; non-crossing helpers that accept a secondary `rlm realm` must check `rlm.IsCurrent()` before trusting `rlm` for authority.
 
 The chain is still **testnet**; the interrealm spec is the youngest and most actively-changing part of the stack. Treat security-critical patterns as version-bound to master HEAD and verify against upstream when emitting consequential code.
 
@@ -56,7 +56,7 @@ This SKILL.md is a router. References are categorized by topic; load whichever f
 ### Task hints (multi-reference loads)
 
 - *Writing a realm from scratch* → start with `patterns.md` (idioms) + `interrealm.md` (spec), then `stdlib.md` for API, `security.md` to avoid known footguns, `render.md` if it exposes a `Render()`, `memory.md` for state-shape decisions, `build.md` for testing and shipping.
-- *Designing the public API of a realm* → `interrealm.md` (crossing functions, `cur.IsCurrent()`) + `security.md` (the verification checklist + (A)/(B)/(C) safety hypothesis) + `patterns.md` (realm-as-public-API mindset).
+- *Designing the public API of a realm* → `interrealm.md` (crossing functions, secondary `rlm.IsCurrent()` guards) + `security.md` (the verification checklist + (A)/(B)/(C) safety hypothesis) + `patterns.md` (realm-as-public-API mindset).
 - *Debugging a panic* → `interrealm.md` (readonly taint, conversion guards, cross-realm panic semantics) + `memory.md` (heap-item and pointer model) + `security.md` (the operational signals — non-determinism, platform divergence).
 - *Reviewing someone else's realm casually* → `security.md` + `interrealm.md` are always relevant; `patterns.md` for idiom checks; `render.md` if it has a `Render()`. Skip the formal procedure unless asked.
 - *Auditing a realm formally* → `audit.md` is the procedure; it pulls in `security.md` + `interrealm.md` + `patterns.md` + `render.md` (if relevant) + `memory.md` (if persistence semantics are in play) as it runs.
@@ -72,8 +72,8 @@ This SKILL.md is a router. References are categorized by topic; load whichever f
 |---|---|
 | `func F(cur realm, ...)` | **Crossing function** — caller invokes with `F(cross(cur), ...)` for a cross-call, `F(cur, ...)` for a same-realm non-crossing call. Only `/r/` packages may declare crossing functions. `MsgCall` only dispatches to crossing functions. |
 | `cross(rlm)` | Uverse function marking a cross-call. `cross(cur)` is the canonical form; `cross(otherRealm)` names an explicit target. The bare `cross` keyword that existed during the 0.9 migration is gone. |
-| `cur.IsCurrent()` | **The authentication primitive.** Returns true only for the live crossing frame's `cur`. Check this before using `cur.Previous()`, `cur.Address()`, or `cur.PkgPath()` — otherwise a stale stored realm value still resolves numerically and forges identity. (security.md Class 2 designation-forgery.) |
-| `cur.Previous()` | Captured realm that was current before this crossing. Use `cur.Previous().Address()` to identify the caller after the `IsCurrent` check. |
+| `cur.IsCurrent()` / `rlm.IsCurrent()` | Returns true only when that realm value matches the topmost live crossing frame. The first `cur realm` of a crossing function is runtime-current by construction; secondary/helper `rlm realm` parameters need an explicit check before authority use. |
+| `cur.Previous()` | Captured realm that was current before this crossing. In a crossing entrypoint, use `cur.Previous().Address()` to identify the caller. In a helper that accepts `rlm realm`, first prove `rlm.IsCurrent()`. |
 | `unsafe.PreviousRealm()` | Imported from `chain/runtime/unsafe`. **Stack-walker** — returns the realm prior to the most recent boundary regardless of which function you're in. Prefer `cur` in crossing functions; reach for this only when you need stack-walking semantics. |
 | `IsUserCall()` | True only if caller is an EOA via `MsgCall`. Use this when guarding `OriginSend`. |
 | `IsUserRun()` | True only if caller is an EOA via `MsgRun` (in the ephemeral `/e/g1<user>/run` realm). |
@@ -90,9 +90,9 @@ Before writing or reviewing crossing functions, check these common mistakes:
 
 | Trigger | What to look for | Fix |
 |---|---|---|
-| **Authorization check** | `cur.Previous()` without `cur.IsCurrent()` | Check `cur.IsCurrent()` first |
+| **Authorization check** | Helper/secondary `rlm realm` trusted without `rlm.IsCurrent()` | Check the same `rlm` first |
 | **Payment handling** | `OriginSend` without `cur.Previous().IsUserCall()` | Guard with `.IsUserCall()`, not `.IsUser()` |
-| **Caller identity** | Using `OriginCaller()` in crossing function | Use `cur.Previous().Address()` after `IsCurrent()` |
+| **Caller identity** | Using `OriginCaller()` in crossing function | Use the crossing entrypoint's runtime-current `cur.Previous().Address()` |
 | **Render output** | Raw `path` concatenated into markdown | Sanitize with `sanitize.InlineText` (`gno.land/p/nt/markdown/sanitize/v0`); see `render.md` |
 | **Callback params** | Function accepts `func()` from caller | Replace with explicit state-mutation methods |
 | **Interface methods** | Interface signature contains `cur realm` | Take `address` instead; caller derives from `cur.Previous()` |
@@ -105,7 +105,7 @@ Load `security.md` for detailed threat model and exploitation mechanics.
 
 If you find yourself thinking *"this is just like Solidity's `msg.sender`…"* — **stop**. Gno's caller-identity model is not stack-walking by default. Specifically:
 
-- `cur.Previous()` is only meaningful inside a **crossing function** AND only after `cur.IsCurrent()` returns true.
+- `cur.Previous()` is meaningful for the runtime-current first `cur realm` of a crossing function. Crossing functions do not need to re-check that first `cur`; helper parameters such as `_ int, rlm realm` do.
 - `unsafe.PreviousRealm()` (from `chain/runtime/unsafe`) is a stack-walker — inside a non-crossing function it returns whatever was previous at the last realm boundary, possibly an unrelated frame upstream. It does NOT identify the immediate caller.
 - A `unsafe.PreviousRealm().PkgPath() == "..."` check inside a non-crossing function is a **security bug** (security.md Class 2).
 
@@ -120,4 +120,4 @@ Load `interrealm.md` § The `cur` capability token before emitting any caller-id
 
 ## Source
 
-Distilled from `docs/resources/` in the `gnolang/gno` repo: `gno-interrealm-v2.md`, `gno-security.md`, `gno-security-guide.md`, `effective-gno.md`, `gno-stdlibs.md`, `gno-memory-model.md`, `gno-data-structures.md`, `gno-testing.md`, `configuring-gno-projects.md`, `go-gno-compatibility.md`, plus observed conventions in `examples/gno.land/` (post-test-13 quarantine).
+Distilled from the `gnolang/gno` repo, especially `gnovm/adr/interrealm_v2.md` (the `rlm.IsCurrent()` note for secondary realm parameters) and `docs/resources/`: `gno-interrealm-v2.md`, `gno-security.md`, `gno-security-guide.md`, `effective-gno.md`, `gno-stdlibs.md`, `gno-memory-model.md`, `gno-data-structures.md`, `gno-testing.md`, `configuring-gno-projects.md`, `go-gno-compatibility.md`, plus observed conventions in `examples/gno.land` (post-test-13 quarantine).

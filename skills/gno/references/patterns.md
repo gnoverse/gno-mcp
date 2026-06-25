@@ -120,7 +120,6 @@ A `/r/` realm is not a Go program. It's a **public API**. Anything exported can 
 
 ```go
 func PublicMethod(cur realm, nb int) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     if nb <= 0 || nb > MaxBatch { panic("nb out of range") }
     privateMethod(cur.Previous().Address(), nb)
 }
@@ -135,7 +134,6 @@ Public functions gate (caller checks, payment validation, input bounds) and then
 ```go
 // Public, called by users via MsgCall. Crossing function — first param is cur realm.
 func Buy(cur realm, sku string) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     if !cur.Previous().IsUserCall() { panic("EOA call only") }
     requirePayment()
     buy(sku)
@@ -160,7 +158,6 @@ When calling a crossing function in another realm, use `cross(cur)` as the first
 import "gno.land/r/some/registry"
 
 func Register(cur realm, ...) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     registry.Register(cross(cur), "myID", myCallback)
 }
 ```
@@ -232,7 +229,7 @@ import "gno.land/r/widget"
 var item *widget.Widget   // every widget method now runs with our authority via D2
 ```
 
-When you must use a `/p/`-declared type, follow the **encapsulation pattern** from `security.md`: lowercase fields, no exported method returning interior pointers, authority transitions gated by `cur.IsCurrent()`. The `grc20` package is the canonical example.
+When you must use a `/p/`-declared type, follow the **encapsulation pattern** from `security.md`: lowercase fields, no exported method returning interior pointers, and authority transitions gated at the crossing/helper boundary. The `grc20` package is the canonical example.
 
 ## Safe-object pattern
 
@@ -245,7 +242,6 @@ type MySafeStruct struct {
 }
 
 func NewSafeStruct(cur realm) *MySafeStruct {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     return &MySafeStruct{
         counter: 0,
         admin:   cur.Previous().Address(),
@@ -255,7 +251,6 @@ func NewSafeStruct(cur realm) *MySafeStruct {
 func (s *MySafeStruct) Counter() int { return s.counter }
 
 func (s *MySafeStruct) Inc(cur realm) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     if cur.Previous().Address() != s.admin { panic("permission denied") }
     s.counter++
 }
@@ -282,7 +277,6 @@ import (
 )
 
 func Buy(cur realm) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     if !cur.Previous().IsUserCall() {
         panic("only EOA via MsgCall can fund this")
     }
@@ -313,7 +307,6 @@ Emit events for any state change off-chain consumers care about. They cost gas b
 import "chain"
 
 func ChangeOwner(cur realm, newOwner address) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     if cur.Previous().Address() != owner { panic("not the owner") }
     owner = newOwner
     chain.Emit("OwnershipChange", "newOwner", newOwner.String())
@@ -330,7 +323,6 @@ Four common shapes:
 
 ```go
 func AdminOnly(cur realm) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     if cur.Previous().Address() != admin { panic("permission denied") }
     // ...
 }
@@ -414,34 +406,40 @@ Prefer these over re-implementation — they're reviewed, used, and stable.
 
 Real examples of each major vulnerability class, with corrected versions. These are excerpts from executable fixtures in the audit pattern harness; see the gnolang/gno repo's `misc/audit-pattern-harness/` for the full test suite.
 
-### Authorization: check `cur.IsCurrent()` before `cur.Previous()`
+### Authorization: check secondary `rlm.IsCurrent()` before trusting helper realm parameters
 
-**Wrong** — uses `cur.Previous()` without verification:
+Crossing functions receive a runtime-current first `cur realm`; do not add a redundant `cur.IsCurrent()` just to satisfy a pattern. The explicit check is needed when realm identity is threaded into a non-crossing helper as a secondary parameter.
+
+**Wrong** — helper trusts caller-supplied `rlm`:
 
 ```go
-func TransferOwnership(cur realm, next address) {
-    if cur.Previous().Address() != owner {  // BUG: stale realm resolves
+func transferOwnership(_ int, rlm realm, next address) {
+    if rlm.Previous().Address() != owner {  // BUG: caller can pass cur.Previous()
         panic("owner only")
     }
     owner = next
 }
 ```
 
-**Right** — verifies realm is live:
+**Right** — verifies the helper realm value is live:
 
 ```go
 func TransferOwnership(cur realm, next address) {
-    if !cur.IsCurrent() {
+    transferOwnership(0, cur, next)
+}
+
+func transferOwnership(_ int, rlm realm, next address) {
+    if !rlm.IsCurrent() {
         panic("invalid realm")
     }
-    if cur.Previous().Address() != owner {  // Now safe
+    if rlm.Previous().Address() != owner {  // Now safe
         panic("owner only")
     }
     owner = next
 }
 ```
 
-**Why**: A stale stored realm value can still resolve `.Address()` numerically, but no longer refers to the live caller. `cur.IsCurrent()` is the authentication primitive.
+**Why**: `rlm` is just a helper parameter. A caller can pass `cur.Previous()` or another realm value unless the helper proves the value is the current crossing frame.
 
 ### Payment: guard with `IsUserCall()`, not `IsUser()`
 
@@ -464,9 +462,6 @@ func Buy(cur realm) {
 import "chain/runtime/unsafe"
 
 func Buy(cur realm) {
-    if !cur.IsCurrent() {
-        panic("invalid realm")
-    }
     if !cur.Previous().IsUserCall() {
         panic("direct user call only")
     }
@@ -495,9 +490,6 @@ func SetPaused(cur realm, next bool) {
 
 ```go
 func SetPaused(cur realm, next bool) {
-    if !cur.IsCurrent() {
-        panic("invalid realm")
-    }
     if cur.Previous().Address() != owner {
         panic("owner only")
     }
@@ -505,7 +497,7 @@ func SetPaused(cur realm, next bool) {
 }
 ```
 
-**Why**: `OriginCaller()` names the transaction's original signer; it does NOT identify the immediate caller when an intermediate realm crosses into this one. Use `cur.Previous().Address()` after `cur.IsCurrent()`.
+**Why**: `OriginCaller()` names the transaction's original signer; it does NOT identify the immediate caller when an intermediate realm crosses into this one. Use the crossing entrypoint's `cur.Previous().Address()`.
 
 ### Render output: sanitize untrusted content
 
