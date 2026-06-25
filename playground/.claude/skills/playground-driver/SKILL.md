@@ -1,6 +1,6 @@
 ---
 name: playground-driver
-description: Drive and judge e2e scenarios against the playground AUT (the containerized Claude + gnomcp + gno skill). Use whenever the user wants to run/debug playground e2e, QA the MCP or skill end to end, run or author a scenario, investigate an e2e failure, or "test the agent against simnet" — even if they don't say "e2e". Interactive mode; batch runs go through the playground-driver agent.
+description: Drive and judge e2e scenarios against the playground AUT (the containerized Claude + gnomcp + gno skill). Load whenever working on the playground harness at all — running or debugging e2e, QAing the MCP or skill end to end, authoring or editing a scenario, changing the driver or its references, or investigating an e2e failure — even if the user doesn't say "e2e". Interactive mode; batch runs go through the playground-driver agent.
 ---
 
 # Playground driver — interactive supervisor

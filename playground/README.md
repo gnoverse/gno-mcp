@@ -65,12 +65,19 @@ scenario: it plays the user turn-by-turn over `docker exec`, verifies chain grou
 the in-container **simnet** (in-memory gnoland node + faucet + gnoweb on chain `test9999`, the
 `e2e` Docker target's main process), then interviews the AUT about its tool and skill choices.
 
+> **Working on the harness?** Load the **`playground-driver`** skill first — for any of it:
+> running scenarios, authoring or editing them, or changing the driver. It carries the wire
+> protocol, judging rules, scenario format, and verify toolkit. It lives at
+> `.claude/skills/playground-driver/` and is also linked from the repo-root `.claude/skills/`,
+> so it surfaces whether your cwd is the repo root or `playground/`.
+
 - **Interactive (debug):** `cd playground && claude`, then `/playground-driver [scenario-id]`.
 - **Batch:** `make playground-e2e` (local tier — gates: every scenario must pass) /
   `make playground-e2e-external` (outside-resource scenarios — random failure tolerated, only
   hard `fail` gates). Narrow the run via `ARGS`: `make playground-e2e ARGS="--scenario session-flow"`
   runs one scenario (fastest way to iterate on a single test); `ARGS="--category reads"` (writes,
-  connect, …) filters by feature set.
+  connect, …) filters by feature set. **Recommended:** iterate one scenario at a time; only run
+  the full sweep when finalizing — it runs every scenario end to end and can take a long time.
 - **Scenarios:** `e2e/scenarios/<tier>/*.md` — copy `e2e/TEMPLATE.md`; authoring guide in
   `.claude/skills/playground-driver/references/scenario-format.md`. Only `### Instruct` is ever
   sent to the AUT; `Expect`/`Verify` stay driver-side.

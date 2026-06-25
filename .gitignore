@@ -25,3 +25,18 @@ skills/gno/tests/
 # re-include it over machine-global ".claude" ignores, keeping local settings out.
 !playground/.claude/
 playground/.claude/settings.local.json
+
+# Repo-root .claude is otherwise machine-global-ignored; re-include only the
+# playground-driver symlink so the skill surfaces from the repo root too, keeping
+# local settings.json and agent-memory out.
+!.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/playground-driver
+
+# CLAUDE.md is machine-global-ignored (the repo uses AGENTS.md); re-include the
+# CLAUDE.md → AGENTS.md symlinks so Claude auto-loads the AGENTS guidance — at the
+# repo root and when cwd is playground/.
+!/CLAUDE.md
+!playground/CLAUDE.md
