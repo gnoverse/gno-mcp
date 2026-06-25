@@ -145,6 +145,8 @@ func DoThing(_ int, rlm realm) {
 
 **Detection**: function signatures with `caller address` or `pkgPath string` as identity parameters; non-crossing helper signatures like `_ int, rlm realm` where `rlm` is used for authority without an `rlm.IsCurrent()` guard. Do not flag the first `cur realm` of a crossing function solely for lacking `cur.IsCurrent()`; the runtime guarantees it is current.
 
+When reconciling upstream docs, treat `docs/resources/gno-interrealm-v2.md`'s public-API checklist as a broad prompt to inspect caller-identity use, not as an automatic finding against every crossing entrypoint. For the `_ int, rlm realm` migration shape, apply `gnovm/adr/interrealm_v2.md`: guard the helper's secondary `rlm`, not the crossing function's first `cur`.
+
 **Fix**:
 
 ```go

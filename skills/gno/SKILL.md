@@ -116,7 +116,7 @@ Load `interrealm.md` § The `cur` capability token before emitting any caller-id
 - **The interrealm spec is the youngest part of the chain.** Treat patterns as version-bound to the master HEAD this skill was distilled against; verify against upstream when emitting security-critical code.
 - **No compiler protection for attached-method privilege escalation** (the (A)-class violation when a `/p/`-type with concrete-callback higher-order methods gets embedded in `/r/`-data). Receiver attachment is a privilege grant — the audit is the only line of defense. See `references/security.md` Safety hypothesis (B).
 - **Test-13 quarantine snapshot.** The kept-in-`examples/` set was frozen at scaffold time; new community packages added or removed post-scaffold are not reflected. Verify against the current master tree before recommending an import.
-- **gno.land docs are evolving.** When a recommendation here disagrees with `docs/resources/*.md` in the gnolang/gno repo, the upstream docs win — file an update.
+- **gno.land docs are evolving.** When upstream docs disagree, prefer the more specific interrealm source for the exact shape in question: `docs/resources/gno-interrealm-v2.md` gives the broad public-API checklist, while `gnovm/adr/interrealm_v2.md` is the sharper source for the crossing-entrypoint vs secondary-helper `realm` distinction.
 
 ## Source
 
