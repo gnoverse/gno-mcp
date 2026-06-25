@@ -31,7 +31,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 | `docker/` | release Dockerfiles (`gnomcp`, `agentfaucet`); built by goreleaser `dockers_v2`, COPY a prebuilt static binary via `$TARGETOS/$TARGETARCH` |
 | `test/integration/` | real-node tests (`-tags=integration`) |
 | `test/e2e/realms/` | gno realm fixtures, baked into the playground e2e image + simnet genesis |
-| `playground/` | agent-e2e harness (driver QAs the containerized AUT); `test/README.md` maps the test layers |
+| `playground/` | agent-e2e harness (driver QAs the containerized AUT) — **load the `playground-driver` skill before working here** (`playground/AGENTS.md`); `test/README.md` maps the test layers |
 | `docs/adr/` | decision records, reconciled to shipped state (status line at top, no `prxxxx_` prefixes) |
 | `skills/` | user-facing skills (product, not contributor guidance): `gno` (reference library + router) + thin side skills (`gno-audit`, `gno-debug`, `gno-onboard`) that only compose `gno/references/` |
 
@@ -66,6 +66,13 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 | Touch skill content | monorepo (`gnolang/gno`) is the source of truth — point at it, don't restate it (`docs/skills.md` § source of truth) |
 
 Stale docs are bugs: if a change makes any claim in README/docs wrong, fixing it is part of the change, not a follow-up.
+
+## Subprojects
+
+Working in `playground/`? Its harness guide is incrusted here (and loads on its own when your
+cwd is `playground/`):
+
+@playground/AGENTS.md
 
 ## Special files
 
