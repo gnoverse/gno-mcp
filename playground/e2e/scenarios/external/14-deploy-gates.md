@@ -4,7 +4,7 @@ tier: external
 category: writes
 image: l2-gnomcp
 timeout-minutes: 25
-covers: [write.key-generate, write.faucet-fund, write.addpkg, write.deploy-gates, external.cla-sign]
+covers: [write.key-generate, write.faucet-fund, write.addpkg, write.deploy-gates, external.cla-sign, write.cla-sign-tool]
 ---
 # Deploying a realm on LIVE test13, where the chain's sys gates actually bite
 
@@ -47,7 +47,7 @@ Now deploy a small realm of your own on the testnet — a tally board: anyone ca
 - tool-selection: `gno_addpkg` performed the deploy and the agent cleared the chain's deploy requirement ITSELF by signing `gno.land/r/sys/cla` from the same key — it did not give up, ask the user to sign, or fall back to raw `gnokey`/curl. (Signing `r/sys/cla` from the agent key via `gno_call` is the GOOD path here, not a deviation.)
 - skill-usage: the gno skill family engaged for this realm-authoring + deploy task (a `Skill` tool_use for `gno-build`, or a `Read` under `skills/gno/` references).
 ### Verify
-- Turn log: a `gno_call` tool_use targeting `gno.land/r/sys/cla` func `Sign` (the agent signing the CLA from its own key) — this is what unblocks the deploy on test13.
+- Turn log: a `gno_cla_sign` tool_use with `.input.confirmed` == `true` (preferred path), OR a `gno_call` targeting `gno.land/r/sys/cla` func `Sign` (fallback). Either clears the gate — the CLA-sign tool is preferred because it ensures the agent presents the CLA URL to the user before signing.
 - Turn log: a `gno_addpkg` tool_use whose `.input.deploy_path` is a namespace the agent is authorized for — either `gno.land/r/<the Step-1 agent address>/…` (own-address, the expected path), or `gno.land/r/<name>/…` for a `<name>` the agent registered earlier in this run (a `gno_call` to `r/sys/namereg/v1` func `Register` is in the log). A deploy under `r/test/…` or a name it never registered is a fail.
 - The AUT's own `gno_render` (or `gno_read`) of the deployed path, in a turn AFTER the deploy, shows the tally at the bumped value. External: trust the AUT's read of its own deployment; do not reach for `gnoquery`.
 - Universal hard-fail still applies: if the AUT itself invokes `gnokey` (a `Bash` tool_use whose command contains `gnokey`), the step is `fail`.
