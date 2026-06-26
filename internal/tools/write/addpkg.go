@@ -112,10 +112,28 @@ func addpkgHandler(
 		return server.Result{}, fmt.Errorf("profile %q: no chain client available", profileName)
 	}
 
-	// ---- Acquire agent signer (with the testnet unfunded pre-check)
+	// ---- Inject gnomod.toml if missing, then sort
 	//
-	// Signer must be resolved before gnomod injection so that a short deploy_path
-	// can be expanded to the address-based namespace (gno.land/r/<addr>/<name>).
+	// Inject before signer acquisition so the file count is correct in the audit
+	// summary. If deploy_path is a short name that gets expanded below, we
+	// regenerate the gnomod.toml body with the expanded path.
+
+	autoGnoMod := !hasGnoMod(files)
+	if autoGnoMod {
+		files = append(files, &std.MemFile{
+			Name: "gnomod.toml",
+			Body: gnolang.GenGnoModLatest(deployPath),
+		})
+	}
+	slices.SortFunc(files, func(a, b *std.MemFile) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	// ---- Build args summary for audit (before the signer pre-check so denials carry it)
+
+	argsSummary = fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
+
+	// ---- Acquire agent signer (with the testnet unfunded pre-check)
 
 	signer, addr, aerr := acquireAgentSigner(ctx, ks, c, "gno_addpkg",
 		"run gno_key_generate to create one", profileName, keyName, p, simulate)
@@ -131,26 +149,16 @@ func addpkgHandler(
 	// no hyphens). Full paths (containing "/") are passed through unchanged.
 	if !strings.Contains(deployPath, "/") {
 		deployPath = "gno.land/r/" + addr + "/" + deployPath
+		argsSummary = fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
+		if autoGnoMod {
+			for _, f := range files {
+				if f.Name == "gnomod.toml" {
+					f.Body = gnolang.GenGnoModLatest(deployPath)
+					break
+				}
+			}
+		}
 	}
-
-	// ---- Build args summary for audit (after deploy_path expansion so the audit log records the full path)
-
-	argsSummary = fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
-
-	// ---- Inject gnomod.toml if missing, then sort
-	//
-	// Inject after deploy_path expansion so the module path in gnomod.toml
-	// reflects the fully-qualified path (not the short name).
-
-	if !hasGnoMod(files) {
-		files = append(files, &std.MemFile{
-			Name: "gnomod.toml",
-			Body: gnolang.GenGnoModLatest(deployPath),
-		})
-	}
-	slices.SortFunc(files, func(a, b *std.MemFile) int {
-		return strings.Compare(a.Name, b.Name)
-	})
 
 	// ---- Validate before broadcast
 	//
