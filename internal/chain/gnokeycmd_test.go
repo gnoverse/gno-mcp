@@ -20,8 +20,8 @@ func TestGnokeyCommand_callBroadcast(t *testing.T) {
 		"-pkgpath gno.land/r/demo/counter",
 		"-func Bump",
 		"-args 1",
-		"-gas-fee 10000ugnot",  // the floor fallback (DefaultGasFeeUgnot)
-		"-gas-wanted 10000000", // DefaultGasWanted
+		"-gas-fee 200000ugnot",   // the floor fallback (DefaultGasFeeUgnot = DefaultGasWanted/1000)
+		"-gas-wanted 200000000", // DefaultGasWanted
 		"-remote http://localhost:26657",
 		"-chainid dev",
 		"-broadcast g1alice",
@@ -45,7 +45,7 @@ func TestGnokeyCommand_usesOfferedFee(t *testing.T) {
 	if !strings.Contains(got, "-gas-fee 80000ugnot") {
 		t.Errorf("expected the offered fee in -gas-fee\ngot: %s", got)
 	}
-	if strings.Contains(got, "-gas-fee 10000ugnot") {
+	if strings.Contains(got, "-gas-fee 200000ugnot") {
 		t.Errorf("must not fall back to the floor when a fee is set\ngot: %s", got)
 	}
 }
