@@ -20,7 +20,7 @@ func TestGnokeyCommand_callBroadcast(t *testing.T) {
 		"-pkgpath gno.land/r/demo/counter",
 		"-func Bump",
 		"-args 1",
-		"-gas-fee 200000ugnot",   // the floor fallback (DefaultGasFeeUgnot = DefaultGasWanted/1000)
+		"-gas-fee 200000ugnot",  // the floor fallback (DefaultGasFeeUgnot = DefaultGasWanted/1000)
 		"-gas-wanted 200000000", // DefaultGasWanted
 		"-remote http://localhost:26657",
 		"-chainid dev",
