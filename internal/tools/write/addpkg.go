@@ -112,7 +112,35 @@ func addpkgHandler(
 		return server.Result{}, fmt.Errorf("profile %q: no chain client available", profileName)
 	}
 
+	// ---- Acquire agent signer (with the testnet unfunded pre-check)
+	//
+	// Signer must be resolved before gnomod injection so that a short deploy_path
+	// can be expanded to the address-based namespace (gno.land/r/<addr>/<name>).
+
+	signer, addr, aerr := acquireAgentSigner(ctx, ks, c, "gno_addpkg",
+		"run gno_key_generate to create one", profileName, keyName, p, simulate)
+	if aerr != nil {
+		return server.Result{}, aerr
+	}
+
+	// ---- Expand short deploy_path to address-based namespace
+	//
+	// When deploy_path contains no "/" it is a short package name (e.g. "hello").
+	// Expand it to "gno.land/r/<agentAddr>/<name>" which is always authorized
+	// (no namespace registration required) and gnoweb-compatible (hex address,
+	// no hyphens). Full paths (containing "/") are passed through unchanged.
+	if !strings.Contains(deployPath, "/") {
+		deployPath = "gno.land/r/" + addr + "/" + deployPath
+	}
+
+	// ---- Build args summary for audit (after deploy_path expansion so the audit log records the full path)
+
+	argsSummary = fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
+
 	// ---- Inject gnomod.toml if missing, then sort
+	//
+	// Inject after deploy_path expansion so the module path in gnomod.toml
+	// reflects the fully-qualified path (not the short name).
 
 	if !hasGnoMod(files) {
 		files = append(files, &std.MemFile{
@@ -123,18 +151,6 @@ func addpkgHandler(
 	slices.SortFunc(files, func(a, b *std.MemFile) int {
 		return strings.Compare(a.Name, b.Name)
 	})
-
-	// ---- Build args summary for audit (before the signer pre-check so denials carry it)
-
-	argsSummary = fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
-
-	// ---- Acquire agent signer (with the testnet unfunded pre-check)
-
-	signer, addr, aerr := acquireAgentSigner(ctx, ks, c, "gno_addpkg",
-		"run gno_key_generate to create one", profileName, keyName, p, simulate)
-	if aerr != nil {
-		return server.Result{}, aerr
-	}
 
 	// ---- Validate before broadcast
 	//
@@ -260,8 +276,11 @@ func hasGnoMod(files []*std.MemFile) bool {
 func addpkgInputSchema(s *server.Server) map[string]any {
 	props := map[string]any{
 		"deploy_path": map[string]any{
-			"type":        "string",
-			"description": "Fully-qualified package path (e.g. \"gno.land/r/<ns>/<pkg>\").",
+			"type": "string",
+			"description": "Full package path (e.g. \"gno.land/r/myname/hello\") or a short package name (e.g. \"hello\"). " +
+				"When a short name is given (no \"/\"), the path is automatically expanded to " +
+				"\"gno.land/r/<agent_address>/<name>\" — this is always authorized and gnoweb-compatible. " +
+				"Use a full path only when deploying to a registered namespace.",
 		},
 		"files": map[string]any{
 			"type":        "array",
