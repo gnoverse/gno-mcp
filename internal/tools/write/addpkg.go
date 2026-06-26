@@ -113,8 +113,13 @@ func addpkgHandler(
 	}
 
 	// ---- Inject gnomod.toml if missing, then sort
+	//
+	// Inject before signer acquisition so the file count is correct in the audit
+	// summary. If deploy_path is a short name that gets expanded below, we
+	// regenerate the gnomod.toml body with the expanded path.
 
-	if !hasGnoMod(files) {
+	autoGnoMod := !hasGnoMod(files)
+	if autoGnoMod {
 		files = append(files, &std.MemFile{
 			Name: "gnomod.toml",
 			Body: gnolang.GenGnoModLatest(deployPath),
@@ -134,6 +139,25 @@ func addpkgHandler(
 		"run gno_key_generate to create one", profileName, keyName, p, simulate)
 	if aerr != nil {
 		return server.Result{}, aerr
+	}
+
+	// ---- Expand short deploy_path to address-based namespace
+	//
+	// When deploy_path contains no "/" it is a short package name (e.g. "hello").
+	// Expand it to "gno.land/r/<agentAddr>/<name>" which is always authorized
+	// (no namespace registration required) and gnoweb-compatible (hex address,
+	// no hyphens). Full paths (containing "/") are passed through unchanged.
+	if !strings.Contains(deployPath, "/") {
+		deployPath = "gno.land/r/" + addr + "/" + deployPath
+		argsSummary = fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
+		if autoGnoMod {
+			for _, f := range files {
+				if f.Name == "gnomod.toml" {
+					f.Body = gnolang.GenGnoModLatest(deployPath)
+					break
+				}
+			}
+		}
 	}
 
 	// ---- Validate before broadcast
@@ -260,8 +284,11 @@ func hasGnoMod(files []*std.MemFile) bool {
 func addpkgInputSchema(s *server.Server) map[string]any {
 	props := map[string]any{
 		"deploy_path": map[string]any{
-			"type":        "string",
-			"description": "Fully-qualified package path (e.g. \"gno.land/r/<ns>/<pkg>\").",
+			"type": "string",
+			"description": "Full package path (e.g. \"gno.land/r/myname/hello\") or a short package name (e.g. \"hello\"). " +
+				"When a short name is given (no \"/\"), the path is automatically expanded to " +
+				"\"gno.land/r/<agent_address>/<name>\" — this is always authorized and gnoweb-compatible. " +
+				"Use a full path only when deploying to a registered namespace.",
 		},
 		"files": map[string]any{
 			"type":        "array",
