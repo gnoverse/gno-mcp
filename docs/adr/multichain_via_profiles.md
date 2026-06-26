@@ -43,7 +43,7 @@ faucet-service-url  = "<url>"         # optional; automatic faucet service gno_f
 
 **Dynamic profiles at runtime.** `gno_profile_add` adds a profile in memory for the process lifetime: same allowlist validation, plus the node is dialed to confirm it reports the declared chain-id (gnoweb `gnoconnect` meta-tags are treated as a hint, not truth; a non-loopback gnoweb advertising a loopback RPC is rejected). Init-time profiles are immutable; `default` is a reserved name. Dynamic profiles carry no `master-address` — reads and agent-key writes only; sessions require a persisted profile. After an add, the tool set re-registers (gates re-evaluate, write-tool profile enums regenerate; read tools accept the new profile immediately via their free-form `profile` string) and the server emits `tools/list_changed`, so gated tools can appear mid-session.
 
-**Gnoweb discovery.** `gno_connect` (and `gnomcp profile add --from-gnoweb`) reads `gnoconnect:{rpc,chainid}` meta-tags from a gnoweb page and derives the profile arguments, previewing without mutating anything.
+**Gnoweb discovery.** `gno_connect` (and `gnomcp profile add --from-gnoweb`) reads `gnoconnect:{rpc,chainid}` meta-tags from a gnoweb page and derives the profile arguments, previewing without mutating anything. When the URL names a realm/file/render path rather than only a host, `gno_connect` and `gno_profile_add` also return parsed target metadata so callers can immediately pass the right package path and render/file hint to read tools.
 
 ## Alternatives considered
 

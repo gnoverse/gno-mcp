@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gnoverse/gno-mcp/internal/gnoweb"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/stretchr/testify/assert"
@@ -28,6 +29,28 @@ func TestConnect_EmitsAddCommand(t *testing.T) {
 	assert.Contains(t, res.Text, "gnomcp profile add", "expected persist command in output")
 	assert.Contains(t, res.Text, "test-13", "expected chain-id in output")
 	assert.Contains(t, res.Text, "gno_profile_add", "expected the in-session (dynamic add) path in output")
+	assert.Contains(t, res.StructuredContent["command"], "--gnoweb-url", "persist command should retain the gnoweb host")
+	assert.Equal(t, srv.URL, res.StructuredContent["gnoweb_url"])
+}
+
+func TestConnect_ParsesTargetPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.test13.testnets.gno.land" />` +
+			`<meta name="gnoconnect:chainid" content="test-13" />`))
+	}))
+	defer srv.Close()
+
+	s := server.NewServer(&profiles.Config{Profiles: profiles.BuiltinProfiles()}, "")
+	RegisterConnect(s, srv.Client())
+	res, err := s.Registry().Call(context.Background(), "gno_connect", map[string]any{
+		"gnoweb_url": srv.URL + "/r/gnoland/blog:p/monthly-dev-17",
+	})
+	require.NoError(t, err)
+	target, ok := res.StructuredContent["target"].(gnoweb.Path)
+	require.True(t, ok, "target should be structured as gnoweb.Path")
+	assert.Equal(t, "gno.land/r/gnoland/blog", target.PkgPath)
+	assert.Equal(t, "p/monthly-dev-17", target.RenderPath)
+	assert.Contains(t, res.Text, `path/realm="gno.land/r/gnoland/blog"`)
 }
 
 func TestConnect_RejectsInjectionInName(t *testing.T) {

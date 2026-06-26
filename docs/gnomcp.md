@@ -121,6 +121,10 @@ gnomcp profile add mychain --from-gnoweb https://mychain.testnets.gno.land
 # Manual
 gnomcp profile add mychain --rpc https://rpc.mychain.gno.land:443 --chain-id test99
 
+# Manual with a gnoweb frontend for view links
+gnomcp profile add mychain --rpc https://rpc.mychain.gno.land:443 --chain-id test99 \
+  --gnoweb-url https://mychain.gno.land
+
 # With master address to enable session writes
 gnomcp profile add mychain --from-gnoweb https://mychain.testnets.gno.land \
   --master g1youraddresshere

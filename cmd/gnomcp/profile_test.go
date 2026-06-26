@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,6 +50,30 @@ func TestParseProfileAddArgs_FromGnowebAndMaster(t *testing.T) {
 	assert.Equal(t, "foo", name)
 	assert.Equal(t, "https://test13.testnets.gno.land", o.FromGnoweb)
 	assert.Equal(t, "g1abc", o.Master)
+}
+
+func TestParseProfileAddArgs_GnowebURL(t *testing.T) {
+	name, o, err := parseProfileAddArgs([]string{"foo", "--rpc", "https://rpc.test13.testnets.gno.land:443", "--chain-id", "test-13", "--gnoweb-url", "https://test13.testnets.gno.land"})
+	require.NoError(t, err, "parse")
+	assert.Equal(t, "foo", name)
+	assert.Equal(t, "https://test13.testnets.gno.land", o.GnowebURL)
+}
+
+func TestProfileAddFromGnoweb_PersistsGnowebURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `<meta name="gnoconnect:rpc" content="https://rpc.test13.testnets.gno.land:443" />`+
+			`<meta name="gnoconnect:chainid" content="test-13" />`)
+	}))
+	defer srv.Close()
+
+	path := filepath.Join(t.TempDir(), "profiles.toml")
+	err := profileAdd(path, "test-13", profileAddOpts{FromGnoweb: srv.URL + "/r/demo/counter"})
+	require.NoError(t, err, "add")
+	f, _ := os.Open(path)
+	defer f.Close()
+	cfg, err := profiles.Load(f)
+	require.NoError(t, err, "load")
+	assert.Equal(t, srv.URL, cfg.Profiles["test-13"].GnowebURL)
 }
 
 func TestParseProfileAddArgs_MissingName(t *testing.T) {

@@ -144,6 +144,8 @@ func profileAddHandler(ctx context.Context, args map[string]any, s *server.Serve
 	}
 
 	source := "explicit"
+	var target gnoweb.Path
+	var targetOK bool
 	if gnowebURL != "" {
 		source = "gnoweb"
 		conn, err := gnoweb.Discover(gnowebClient, gnowebURL)
@@ -168,6 +170,12 @@ func profileAddHandler(ctx context.Context, args map[string]any, s *server.Serve
 			}
 		}
 		rpcURL, chainID = conn.RPC, conn.ChainID
+		if base, err := gnoweb.BaseURL(gnowebURL); err == nil {
+			p.GnowebURL = base
+		}
+		if parsed, err := gnoweb.ParsePath(gnowebURL); err == nil {
+			target, targetOK = parsed, true
+		}
 	}
 	p.RPCURL, p.ChainID = rpcURL, chainID
 
@@ -237,6 +245,9 @@ func profileAddHandler(ctx context.Context, args map[string]any, s *server.Serve
 	}
 
 	persistCmd := fmt.Sprintf("gnomcp profile add %s --rpc %s --chain-id %s", name, p.RPCURL, p.ChainID)
+	if p.GnowebURL != "" {
+		persistCmd += " --gnoweb-url " + p.GnowebURL
+	}
 	if p.TxIndexerURL != "" {
 		persistCmd += " --indexer-url " + p.TxIndexerURL
 	}
@@ -253,17 +264,24 @@ func profileAddHandler(ctx context.Context, args map[string]any, s *server.Serve
 	if p.FaucetServiceURL != "" || p.FaucetURL != "" {
 		text += "\n\n(faucet-url / faucet-service-url have no CLI flags — add them to profiles.toml by hand when persisting.)"
 	}
+	sc := map[string]any{
+		"name":            name,
+		"chain_id":        p.ChainID,
+		"rpc_url":         p.RPCURL,
+		"source":          source,
+		"persisted":       false,
+		"persist_command": persistCmd,
+		"read_only":       readOnly,
+	}
+	if p.GnowebURL != "" {
+		sc["gnoweb_url"] = p.GnowebURL
+	}
+	if targetOK {
+		sc["target"] = target
+	}
 	return server.Result{
-		Text: text,
-		StructuredContent: map[string]any{
-			"name":            name,
-			"chain_id":        p.ChainID,
-			"rpc_url":         p.RPCURL,
-			"source":          source,
-			"persisted":       false,
-			"persist_command": persistCmd,
-			"read_only":       readOnly,
-		},
+		Text:              text,
+		StructuredContent: sc,
 	}, nil
 }
 

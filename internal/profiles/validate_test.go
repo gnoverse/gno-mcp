@@ -299,6 +299,19 @@ func TestValidate_rejectsInjectionInRPCURL(t *testing.T) {
 	}
 }
 
+func TestValidate_rejectsInjectionInGnowebURL(t *testing.T) {
+	cfg := &Config{Profiles: map[string]Profile{
+		"p": {
+			RPCURL:    "https://rpc.test13.testnets.gno.land:443",
+			ChainID:   "test-13",
+			GnowebURL: "https://evil.example/$(whoami)",
+		},
+	}}
+	_, err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid gnoweb-url")
+}
+
 func TestValidate_acceptsMixedCaseRPCHost(t *testing.T) {
 	// DNS hostnames are case-insensitive and shell-safe in any case.
 	cfg := &Config{Profiles: map[string]Profile{

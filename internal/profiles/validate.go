@@ -89,6 +89,9 @@ func (c *Config) Validate() (warn error, err error) {
 		if !ValidRPCURL(p.RPCURL) {
 			return nil, fmt.Errorf("profile %q: invalid rpc-url %q (want an absolute http(s) URL with no spaces or shell metacharacters — it is interpolated into pasted gnokey commands)", name, p.RPCURL)
 		}
+		if p.GnowebURL != "" && !ValidRPCURL(p.GnowebURL) {
+			return nil, fmt.Errorf("profile %q: invalid gnoweb-url %q (want an absolute http(s) URL with no spaces or shell metacharacters)", name, p.GnowebURL)
+		}
 		if p.ChainID == "" {
 			return nil, fmt.Errorf("profile %q: missing required chain-id", name)
 		}

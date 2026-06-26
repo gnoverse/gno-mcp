@@ -58,6 +58,7 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 			if err != nil {
 				return server.Result{}, fmt.Errorf("gno_connect: %w", err)
 			}
+			target, targetErr := gnoweb.ParsePath(url)
 			if !profiles.ChainIDValid(conn.ChainID) {
 				return server.Result{}, &server.ToolError{
 					Code:    "chain_id_malformed",
@@ -80,6 +81,10 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 				return server.Result{}, fmt.Errorf("gno_connect: profile name %q must be lowercase alphanumeric with '-' or '_' (e.g. %q)", name, conn.ChainID)
 			}
 			cmd := fmt.Sprintf("gnomcp profile add %s --rpc %s --chain-id %s", name, conn.RPC, conn.ChainID)
+			gnowebBase, _ := gnoweb.BaseURL(url)
+			if gnowebBase != "" && profiles.ValidRPCURL(gnowebBase) {
+				cmd += " --gnoweb-url " + gnowebBase
+			}
 			readOnly := !profiles.ChainIDWritable(conn.ChainID)
 			capability := "For write-as-user sessions, persist the profile with --master <g1...> appended " +
 				"(dynamic profiles support agent-key writes only)."
@@ -87,19 +92,37 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 				capability = "This is a read-only chain (mainnet/betanet): read tools only — no agent key, " +
 					"no faucet, and --master is refused. That is all an audit needs."
 			}
+			targetText := ""
+			if targetErr == nil && target.PkgPath != "" {
+				targetText = fmt.Sprintf("\n\nThe URL target parses as %s %q; after adding the profile, pass profile=%q and path/realm=%q to read tools.",
+					target.Kind, target.PkgPath, name, target.PkgPath)
+				if target.RenderPath != "" {
+					targetText += fmt.Sprintf(" For gno_render, use path=%q.", target.RenderPath)
+				}
+				if target.File != "" {
+					targetText += fmt.Sprintf(" For gno_read, use file=%q.", target.File)
+				}
+			}
 			text := fmt.Sprintf(
 				"Discovered chain %q at RPC %s.\n\n"+
 					"To use it in this session (in-memory until restart), call gno_profile_add with "+
 					"name=%q, rpc_url=%q, chain_id=%q.\n\n"+
 					"To persist it, run:\n\n```\n%s\n```\n\n"+
-					"Then pass profile=%q to the read tools. %s",
-				conn.ChainID, conn.RPC, name, conn.RPC, conn.ChainID, cmd, name, capability)
+					"Then pass profile=%q to the read tools. %s%s",
+				conn.ChainID, conn.RPC, name, conn.RPC, conn.ChainID, cmd, name, capability, targetText)
+			sc := map[string]any{
+				"rpc": conn.RPC, "chain_id": conn.ChainID, "name": name, "command": cmd,
+				"read_only": readOnly,
+			}
+			if gnowebBase != "" && profiles.ValidRPCURL(gnowebBase) {
+				sc["gnoweb_url"] = gnowebBase
+			}
+			if targetErr == nil {
+				sc["target"] = target
+			}
 			return server.Result{
-				Text: text,
-				StructuredContent: map[string]any{
-					"rpc": conn.RPC, "chain_id": conn.ChainID, "name": name, "command": cmd,
-					"read_only": readOnly,
-				},
+				Text:              text,
+				StructuredContent: sc,
 			}, nil
 		},
 	})

@@ -49,15 +49,15 @@ These tools require no config — the built-in `local` and `testnet` profiles ar
 ### `gno_connect`
 
 - **Args:** `gnoweb_url` (required), `name?` (suggested profile name, default derived from chain-id)
-- **Returns:** both follow-up paths — `gno_profile_add` arguments for in-session use, and the exact `gnomcp profile add` command the user runs to persist the chain.
-- Reads gnoconnect meta-tags from the gnoweb page at `gnoweb_url` and derives the `--rpc` and `--chain-id` arguments. **Never mutates config itself.**
+- **Returns:** both follow-up paths — `gno_profile_add` arguments for in-session use, the exact `gnomcp profile add` command the user runs to persist the chain, and parsed target metadata when the URL names a realm/file/render path.
+- Reads gnoconnect meta-tags from the gnoweb page at `gnoweb_url` and derives the `--rpc`, `--chain-id`, and `--gnoweb-url` arguments. **Never mutates config itself.**
 
 ## Admin
 
 ### `gno_profile_add`
 
 - **Args:** `name` (required), then exactly one form: `rpc_url` + `chain_id` (explicit), or `gnoweb_url` (discovery). Optional: `tx_indexer_url`, `faucet_service_url`, `faucet_url`.
-- **Returns:** confirmation plus the `gnomcp profile add` command to persist the profile.
+- **Returns:** confirmation plus the `gnomcp profile add` command to persist the profile, including `--gnoweb-url` and parsed target metadata when added from a gnoweb URL.
 - Adds a profile **in-memory only** — it disappears on restart and never touches `profiles.toml`. Init-time profiles cannot be overridden; re-adding a dynamically added name replaces it. Only `dev`/`testNN` chain-ids are accepted, and the node is dialed to confirm it reports the declared chain-id (gnoweb meta-tags are a hint, not truth; a non-loopback gnoweb advertising a loopback RPC is rejected). No `master-address` field: dynamic profiles support reads and agent-key writes only — sessions require a persisted profile. After a successful add the tool set is re-published (`tools/list_changed`), which can summon gated tools (faucet, indexer) mid-session.
 
 ## Read-only (indexer)

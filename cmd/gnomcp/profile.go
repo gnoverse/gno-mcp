@@ -24,6 +24,7 @@ type profileAddOpts struct {
 	FromGnoweb string
 	RPC        string
 	ChainID    string
+	GnowebURL  string
 	Master     string
 	IndexerURL string
 }
@@ -64,6 +65,9 @@ func profileAdd(path, name string, opts profileAddOpts) error {
 			return err
 		}
 		rpc, chainID = conn.RPC, conn.ChainID
+		if opts.GnowebURL == "" {
+			opts.GnowebURL, _ = gnoweb.BaseURL(opts.FromGnoweb)
+		}
 	}
 	if rpc == "" || chainID == "" {
 		return fmt.Errorf("need --rpc and --chain-id (or --from-gnoweb)")
@@ -75,6 +79,7 @@ func profileAdd(path, name string, opts profileAddOpts) error {
 	cur[name] = profiles.Profile{
 		RPCURL:        rpc,
 		ChainID:       chainID,
+		GnowebURL:     opts.GnowebURL,
 		MasterAddress: opts.Master,
 		TxIndexerURL:  opts.IndexerURL,
 	}
@@ -131,6 +136,7 @@ func parseProfileAddArgs(args []string) (string, profileAddOpts, error) {
 	fs.StringVar(&o.FromGnoweb, "from-gnoweb", "", "gnoweb URL to autofill rpc/chain-id")
 	fs.StringVar(&o.RPC, "rpc", "", "RPC URL")
 	fs.StringVar(&o.ChainID, "chain-id", "", "chain id (dev/testNN are writable; any other id, e.g. gnoland1, is read-only)")
+	fs.StringVar(&o.GnowebURL, "gnoweb-url", "", "gnoweb base URL for view links")
 	fs.StringVar(&o.Master, "master", "", "master address g1... (enables writes)")
 	fs.StringVar(&o.IndexerURL, "indexer-url", "", "tx indexer GraphQL URL (optional)")
 	if err := fs.Parse(args[1:]); err != nil {
@@ -154,7 +160,7 @@ func runProfile(args []string) {
 	case "add":
 		name, o, err := parseProfileAddArgs(args[1:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "usage: gnomcp profile add <name> [--from-gnoweb URL | --rpc URL --chain-id ID] [--master g1...] [--indexer-url URL]")
+			fmt.Fprintln(os.Stderr, "usage: gnomcp profile add <name> [--from-gnoweb URL | --rpc URL --chain-id ID] [--gnoweb-url URL] [--master g1...] [--indexer-url URL]")
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}

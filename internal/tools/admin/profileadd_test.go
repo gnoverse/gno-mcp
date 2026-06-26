@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gnoverse/gno-mcp/internal/gnoweb"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/stretchr/testify/assert"
@@ -130,7 +131,13 @@ func TestProfileAdd_gnowebForm(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "test-13", p.ChainID)
 	assert.Equal(t, "https://rpc.test13.testnets.gno.land", p.RPCURL)
+	assert.Equal(t, gw.URL, p.GnowebURL)
 	assert.Equal(t, "gnoweb", res.StructuredContent["source"])
+	assert.Equal(t, gw.URL, res.StructuredContent["gnoweb_url"])
+	assert.Contains(t, res.StructuredContent["persist_command"], "--gnoweb-url "+gw.URL)
+	target, ok := res.StructuredContent["target"].(gnoweb.Path)
+	require.True(t, ok)
+	assert.Equal(t, gnoweb.PathNetwork, target.Kind)
 }
 
 func TestProfileAdd_reAddDynamicNameReplaces(t *testing.T) {
