@@ -58,7 +58,9 @@ func registerAllTools(d *toolDeps) {
 
 	writetools.RegisterCall(s, d.keystore, d.sessionMgr, d.chainResolver, d.auditLog)
 	writetools.RegisterRun(s, d.keystore, d.sessionMgr, d.chainResolver, d.auditLog)
+
 	writetools.RegisterCLASign(s, d.keystore, d.chainResolver, d.auditLog)
+	writetools.RegisterNameReg(s, d.keystore, d.sessionMgr, d.chainResolver, d.auditLog)
 	writetools.RegisterAuthStatus(s, d.sessionMgr, d.chainResolver)
 	writetools.RegisterSessionPropose(s, d.sessionMgr)
 	writetools.RegisterSessionRevoke(s, d.sessionMgr)
