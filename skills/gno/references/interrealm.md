@@ -84,7 +84,7 @@ Inside a crossing function body, the `cur realm` parameter is a **typed capabili
 | `Address() address` | bech32 address derived from the realm's pkgpath |
 | `PkgPath() string` | pkgpath, or `""` at chain root (EOA) |
 | `Previous() realm` | the captured realm that was current before this crossing |
-| `IsCurrent() bool` | **true only when this realm value matches the topmost live crossing frame's identity**. The first `cur realm` of a crossing function is current by runtime construction; stale, previous, or otherwise forwarded realm values return `false` |
+| `IsCurrent() bool` | **true only when this realm value matches the topmost live crossing frame's identity**. The first `cur realm` of a crossing function is current by runtime construction, and stays current when forwarded through non-crossing calls -- that is what admits legitimate callers through a helper's `rlm.IsCurrent()` guard. Stale, stored, or `Previous()` realm values return `false` |
 | `IsCode() / IsUser() / IsUserCall() / IsUserRun() / IsEphemeral()` | classification by address and pkgpath |
 | `String() string` | debug representation |
 
