@@ -49,14 +49,13 @@ A crossing function `func F(cur realm, ...)` receives a typed capability token. 
 
 ```go
 func Buy(cur realm) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     if !cur.Previous().IsUserCall() { panic("not an EOA call") }
     coins := unsafe.OriginSend()   // import "chain/runtime/unsafe"
     // ...
 }
 ```
 
-The `IsCurrent()` check is the authentication primitive — see `security.md` Class 2 (designation-forgery).
+The first `cur realm` in a crossing function is runtime-current. `IsCurrent()` becomes the authentication guard when realm identity is accepted as a secondary/helper parameter such as `_ int, rlm realm`; see `security.md` Class 2 (designation-forgery).
 
 ### Stack-walking: `chain/runtime/unsafe`
 
@@ -76,7 +75,7 @@ Use `chain/runtime/unsafe` only when you genuinely need the stack-walking form:
 - A non-crossing function with no `cur` in scope (remembering it returns the last-boundary realm, not the direct caller — see the warning above).
 - Code that deliberately wants the realm before the most recent boundary.
 
-`OriginCaller`, `CurrentRealm`, `PreviousRealm`, and `OriginSend` are exported only from `chain/runtime/unsafe` — there is no `runtime.OriginCaller()` or `banker.OriginSend()`. Inside a crossing function, `cur.Previous()` under `cur.IsCurrent()` identifies the immediate caller; `unsafe.PreviousRealm()` stack-walks to the last boundary instead (the distinction above).
+`OriginCaller`, `CurrentRealm`, `PreviousRealm`, and `OriginSend` are exported only from `chain/runtime/unsafe` — there is no `runtime.OriginCaller()` or `banker.OriginSend()`. Inside a crossing function, the first `cur.Previous()` identifies the immediate caller; `unsafe.PreviousRealm()` stack-walks to the last boundary instead (the distinction above).
 
 ### The trichotomy — `IsUserCall` vs `IsUserRun` vs `IsUser`
 
