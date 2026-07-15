@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with: { go-version: '1.26.4' }
+        with: { go-version: '1.26.5' }
       - run: go test -short -race ./...
       - run: go vet ./...
       # Compile-check the integration-tagged tests so the real-node harness can't rot unnoticed.
@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with: { go-version: '1.26.4' }
+        with: { go-version: '1.26.5' }
       # govulncheck is intentionally @latest: it is a first-party Go-team tool and
       # the vuln database is fetched at run time regardless, so @latest keeps the
       # scanner and its advisory tooling current.
@@ -46,7 +46,7 @@ jobs:
       - run: ./scripts/bump-version_test.sh
       - run: ./scripts/bump-version.sh --check
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with: { go-version: '1.26.4' }
+        with: { go-version: '1.26.5' }
       # QEMU + buildx so the snapshot can build the arm64 image layer on this
       # amd64 runner (the Dockerfiles only COPY a prebuilt binary — no compile).
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
