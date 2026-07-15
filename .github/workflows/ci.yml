@@ -24,10 +24,10 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with: { go-version: '1.26.5' }
-      # govulncheck is intentionally @latest: it is a first-party Go-team tool and
-      # the vuln database is fetched at run time regardless, so @latest keeps the
-      # scanner and its advisory tooling current.
-      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      # vulncheck.sh wraps govulncheck with an advisory ignore list — see the
+      # script for the rationale on each ignored entry.
+      - run: ./scripts/vulncheck_test.sh
+      - run: ./scripts/vulncheck.sh
   release-config:
     runs-on: ubuntu-latest
     timeout-minutes: 15
