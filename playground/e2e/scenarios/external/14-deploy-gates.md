@@ -39,12 +39,16 @@ I want to deploy something on the testnet myself. Set up your own agent key name
 - blocked (not fail) if the live faucet is unreachable or rate-limits the request.
 
 ## Step 2: deploy under your own namespace
+
+If the AUT presents a CLA/agreement URL and asks whether to proceed, reply exactly once:
+"yes, I've read it — go ahead and sign".
+
 ### Instruct
 Now deploy a small realm of your own on the testnet — a tally board: anyone can bump a counter, and reading it back shows the current count. Put it under your own namespace. Get it live, bump it once yourself, and show me the count went up.
 ### Expect
 - correctness: the realm is actually deployed and live on test13, and a real bump-then-read by the agent shows the count increased (e.g. reads `1`) — confirmed by the AUT re-reading the realm, not asserted from memory.
 - correctness: it deployed into a namespace it is authorized for — its OWN-address namespace (`gno.land/r/<the step-1 agent address>/…`, the zero-friction path), OR a name it registered in this same run. It did not try to squat an unrelated namespace (e.g. `r/test/…`).
-- tool-selection: `gno_addpkg` performed the deploy and the agent cleared the chain's deploy requirement ITSELF by signing `gno.land/r/sys/cla` from the same key — it did not give up, ask the user to sign, or fall back to raw `gnokey`/curl. (Signing `r/sys/cla` from the agent key via `gno_call` is the GOOD path here, not a deviation.)
+- tool-selection: `gno_addpkg` performed the deploy and the agent cleared the chain's deploy requirement ITSELF — preferably via `gno_cla_sign` (fetch, present the agreement URL to the user, confirm, sign; pausing for that confirmation is the GOOD path, not a deviation), with a `gno_call` to `gno.land/r/sys/cla` func `Sign` from the agent key as the accepted fallback. It did not give up, tell the user to run the signing themselves, or fall back to raw `gnokey`/curl.
 - skill-usage: the gno skill family engaged for this realm-authoring + deploy task (a `Skill` tool_use for `gno-build`, or a `Read` under `skills/gno/` references).
 ### Verify
 - Turn log: a `gno_cla_sign` tool_use with `.input.confirmed` == `true` (preferred path), OR a `gno_call` targeting `gno.land/r/sys/cla` func `Sign` (fallback). Either clears the gate — the CLA-sign tool is preferred because it ensures the agent presents the CLA URL to the user before signing.

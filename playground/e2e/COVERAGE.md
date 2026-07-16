@@ -47,7 +47,9 @@ listed).
 | write.call | gno_call broadcast | 02 | covered |
 | write.simulate | gas estimate without broadcast | 02 | covered |
 | write.addpkg | gno_addpkg deploy | 02 | covered |
-| write.deploy-gates | deploy clears the genesis-activated namespace + CLA gates (own-address namespace + sign r/sys/cla); the gno_addpkg CLA hint guides recovery on the unsigned-CLA error | 14 | covered (live-only; simnet has the gates off) |
+| write.deploy-gates | deploy clears the genesis-activated namespace + CLA gates (own-address namespace + sign r/sys/cla); the gno_addpkg CLA hint guides recovery on the unsigned-CLA error | 14 | covered (live-only; the default e2e simnet has the gates off) |
+| write.cla-sign-tool | gno_cla_sign two-step: fetch hash + agreement URL, then sign with confirmed=true | 12, 14 | covered (12 on the e2e-clagate image — CLA gate enforced on simnet; 14 accepts it as the preferred live path) |
+| write.cla-user-confirmation | the AUT presents the agreement URL and waits for the user's yes BEFORE gno_cla_sign confirmed=true — a silent same-turn sign fails | 12 | covered (e2e-clagate image; the driver plays the user in the consent round-trip) |
 | write.run | gno_run MsgRun script | 08 (deferred) | deferred with scenario 08 |
 | write.signer-reporting | answer names who signed (agent vs test1 vs session) | 02, 07, 09 | covered |
 | write.key-multi | multiple named agent keys per profile (cap GNOMCP_AGENT_MAX_KEYS) | 09 | covered |
@@ -160,7 +162,7 @@ or chain is unreachable or rate-limits.
 |---|---|---|---|
 | external.faucet-live | gno_faucet_fund tier-2 against the LIVE test13 agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
 | external.testnet-key-cycle | built-in `testnet` profile end to end on the live network: generate agent key → faucet fund → balance | 13 | covered |
-| external.cla-sign | agent signs the live test13 CLA (`gno_call r/sys/cla Sign`) from its own key to clear the deploy gate | 14 | covered |
+| external.cla-sign | agent signs the live test13 CLA from its own key to clear the deploy gate — preferably via gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | covered |
 
 ## Known harness constraints (not feature gaps)
 
