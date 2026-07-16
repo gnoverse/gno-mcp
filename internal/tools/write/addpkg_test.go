@@ -311,6 +311,80 @@ func TestAddPkg_simulateOmitsGnowebURL(t *testing.T) {
 	assert.Nil(t, res.StructuredContent["gnoweb_url"], "simulate must not carry a gnoweb URL")
 }
 
+// A short deploy_path (no "/") expands to the agent's own-address namespace,
+// and the auto-generated gnomod.toml must carry the EXPANDED path — a module
+// line naming the bare short name would be rejected by the chain.
+func TestAddPkg_expandsShortDeployPath(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "", 5)
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
+	require.NoError(t, err, "GenerateForProfile")
+
+	expanded := "gno.land/r/" + agentAddr + "/hello"
+	fake := chain.NewFake()
+	fake.SetBalance(agentAddr, 10_000_000)
+	fake.SetAddPackage(expanded, chain.AddPackageResult{TxHash: "0xshort", Height: 5, GasUsed: 9000})
+	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
+
+	res, pkgErr := s.Registry().Call(context.Background(), "gno_addpkg", map[string]any{
+		"profile":     "testnet9999",
+		"deploy_path": "hello",
+		"files":       []any{map[string]any{"name": "hello.gno", "body": "package hello\n"}},
+	})
+	require.NoError(t, pkgErr, "short deploy_path must deploy under the agent's own-address namespace")
+	assert.Contains(t, res.Text, "0xshort")
+
+	files := fake.LastAddPackageFiles(expanded)
+	require.NotNil(t, files, "AddPackage must be called with the expanded path")
+	var gnomod *std.MemFile
+	for _, f := range files {
+		if f.Name == "gnomod.toml" {
+			gnomod = f
+		}
+	}
+	require.NotNil(t, gnomod, "gnomod.toml must be injected")
+	assert.Contains(t, gnomod.Body, expanded, "the generated gnomod.toml must name the expanded path, not the short name")
+
+	entries := parseAuditEntries(t, &auditBuf)
+	require.Len(t, entries, 1)
+	assert.Contains(t, entries[0].ArgsSummary, "deploy_path="+expanded,
+		"the audit summary must record the path that was actually deployed")
+}
+
+// A caller-supplied gnomod.toml names a module path the handler cannot rewrite;
+// combined with a short deploy_path the module line and the expanded path would
+// disagree and the chain would reject with an opaque error. Refuse it up front.
+func TestAddPkg_shortDeployPathRejectsUserGnomod(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "", 5)
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
+	require.NoError(t, err, "GenerateForProfile")
+
+	fake := chain.NewFake()
+	fake.SetBalance(agentAddr, 10_000_000)
+	RegisterAddPkg(s, ks, constChainResolver(fake), alog)
+
+	_, pkgErr := s.Registry().Call(context.Background(), "gno_addpkg", map[string]any{
+		"profile":     "testnet9999",
+		"deploy_path": "hello",
+		"files": []any{
+			map[string]any{"name": "hello.gno", "body": "package hello\n"},
+			map[string]any{"name": "gnomod.toml", "body": "module = \"hello\"\n"},
+		},
+	})
+	require.Error(t, pkgErr, "short name + caller-supplied gnomod.toml must be refused before broadcast")
+	assert.Contains(t, pkgErr.Error(), "deploy_path")
+	assert.Contains(t, pkgErr.Error(), "gnomod.toml")
+	assert.Equal(t, 0, fake.AddPackageBroadcasts("gno.land/r/"+agentAddr+"/hello"),
+		"nothing may be broadcast for the ambiguous combination")
+}
+
 // assertHasGnomod fails t if no file named "gnomod.toml" is in files.
 func assertHasGnomod(t *testing.T, files []*std.MemFile) {
 	t.Helper()
