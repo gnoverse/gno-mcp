@@ -88,7 +88,7 @@ gnomcp signs writes with one of two identities, chosen per call via the `identit
 
 Every write result names the signer (`Signed by: agent test1 (g1…)` or `Signed by: session g1… on behalf of master g1…`) and the structured output carries `identity` + `signer_address`.
 
-Registration: every allowed chain (local dev or testnet) has an agent key path, so `gno_call`, `gno_run`, `gno_addpkg`, `gno_key_send`, `gno_key_address`, `gno_key_list`, `gno_key_generate`, and `gno_key_delete` always register. `gno_faucet_fund` appears when a testnet profile exists (including one added mid-session via `gno_profile_add`).
+Registration: every allowed chain (local dev or testnet) has an agent key path, so `gno_call`, `gno_run`, `gno_addpkg`, `gno_cla_sign`, `gno_key_send`, `gno_key_address`, `gno_key_list`, `gno_key_generate`, and `gno_key_delete` always register. `gno_faucet_fund` appears when a testnet profile exists (including one added mid-session via `gno_profile_add`).
 
 A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, default 5), so the agent can fund secondary accounts and exercise realms involving multiple addresses. The write and key tools take an optional `key` arg (default `"default"`) selecting which key to act with; `gno_key_list` enumerates them. `key` applies to `identity=agent` only and is rejected with `identity=session`.
 
@@ -127,6 +127,13 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Args:** `profile` (required), `deploy_path` (required), `files[]` (required — each `{name, body}`), `simulate?`, `key?`
 - **Returns:** deploy (or `simulate`) result, prefixed with the signing identity.
 - Deploys a package/realm via `vm/MsgAddPackage`, signed by the agent key (local: test1, testnet: generated key). A `gnomod.toml` is generated automatically if omitted.
+- `deploy_path` accepts a full package path, or a **short name** (no `/`) that expands to the agent's own-address namespace `gno.land/r/<agent-address>/<name>` — always authorized, no registration. A short name cannot be combined with a caller-supplied `gnomod.toml` (the module line cannot be rewritten); pass the full path in that case.
+
+### `gno_cla_sign`
+
+- **Args:** `profile` (required), `confirmed?` (default false), `hash?` (required when `confirmed=true`), `key?`
+- **Returns:** without `confirmed` — the chain's current CLA required hash, document URL, and whether enforcement is enabled (a disabled chain needs no signature); with `confirmed=true` and `hash` — the broadcast result of `gno.land/r/sys/cla.Sign(hash)`, signed by the agent key.
+- Two-step by design: fetch first, then **show the CLA URL to the user and get their explicit confirmation** before calling again with `confirmed=true`. Use it when a deploy fails with `cla_unsigned` (the error's hint points here). The inline document URL is realm-authored and arrives inside the untrusted envelope.
 
 ### `gno_key_address`
 

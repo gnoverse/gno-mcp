@@ -79,7 +79,7 @@ Under all of these, the `gno` skill gives your agent the language, idioms, and s
 
 ## Tools
 
-23 tools, grouped by what they touch:
+24 tools, grouped by what they touch:
 
 - **Chain reads** — render realms, evaluate expressions, read packages, inspect accounts and status. Work immediately.
 - **Indexer reads** — list realms, deploy and transaction history, on-chain activity. Need a profile with an indexer URL.

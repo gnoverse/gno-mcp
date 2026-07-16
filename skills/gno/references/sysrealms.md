@@ -101,9 +101,11 @@ assume**, and prefer checking both *before* deploying rather than reading it off
    whose current owner is you (register via the live controller, e.g. `r/sys/namereg/v1`, if it's
    deployed). Check: `IsAuthorizedAddressForNamespace(addr, ns)`.
 2. **CLA** (`r/sys/cla`). Enforced when a required hash is set. The signer must have signed the current
-   agreement. Check: `HasValidSignature(addr)`. To clear it, **sign once from the same key**: read the
-   required hash from `r/sys/cla`'s render (the `Required Hash` field), then call `Sign(hash)` with that
-   value. `Sign` is an ordinary crossing call — the agent key signs it directly; no human or session needed.
+   agreement. Check: `HasValidSignature(addr)`. To clear it, **sign once from the same key**. With a Gno
+   MCP connected, use its `gno_cla_sign` tool and follow its two-step flow — it fetches the required
+   hash and the agreement URL, and the user sees the URL before the signing call. Without an MCP: read
+   the required hash from `r/sys/cla`'s render (the `Required Hash` field), show the linked agreement
+   to the user, then call `Sign(hash)` from the deploying key (an ordinary crossing call).
 
 Both gates reject with the **same error type** but distinct messages — tell them apart by the text:
 `…not authorized to deploy packages to namespace` (fix: own-address path or register a name) vs

@@ -50,7 +50,7 @@ chain-returned bytes are untrusted. The control differs by delivery channel:
   </untrusted_content>
   ```
 
-  An envelope tag (opening or closing) embedded in chain content is neutralized first, so content cannot escape or forge the envelope. The write tools envelope the realm-controlled portions of their success text the same way: `gno_call`'s `Result` (kind `call_result`) and `gno_run`'s `Output` (kind `run_output`).
+  An envelope tag (opening or closing) embedded in chain content is neutralized first, so content cannot escape or forge the envelope. The write tools envelope the realm-controlled portions of their success text the same way: `gno_call`'s `Result` (kind `call_result`), `gno_run`'s `Output` (kind `run_output`), and `gno_cla_sign`'s fetched document URL (kind `cla_url`; the required hash is regex-constrained hex and stays inline).
 
 - **The resource tool** (`gno_read`) returns content as an MCP `EmbeddedResource`, a distinct trust posture clients treat as resource data rather than inline instructions. Verbatim source (`full=true`, `symbols`) is not textually wrapped because that would corrupt the txtar archive and break byte fidelity (the body is audit evidence). The default **outline** is server-rendered rather than verbatim, so it additionally neutralizes embedded envelope tags — realm-authored doc comments cannot forge an envelope there. Both paths still rely on the client honoring the resource boundary.
 
@@ -86,3 +86,6 @@ Errors are JSON-encoded payloads with `code`, `message`, and (where useful) extr
 | `key_cap_reached` | The profile already holds `GNOMCP_AGENT_MAX_KEYS` agent keys; delete one (`gno_key_delete`) to free a slot |
 | `key_ignored_for_session` | A `key` arg was supplied with `identity=session`, where it does not apply (the session signer is used) |
 | `key_has_funds` | `gno_key_delete` on a key that still holds ugnot without `force=true` — sweep with `gno_key_send` first, or force to abandon the funds |
+| `cla_unsigned` | A deploy was rejected by the chain's CLA gate; clear it with `gno_cla_sign` (the hint carries the steps) |
+| `hash_required` | `gno_cla_sign` was called with `confirmed=true` but no `hash` — fetch it first (call without `confirmed`) |
+| `cla_hash_not_found` | `gno_cla_sign` could not extract the required hash from the `r/sys/cla` render (realm format changed?) |
