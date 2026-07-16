@@ -163,9 +163,10 @@ type txOutcome struct {
 
 // asUserTx runs the session-signed write pipeline shared by CallAsUser and
 // RunAsUser: validate the signer/master pair, build the unsigned tx via
-// buildTx, session-sign it, then simulate or broadcast. errPrefix tags every
-// error with the calling op.
-func (r *Real) asUserTx(signer Signer, master, errPrefix string, buildTx func(masterAddr crypto.Address) (*std.Tx, error), simulate bool) (txOutcome, error) {
+// buildTx(masterAddr, gasWanted), session-sign it, then simulate or broadcast.
+// The simulate path uses simulateSessionWithRetry so heavy txs recover from
+// out-of-gas without a source edit. errPrefix tags every error with the calling op.
+func (r *Real) asUserTx(signer Signer, master, errPrefix string, buildTx func(masterAddr crypto.Address, gasWanted int64) (*std.Tx, error), simulate bool) (txOutcome, error) {
 	if signer == nil {
 		return txOutcome{}, fmt.Errorf("%s: signer required (got nil)", errPrefix)
 	}
@@ -182,7 +183,11 @@ func (r *Real) asUserTx(signer Signer, master, errPrefix string, buildTx func(ma
 		return txOutcome{}, fmt.Errorf("%s: invalid session address %q: %w", errPrefix, signer.Address(), err)
 	}
 
-	unsignedTx, err := buildTx(masterAddr)
+	if simulate {
+		return r.simulateSessionWithRetry(signer, masterAddr, sessionAddr, errPrefix, buildTx)
+	}
+
+	unsignedTx, err := buildTx(masterAddr, DefaultGasWanted)
 	if err != nil {
 		return txOutcome{}, fmt.Errorf("%s: build unsigned tx: %w", errPrefix, err)
 	}
@@ -190,14 +195,6 @@ func (r *Real) asUserTx(signer Signer, master, errPrefix string, buildTx func(ma
 	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
 	if err != nil {
 		return txOutcome{}, fmt.Errorf("%s: sign tx: %w", errPrefix, err)
-	}
-
-	if simulate {
-		deliver, err := r.cli.Simulate(signedTx)
-		if err != nil {
-			return txOutcome{}, fmt.Errorf("%s: simulate: %w", errPrefix, err)
-		}
-		return txOutcome{Simulated: true, GasUsed: deliver.GasUsed, Data: string(deliver.Data)}, nil
 	}
 
 	res, err := r.cli.BroadcastTxCommit(signedTx)
@@ -210,6 +207,46 @@ func (r *Real) asUserTx(signer Signer, master, errPrefix string, buildTx func(ma
 		Data:    string(res.DeliverTx.Data),
 		GasUsed: res.DeliverTx.GasUsed,
 	}, nil
+}
+
+// simulateSessionWithRetry runs a session-signed simulate starting at
+// DefaultGasWanted and doubles the ceiling on each out-of-gas failure, up to
+// maxSimRetries attempts (ceiling capped at maxSimGasWanted).
+func (r *Real) simulateSessionWithRetry(signer Signer, masterAddr, sessionAddr crypto.Address, errPrefix string, buildTx func(masterAddr crypto.Address, gasWanted int64) (*std.Tx, error)) (txOutcome, error) {
+	ceiling := DefaultGasWanted
+	for attempt := 0; attempt <= maxSimRetries; attempt++ {
+		out, err := r.simulateSessionOnce(signer, masterAddr, sessionAddr, errPrefix, buildTx, ceiling)
+		if err == nil {
+			return out, nil
+		}
+		if !isOutOfGasErr(err) || ceiling >= maxSimGasWanted {
+			return txOutcome{}, err
+		}
+		next := ceiling * 2
+		if next > maxSimGasWanted {
+			next = maxSimGasWanted
+		}
+		ceiling = next
+	}
+	return r.simulateSessionOnce(signer, masterAddr, sessionAddr, errPrefix, buildTx, ceiling)
+}
+
+// simulateSessionOnce performs a single session-signed simulation at the given
+// gasWanted ceiling.
+func (r *Real) simulateSessionOnce(signer Signer, masterAddr, sessionAddr crypto.Address, errPrefix string, buildTx func(masterAddr crypto.Address, gasWanted int64) (*std.Tx, error), gasWanted int64) (txOutcome, error) {
+	unsignedTx, err := buildTx(masterAddr, gasWanted)
+	if err != nil {
+		return txOutcome{}, fmt.Errorf("%s: build unsigned tx: %w", errPrefix, err)
+	}
+	signedTx, err := r.signTxForSession(unsignedTx, signer, masterAddr, sessionAddr)
+	if err != nil {
+		return txOutcome{}, fmt.Errorf("%s: sign tx: %w", errPrefix, err)
+	}
+	deliver, err := r.cli.Simulate(signedTx)
+	if err != nil {
+		return txOutcome{}, fmt.Errorf("%s: simulate: %w", errPrefix, err)
+	}
+	return txOutcome{Simulated: true, GasUsed: deliver.GasUsed, Data: string(deliver.Data)}, nil
 }
 
 // CallAsUser broadcasts (or simulates) a session-signed vm/MsgCall through
@@ -225,7 +262,7 @@ func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn st
 	if err != nil {
 		return CallResult{}, fmt.Errorf("call as user: %w", err)
 	}
-	out, err := r.asUserTx(signer, master, "call as user", func(masterAddr crypto.Address) (*std.Tx, error) {
+	out, err := r.asUserTx(signer, master, "call as user", func(masterAddr crypto.Address, gasWanted int64) (*std.Tx, error) {
 		msg := vm.MsgCall{
 			Caller:  masterAddr,
 			Send:    sendCoins,
@@ -233,7 +270,7 @@ func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn st
 			Func:    fn,
 			Args:    args,
 		}
-		return gnoclient.NewCallTx(baseTxCfg(fee), msg)
+		return gnoclient.NewCallTx(baseTxCfgWithGas(fee, gasWanted), msg)
 	}, simulate)
 	if err != nil {
 		return CallResult{}, err
@@ -255,10 +292,10 @@ func (r *Real) RunAsUser(_ context.Context, signer Signer, master, code string, 
 	if err != nil {
 		return RunResult{}, fmt.Errorf("run as user: %w", err)
 	}
-	out, err := r.asUserTx(signer, master, "run as user", func(masterAddr crypto.Address) (*std.Tx, error) {
+	out, err := r.asUserTx(signer, master, "run as user", func(masterAddr crypto.Address, gasWanted int64) (*std.Tx, error) {
 		files := []*std.MemFile{{Name: "main.gno", Body: code}}
 		msg := vm.NewMsgRun(masterAddr, nil, files)
-		return gnoclient.NewRunTx(baseTxCfg(fee), msg)
+		return gnoclient.NewRunTx(baseTxCfgWithGas(fee, gasWanted), msg)
 	}, simulate)
 	if err != nil {
 		return RunResult{}, err
@@ -422,11 +459,18 @@ func isSessionNotFoundErr(err error) bool {
 	return strings.Contains(err.Error(), "session not found")
 }
 
-// DefaultGasWanted is the gas limit of every write tx; it must exceed the
-// heaviest tx's gas use (an AddPackage runs ~5M). Execution headroom lives
-// here, sized independently of the fee — a heavier tx needs more GasWanted,
-// never a bigger GasFee.
-const DefaultGasWanted int64 = 10_000_000
+// DefaultGasWanted is the simulation ceiling used when measuring a tx's gas.
+// The simulate ante caps execution at the tx's GasWanted, so this ceiling must
+// exceed the heaviest expected tx — a name registration via r/sys/namereg uses
+// ~27M, and other complex txs can exceed 50M. 200M gives comfortable headroom
+// for current workloads; the retry-with-doubling loop in simulateWithRetry
+// handles anything larger without requiring a source edit.
+const DefaultGasWanted int64 = 200_000_000
+
+// maxSimGasWanted is the hard ceiling for the retry-with-doubling loop in
+// simulateWithRetry. Three doublings of DefaultGasWanted stay well within
+// int64 and the chain's per-block MaxGas limit.
+const maxSimGasWanted int64 = 1_600_000_000
 
 // minGasPriceDivisor is gnomcp's assumed minGasPrice floor as gas-per-ugnot:
 // 1 ugnot per 1000 gas, the gno.land genesis default. It sets DefaultGasFeeUgnot,
@@ -467,11 +511,10 @@ func (r *Real) agentTxSetup(signer gnoclient.Signer, errPrefix string) (crypto.A
 	return info.GetAddress(), r.agentClient(signer), nil
 }
 
-// agentSimulate runs the agent-signed dry-run shared by Call/Run/AddPackage:
-// build the unsigned tx via buildTx, sign it with the client's signer, and
-// simulate without broadcasting.
-func agentSimulate(cli *gnoclient.Client, errPrefix string, buildTx func() (*std.Tx, error)) (txOutcome, error) {
-	unsigned, err := buildTx()
+// agentSimulate runs one simulation attempt: build the unsigned tx via
+// buildTx(gasWanted), sign it, and simulate without broadcasting.
+func agentSimulate(cli *gnoclient.Client, errPrefix string, buildTx func(gasWanted int64) (*std.Tx, error), gasWanted int64) (txOutcome, error) {
+	unsigned, err := buildTx(gasWanted)
 	if err != nil {
 		return txOutcome{}, fmt.Errorf("%s: build tx: %w", errPrefix, err)
 	}
@@ -484,6 +527,43 @@ func agentSimulate(cli *gnoclient.Client, errPrefix string, buildTx func() (*std
 		return txOutcome{}, fmt.Errorf("%s: simulate: %w", errPrefix, err)
 	}
 	return txOutcome{Simulated: true, GasUsed: deliver.GasUsed, Data: string(deliver.Data)}, nil
+}
+
+// agentSimulateWithRetry runs agentSimulate starting at DefaultGasWanted and
+// doubles the ceiling on each out-of-gas failure, up to maxSimRetries attempts
+// (ceiling capped at maxSimGasWanted). Normal transactions succeed on the first
+// try; heavy ones (name registration, large packages) recover automatically.
+const maxSimRetries = 3
+
+func agentSimulateWithRetry(cli *gnoclient.Client, errPrefix string, buildTx func(gasWanted int64) (*std.Tx, error)) (txOutcome, error) {
+	ceiling := DefaultGasWanted
+	for attempt := 0; attempt <= maxSimRetries; attempt++ {
+		out, err := agentSimulate(cli, errPrefix, buildTx, ceiling)
+		if err == nil {
+			return out, nil
+		}
+		if !isOutOfGasErr(err) || ceiling >= maxSimGasWanted {
+			return txOutcome{}, err
+		}
+		next := ceiling * 2
+		if next > maxSimGasWanted {
+			next = maxSimGasWanted
+		}
+		ceiling = next
+	}
+	// All retries exhausted with out-of-gas; attempt one final time to return
+	// the error with the ceiling label intact.
+	return agentSimulate(cli, errPrefix, buildTx, ceiling)
+}
+
+// isOutOfGasErr returns true when err is (or wraps) an out-of-gas signal from
+// the chain's ante handler. The typed std.OutOfGasError is not preserved through
+// gnoclient's string-only error wrapping, so we match the stable error string.
+func isOutOfGasErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "out of gas")
 }
 
 // Call broadcasts (or simulates) a STANDARD vm/MsgCall signed by the agent key.
@@ -503,8 +583,8 @@ func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string
 	}
 	msg := vm.MsgCall{Caller: caller, Send: sendCoins, PkgPath: realm, Func: fn, Args: args}
 	if simulate {
-		out, err := agentSimulate(cli, "call", func() (*std.Tx, error) {
-			return gnoclient.NewCallTx(baseTxCfg(fee), msg)
+		out, err := agentSimulateWithRetry(cli, "call", func(gasWanted int64) (*std.Tx, error) {
+			return gnoclient.NewCallTx(baseTxCfgWithGas(fee, gasWanted), msg)
 		})
 		if err != nil {
 			return CallResult{}, err
@@ -532,8 +612,8 @@ func (r *Real) Run(_ context.Context, signer gnoclient.Signer, code string, simu
 	files := []*std.MemFile{{Name: "main.gno", Body: code}}
 	msg := vm.NewMsgRun(caller, nil, files)
 	if simulate {
-		out, err := agentSimulate(cli, "run", func() (*std.Tx, error) {
-			return gnoclient.NewRunTx(baseTxCfg(fee), msg)
+		out, err := agentSimulateWithRetry(cli, "run", func(gasWanted int64) (*std.Tx, error) {
+			return gnoclient.NewRunTx(baseTxCfgWithGas(fee, gasWanted), msg)
 		})
 		if err != nil {
 			return RunResult{}, err
@@ -563,8 +643,8 @@ func (r *Real) AddPackage(_ context.Context, signer gnoclient.Signer, deployPath
 	msg := vm.NewMsgAddPackage(creator, deployPath, files)
 	msg.MaxDeposit = std.Coins{{Denom: ugnot.Denom, Amount: DefaultMaxDepositUgnot}}
 	if simulate {
-		out, err := agentSimulate(cli, "addpackage", func() (*std.Tx, error) {
-			return gnoclient.NewAddPackageTx(baseTxCfg(fee), msg)
+		out, err := agentSimulateWithRetry(cli, "addpackage", func(gasWanted int64) (*std.Tx, error) {
+			return gnoclient.NewAddPackageTx(baseTxCfgWithGas(fee, gasWanted), msg)
 		})
 		if err != nil {
 			return AddPackageResult{}, err
