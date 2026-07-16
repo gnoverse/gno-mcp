@@ -105,6 +105,18 @@ func addpkgHandler(
 		return server.Result{}, fmt.Errorf("files: %w", err)
 	}
 
+	// A short deploy_path expands to the agent's own-address namespace below,
+	// which requires regenerating gnomod.toml for the expanded path. A
+	// caller-supplied gnomod.toml names a module path this handler must not
+	// rewrite, so the combination would reach the chain with a module line that
+	// contradicts the deploy path — refuse it before anything is signed.
+	shortName := !strings.Contains(deployPath, "/")
+	if shortName && hasGnoMod(files) {
+		return server.Result{}, fmt.Errorf(
+			"deploy_path %q: a short package name cannot be combined with a caller-supplied gnomod.toml — pass the full package path, or omit gnomod.toml to have it generated",
+			deployPath)
+	}
+
 	// ---- Resolve chain client
 
 	c := resolver(profileName)
@@ -115,11 +127,11 @@ func addpkgHandler(
 	// ---- Inject gnomod.toml if missing, then sort
 	//
 	// Inject before signer acquisition so the file count is correct in the audit
-	// summary. If deploy_path is a short name that gets expanded below, we
-	// regenerate the gnomod.toml body with the expanded path.
+	// summary. If deploy_path is a short name that gets expanded below, the
+	// generated body is regenerated with the expanded path (a caller-supplied
+	// gnomod.toml was already refused for that case).
 
-	autoGnoMod := !hasGnoMod(files)
-	if autoGnoMod {
+	if !hasGnoMod(files) {
 		files = append(files, &std.MemFile{
 			Name: "gnomod.toml",
 			Body: gnolang.GenGnoModLatest(deployPath),
@@ -143,19 +155,18 @@ func addpkgHandler(
 
 	// ---- Expand short deploy_path to address-based namespace
 	//
-	// When deploy_path contains no "/" it is a short package name (e.g. "hello").
-	// Expand it to "gno.land/r/<agentAddr>/<name>" which is always authorized
-	// (no namespace registration required) and gnoweb-compatible (hex address,
-	// no hyphens). Full paths (containing "/") are passed through unchanged.
-	if !strings.Contains(deployPath, "/") {
+	// A short name (e.g. "hello") expands to "gno.land/r/<agentAddr>/<name>",
+	// which is always authorized (no namespace registration required) and
+	// gnoweb-compatible (bech32 addresses are lowercase alphanumeric — gnoweb's
+	// path regex rejects hyphens, so registered names can 404 where an address
+	// path works). Full paths (containing "/") pass through unchanged.
+	if shortName {
 		deployPath = "gno.land/r/" + addr + "/" + deployPath
 		argsSummary = fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
-		if autoGnoMod {
-			for _, f := range files {
-				if f.Name == "gnomod.toml" {
-					f.Body = gnolang.GenGnoModLatest(deployPath)
-					break
-				}
+		for _, f := range files {
+			if f.Name == "gnomod.toml" {
+				f.Body = gnolang.GenGnoModLatest(deployPath)
+				break
 			}
 		}
 	}
