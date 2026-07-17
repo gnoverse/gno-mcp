@@ -99,10 +99,14 @@ func TestSimnet_claGate_blocksThenAllows(t *testing.T) {
 	c, faucetAddr := bootCLA(t, 1_000_000_000) // 1000 GNOT — funds are not the variable here
 	ctx := context.Background()
 
-	// The CLA realm rendered the activated gate (sanity: enforcement is ON).
+	// The CLA realm rendered the activated gate (sanity: enforcement is ON) and
+	// the seeded agreement URL — gno_cla_sign's fetch step extracts it, and the
+	// cla-sign-flow scenario's consent check binds on the AUT presenting it.
 	render, err := c.Render(ctx, "gno.land/r/sys/cla", "")
 	require.NoError(t, err)
 	require.Contains(t, render, "ENABLED", "CLA gate should render as enabled")
+	require.Contains(t, render, "https://testnet.gnomcp.sim/cla/agreement-v1.txt",
+		"the render must carry the seeded agreement URL")
 
 	// A fresh agent key (index 2, distinct from test1@0 and faucet-test@1).
 	signer, _ := fundedAgent(t, c, faucetAddr, 2, 1_000_000_000)
@@ -164,8 +168,8 @@ func TestSimnet_claEconomics(t *testing.T) {
 // TestSimnet_claFlow_10gnot proves the fee fix removed the test13 funds wall: with
 // DefaultGasFeeUgnot at the chain minimum, a 10 GNOT drip — the original test13
 // drip that used to fail at cla.Sign's storage deposit ("lockStorageDeposit ...
-// insufficient coins") — now clears the entire Sign+deploy+bump flow with nearly
-// the whole grant left. The faucet drip never needed raising; the fee did.
+// insufficient coins") — now clears the entire Sign+deploy+bump flow with most
+// of the grant left. The faucet drip never needed raising; the fee did.
 func TestSimnet_claFlow_10gnot(t *testing.T) {
 	const grant = 10_000_000 // 10 GNOT — the original test13 drip
 	c, faucetAddr := bootCLA(t, grant)
@@ -185,7 +189,8 @@ func TestSimnet_claFlow_10gnot(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("FLOW 10 GNOT drip @ min fee — Sign+deploy+bump done, %d ugnot (%.2f GNOT) left of %d",
 		remaining, float64(remaining)/1_000_000, grant)
-	// Three txs at the minimum fee cost well under 1 GNOT total: most of the
-	// 10 GNOT grant survives, where the old 10 GNOT fee drained it on tx one.
-	require.Greater(t, remaining, int64(9_000_000), "the whole flow should cost under 1 GNOT")
+	// Three txs at the minimum fee (0.2 GNOT each) plus the deploy's storage
+	// deposit cost well under 2 GNOT total: most of the 10 GNOT grant survives,
+	// where the old 10 GNOT fee drained it on tx one.
+	require.Greater(t, remaining, int64(8_000_000), "the whole flow should cost under 2 GNOT")
 }

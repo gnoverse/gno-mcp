@@ -37,7 +37,7 @@ Upstream taxonomy from `gno-security.md`. Code comments in the gno repo referenc
 |---|---|---|
 | **1a** | cur-disclosure / impersonate-self | Hostile interface implementation captures `cur.Address()` / `cur.PkgPath()` from a `cur realm` parameter and later acts AS the realm that handed it the cur. |
 | **1b** | cur-disclosure / impersonate-caller | Hostile implementation captures `cur.Previous()` and acts AS that realm's caller. |
-| **2** | designation-forgery | Public method takes `(caller address, ...)` or `(pkgPath string, ...)`; any attacker calls it with the victim's identity. Also: APIs that accept a `realm` value but skip `cur.IsCurrent()` — a stored stale realm value's `.Address()` still resolves but no longer refers to the live caller. |
+| **2** | designation-forgery | Public method takes `(caller address, ...)` or `(pkgPath string, ...)`; any attacker calls it with the victim's identity. Also: non-crossing helpers that accept a secondary `realm` value and skip `rlm.IsCurrent()` before trusting it — a stale or previous realm value's `.Address()` still resolves but no longer refers to the live caller. |
 | **3** | impl-substitution | Public function accepts an open interface; attacker supplies an implementation that lies on read (DoS or silent escalation). **Fires even when the interface has no realm-typed methods** — it's a read/behavior-integrity class, not a cur-leak class. |
 | **4** | closed-over-authority | A canonical-typed value's constructor (or post-construction setter) takes attacker-controllable callback/data; the value passes an `IsCanonicalX` type check but carries hostile state. When Class 3 and Class 4 both apply, file as Class 4 — the allowlist passed; residual harm is captured-state. |
 
@@ -117,7 +117,7 @@ type Hooker interface { Hook(cur realm) }
 
 **Detection**: interface methods declared with `cur realm` parameters; functions that pass `cur` (not `cross(cur)`) to subsequent cross-realm calls. The interface-with-`cur realm` shape is the primary tell.
 
-**Fix**: never declare an interface method that takes `cur realm`. Take `caller address` instead, and let the calling code derive the address from `cur.Previous().Address()` under an `IsCurrent()` guard at the call site.
+**Fix**: never declare an interface method that takes `cur realm`. Take `caller address` instead, and let the crossing call site derive the address from its runtime-current `cur.Previous().Address()`.
 
 **Status**: ACTIVE class (defensive lint). The compiler today rejects most expressions; the lint catches the cases it doesn't.
 
@@ -134,23 +134,25 @@ func DoThing(addr address) {
 Or:
 
 ```go
-func DoThing(cur realm) {
+func DoThing(_ int, rlm realm) {
     // missing IsCurrent() check
-    addr := cur.Previous().Address()   // a stale stored realm value still resolves
+    addr := rlm.Previous().Address()   // cur.Previous() or a stale realm value still resolves
     log[addr] = ...
 }
 ```
 
-**Why wrong**: an `address` or `pkgPath` parameter is attacker-controlled. To identify the actual calling realm, take `cur realm` and derive the address inside. And a stored stale realm value can still resolve `.Address()` numerically — it just no longer refers to the live caller. **`cur.IsCurrent()` is the authentication primitive**.
+**Why wrong**: an `address` or `pkgPath` parameter is attacker-controlled. To identify the actual caller at an entrypoint, use the crossing function's first `cur realm` and derive the address inside. For non-crossing helpers that intentionally accept a secondary `rlm realm`, first prove `rlm.IsCurrent()`; otherwise the caller can pass `cur.Previous()` or another realm value. A stale or previous realm value can still resolve `.Address()` numerically — it just no longer refers to the live caller.
 
-**Detection**: function signatures with `caller address` or `pkgPath string` as identity parameters; `cur` used to derive identity without an `IsCurrent()` guard.
+**Detection**: function signatures with `caller address` or `pkgPath string` as identity parameters; non-crossing helper signatures like `_ int, rlm realm` where `rlm` is used for authority without an `rlm.IsCurrent()` guard. Do not flag the first `cur realm` of a crossing function solely for lacking `cur.IsCurrent()`; the runtime guarantees it is current.
+
+When reconciling upstream docs, treat `docs/resources/gno-interrealm-v2.md`'s public-API checklist as a broad prompt to inspect caller-identity use, not as an automatic finding against every crossing entrypoint. For the `_ int, rlm realm` migration shape, apply `gnovm/adr/interrealm_v2.md`: guard the helper's secondary `rlm`, not the crossing function's first `cur`.
 
 **Fix**:
 
 ```go
-func DoThing(cur realm) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
-    addr := cur.Previous().Address()
+func DoThing(_ int, rlm realm) {
+    if !rlm.IsCurrent() { panic("spoofed realm") }
+    addr := rlm.Previous().Address()
     log[addr] = ...
 }
 ```
@@ -219,7 +221,6 @@ The single most common security-relevant operation in `/r/` code:
 
 ```go
 func Buy(cur realm) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     if !cur.Previous().IsUserCall() {
         panic("only EOA via MsgCall can fund this")
     }
@@ -253,7 +254,7 @@ Three predicates that look interchangeable but aren't:
 |---|---|
 | All sensitive fields are unexported | `Token.ledger`, `PrivateLedger.balances`, `PrivateLedger.allowances`, `fnTeller.accountFn` all lowercase. Foreign packages cannot access them. |
 | No exported method leaks an interior pointer | No `Token` method returns `*PrivateLedger`, `*avl.Tree`, or `*avl.Node`. |
-| Authority transitions gated by `cur.IsCurrent()` | Every `Teller` method checks `cur.IsCurrent()` before resolving `cur.Previous().Address()`. |
+| Authority transitions gated at the right boundary | Crossing entrypoints use their runtime-current first `cur`; non-crossing helper methods that accept `_ int, rlm realm` check `rlm.IsCurrent()` before resolving realm identity. |
 | Forgery defended by nominal type assertion | `IsCanonicalTeller(t)` checks `_, ok := t.(*fnTeller)`. Embedding wrappers fail this. |
 | `*PrivateLedger`'s unauthenticated mutators isolated by package privacy | `Mint`/`Burn`/etc. have no `cur` check. They're safe only because no realm exports the `*PrivateLedger` pointer. |
 
@@ -334,7 +335,7 @@ Quick-reference grep checklist. Run these from the realm root.
 | Pattern | Signal | Class |
 |---|---|---|
 | `IsUser()` co-occurring with `OriginSend` | RED | payment-bypass via MsgRun |
-| `cur.Previous()` / `cur.Address()` without prior `cur.IsCurrent()` check | RED | Class 2 — designation-forgery |
+| Helper/secondary `rlm.Previous()` / `rlm.Address()` without prior `rlm.IsCurrent()` check | RED | Class 2 — designation-forgery |
 | Public method takes `caller address` / `pkgPath string` as identity parameter | RED | Class 2 — designation-forgery |
 | `unsafe.PreviousRealm()` inside a non-crossing function used as caller identity | RED | Class 2 — does not identify the immediate caller |
 | `interface { ... }` with `cur realm` parameter declared anywhere | YELLOW | Class 1a/1b — cur-disclosure surface |
@@ -398,7 +399,7 @@ Cite findings as `YELLOW (RED in any realm that exposes <surface> to public inpu
 Before deploying a realm, verify:
 
 - [ ] All logic-data types are declared in this package, OR `/p/`-declared types are stored in **unexported** package vars.
-- [ ] Every exported function/method does one of: pure read (returns primitives or values, no internal pointers); takes `cur realm` and authenticates via `cur.IsCurrent()`; documented intentionally permissive (faucet, public mint).
+- [ ] Every exported function/method does one of: pure read (returns primitives or values, no internal pointers); is a crossing function whose first `cur realm` is used for caller identity; is a non-crossing helper that checks secondary `rlm.IsCurrent()` before trusting realm identity; documented intentionally permissive (faucet, public mint).
 - [ ] No exported var or function returns a pointer aliasing internal mutable state.
 - [ ] Every interface parameter from external callers is gated with a canonical-type assert before invoking methods.
 - [ ] No method takes a `func(*MyPType)` callback (where `MyPType` is `/p/`-declared) and invokes it from within. If yes, retype the callback to use your own `/r/V`-typed parameter.
@@ -432,13 +433,11 @@ func Value() int {
 
 // Authenticated mutator.
 func Increment(cur realm) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     gCounter.value++
 }
 
 // Authenticated owner-gated mutator.
 func SetOwner(cur realm, newOwner address) {
-    if !cur.IsCurrent() { panic("spoofed realm") }
     if gCounter.owner != "" && cur.Previous().Address() != gCounter.owner {
         panic("not the owner")
     }
@@ -449,7 +448,7 @@ func SetOwner(cur realm, newOwner address) {
 // NO method like GetCounter() *Counter — aliased-pointer leak.
 ```
 
-Attackers can read `Value()` (returns a copy), call `Increment(cur)` (D1 keeps `m.Realm = counter`), call `SetOwner(cur, ...)` (owner check). They cannot write `gCounter.value` (unexported), Apply-launder it (no Apply method, no exported pointer), forge `cur` (`IsCurrent()` fails), or spoof `cur.Previous().Address()` (it's the live crossing frame).
+Attackers can read `Value()` (returns a copy), call `Increment(cur)` (D1 keeps `m.Realm = counter`), call `SetOwner(cur, ...)` (owner check). They cannot write `gCounter.value` (unexported), Apply-launder it (no Apply method, no exported pointer), or spoof `cur.Previous().Address()` at the crossing entrypoint because the runtime supplies the live first `cur realm`.
 
 ## Cross-references
 

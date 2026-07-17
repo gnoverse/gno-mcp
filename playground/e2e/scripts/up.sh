@@ -10,14 +10,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLAYGROUND_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 TARGET="${1:-e2e}"
 case "${TARGET}" in
-  e2e|e2e-faucetcap|l1-fresh|l2-gnomcp|l3-full) ;;
-  *) echo "usage: up.sh [e2e|e2e-faucetcap|l1-fresh|l2-gnomcp|l3-full]" >&2; exit 2 ;;
+  e2e|e2e-faucetcap|e2e-clagate|l1-fresh|l2-gnomcp|l3-full) ;;
+  *) echo "usage: up.sh [e2e|e2e-faucetcap|e2e-clagate|l1-fresh|l2-gnomcp|l3-full]" >&2; exit 2 ;;
 esac
 
 # Targets that run simnet as a foreground service (node + faucet + gnoweb) and so
 # need the alias host + the readiness wait; the rest just idle for `docker exec`.
 SIMNET_TARGET=0
-case "${TARGET}" in e2e|e2e-faucetcap) SIMNET_TARGET=1 ;; esac
+case "${TARGET}" in e2e|e2e-faucetcap|e2e-clagate) SIMNET_TARGET=1 ;; esac
 CONTAINER="${E2E_CONTAINER:-gnomcp-e2e}"
 IMAGE="${E2E_IMAGE:-gnomcp-playground:${TARGET}}"
 ALIAS="testnet.gnomcp.sim"

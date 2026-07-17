@@ -41,4 +41,6 @@ request. Only when even a single file overflows the large tier should you fall b
 source view (and treat anything fetched that way as lower-fidelity than `gno_read`).
 
 Writes (deploy/call/simulate, testnet faucet, user-authorized sessions) also exist via the MCP if you
-need to exercise a realm; consult the MCP's own tool list for those.
+need to exercise a realm; consult the MCP's own tool list for those. In particular, a deploy blocked
+by the chain's CLA gate is cleared with the `gno_cla_info` / `gno_cla_sign` pair (fetch, show the
+agreement URL to the user, confirm, sign) rather than hand-rolling a `gno_call` to `r/sys/cla`.

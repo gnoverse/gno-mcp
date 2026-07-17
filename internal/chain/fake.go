@@ -32,6 +32,7 @@ type Fake struct {
 	statusErr     error // checked before status
 	// agent-identity (standard tx, no session) maps
 	agentCalls      map[string]CallResult
+	agentCallErrors map[string]error // key: realm+"|"+fn+"|"; checked before agentCalls
 	agentRuns       map[string]RunResult
 	addPkgs         map[string]AddPackageResult
 	addPkgErrs      map[string]error          // key: deployPath; when set, AddPackage returns it (sim + broadcast)
@@ -68,6 +69,7 @@ func NewFake() *Fake {
 		accounts:        map[string]AccountInfo{},
 		accountErrors:   map[string]error{},
 		agentCalls:      map[string]CallResult{},
+		agentCallErrors: map[string]error{},
 		agentRuns:       map[string]RunResult{},
 		addPkgs:         map[string]AddPackageResult{},
 		addPkgErrs:      map[string]error{},
@@ -216,6 +218,9 @@ func (f *Fake) SetSession(master, sessionAddr string, status SessionStatus) {
 // Call returns the seeded result for (realm, fn, args), ignoring signer.
 func (f *Fake) Call(_ context.Context, _ gnoclient.Signer, realm, fn string, args []string, send string, simulate bool) (CallResult, error) {
 	f.lastSend = send
+	if err, ok := f.agentCallErrors[callKey(realm, fn, nil)]; ok {
+		return CallResult{}, err
+	}
 	r, ok := f.agentCalls[callKey(realm, fn, args)]
 	if !ok {
 		return CallResult{}, fmt.Errorf("fake: no call for realm=%q fn=%q args=%v", realm, fn, args)
@@ -276,6 +281,13 @@ func (f *Fake) AddPackageBroadcasts(deployPath string) int {
 
 func (f *Fake) SetCall(realm, fn string, args []string, result CallResult) {
 	f.agentCalls[callKey(realm, fn, args)] = result
+}
+
+// SetCallError seeds an error returned by the agent-identity Call for
+// (realm, fn), regardless of args — the counterpart of SetCallAsUserError for
+// exercising broadcast-failure paths in tool tests.
+func (f *Fake) SetCallError(realm, fn string, err error) {
+	f.agentCallErrors[callKey(realm, fn, nil)] = err
 }
 
 // LastSend returns the send arg of the most recent Call/CallAsUser, for

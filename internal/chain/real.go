@@ -426,7 +426,7 @@ func isSessionNotFoundErr(err error) bool {
 // heaviest tx's gas use (an AddPackage runs ~5M). Execution headroom lives
 // here, sized independently of the fee — a heavier tx needs more GasWanted,
 // never a bigger GasFee.
-const DefaultGasWanted int64 = 10_000_000
+const DefaultGasWanted int64 = 200_000_000
 
 // minGasPriceDivisor is gnomcp's assumed minGasPrice floor as gas-per-ugnot:
 // 1 ugnot per 1000 gas, the gno.land genesis default. It sets DefaultGasFeeUgnot,

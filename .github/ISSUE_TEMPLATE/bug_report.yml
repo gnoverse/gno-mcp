@@ -1,0 +1,107 @@
+name: 🐞 Bug Report
+description: Report a bug in gnomcp — the MCP server, its tools, or the bundled skills.
+labels: ["🐞 bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+
+        Before filing: bugs in the gno language, GnoVM, or the gno.land chain itself belong
+        upstream in [gnolang/gno](https://github.com/gnolang/gno/issues). Bugs in your MCP
+        client (Claude Code, Cursor, …) belong in that client's repo. This tracker is for
+        gnomcp: the server, its tools, the faucet, and the bundled skills.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I've searched [existing issues](https://github.com/gnoverse/gno-mcp/issues) and found no duplicate.
+          required: true
+        - label: I've reproduced the bug on the [latest release](https://github.com/gnoverse/gno-mcp/releases).
+          required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: gnomcp version
+      description: >-
+        Output of `gnomcp version` (or `docker run --rm ghcr.io/gnoverse/gnomcp version`
+        for the Docker image).
+      placeholder: 0.8.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install gnomcp?
+      multiple: true
+      options:
+        - Install script (curl | sh)
+        - Claude Code plugin
+        - Gemini CLI extension
+        - Codex / OpenCode
+        - Cursor / other MCP client (manual config)
+        - Docker image (ghcr.io/gnoverse/gnomcp)
+        - From source (go run / go build)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: MCP client and version, OS/arch, and the target profile/chain.
+      placeholder: Claude Code 2.1.0, macOS arm64, profile "local" (gnodev)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What went wrong? A clear and concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        Which tool calls, prompts, or commands trigger the bug. A minimal sequence is ideal.
+      placeholder: |
+        1. Call `gno_read` with path '...'
+        2. Then '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual behavior
+      description: What you expected to happen, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >-
+        MCP client logs and/or the gnomcp audit log (`gnomcp audit`). Note that most MCP
+        clients hide tool calls by default — in Claude Code, press Ctrl+O to expand the
+        full tool call transcript (arguments and results). Redact addresses or anything
+        sensitive if needed.
+      value: |-
+        <details>
+
+        ```console
+        # paste logs here
+        ```
+
+        </details>
