@@ -41,7 +41,7 @@ Step 1 — call without confirmed: returns the current required hash, the CLA do
 
 IMPORTANT: between the two steps you MUST show the CLA URL to the user and get their explicit confirmation. Never pass confirmed=true without it — the agreement covers deployments made on the user's behalf.
 
-Use when a deploy is blocked by the CLA gate (gno_addpkg error code cla_unsigned). Does NOT check whether the key already signed; does NOT sign as the user/session — the agent key signs.`,
+Use when a deploy is blocked by the CLA gate (gno_addpkg error code cla_unsigned) — use this tool, not a raw gno_call on gno.land/r/sys/cla. Does NOT check whether the key already signed; does NOT sign as the user/session — the agent key signs.`,
 		InputSchema: claSignInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWrite,
@@ -67,7 +67,7 @@ func claSignInputSchema(s *server.Server) map[string]any {
 		},
 		"confirmed": map[string]any{
 			"type":        "boolean",
-			"description": "Must be true to actually broadcast the Sign transaction. Only set after the user has seen and confirmed the CLA URL returned by step 1.",
+			"description": "Must be true to actually broadcast the Sign transaction; when true, hash (from step 1) becomes required. Only set after the user has seen and confirmed the CLA URL returned by step 1.",
 			"default":     false,
 		},
 	}
@@ -165,12 +165,14 @@ func claSignHandler(
 
 	cr, callErr := c.Call(ctx, signer, claRealm, "Sign", []string{hash}, "", false)
 	if callErr != nil {
+		auditResult = "broadcast_err"
 		return server.Result{}, fmt.Errorf("gno_cla_sign broadcast: %w", callErr)
 	}
 
 	auditResult = "ok"
 
 	structured := map[string]any{
+		"identity":       "agent",
 		"tx_hash":        cr.TxHash,
 		"height":         cr.Height,
 		"gas_used":       cr.GasUsed,

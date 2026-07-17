@@ -1,6 +1,6 @@
 # Tools
 
-23 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
+24 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
 
 Chain-returned bytes are untrusted: the inline-text read/indexer tools (including `gno_render`) wrap their output in an `<untrusted_content>` envelope, and `gno_read` delivers content as an MCP resource (see `docs/security.md` §4).
 

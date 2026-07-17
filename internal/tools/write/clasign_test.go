@@ -3,6 +3,7 @@ package write
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -169,6 +170,8 @@ func TestCLASign_signHappyPath(t *testing.T) {
 	require.NoError(t, err, "sign step")
 	assert.Contains(t, res.Text, "Signed by: agent test1 ("+keystore.Test1Address+")",
 		"every write result must name its signing identity")
+	assert.Equal(t, "agent", res.StructuredContent["identity"],
+		"the signing identity belongs in the structured channel too, like the sibling write tools")
 	assert.Equal(t, "0xcla", res.StructuredContent["tx_hash"])
 	assert.Equal(t, hash, res.StructuredContent["hash_signed"])
 
@@ -176,4 +179,41 @@ func TestCLASign_signHappyPath(t *testing.T) {
 	require.Len(t, entries, 1)
 	assert.Equal(t, "ok", entries[0].Result)
 	assert.Contains(t, entries[0].ArgsSummary, "confirmed=true")
+}
+
+// A failed Sign broadcast must be distinguishable in the audit log from the
+// generic denials, matching the sibling write tools' result labels.
+func TestCLASign_signBroadcastErrorAuditsBroadcastErr(t *testing.T) {
+	fake := chain.NewFake()
+	fake.SetCallError(claRealm, "Sign", errors.New("node unavailable"))
+	s, auditBuf := registerCLASignForTest(t, fake)
+
+	_, err := s.Registry().Call(context.Background(), "gno_cla_sign", map[string]any{
+		"profile":   "local",
+		"confirmed": true,
+		"hash":      "deadbeef",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gno_cla_sign broadcast")
+
+	entries := parseAuditEntries(t, auditBuf)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "broadcast_err", entries[0].Result)
+}
+
+// An unreachable node during the fetch step is a failure, and the audit record
+// must say so.
+func TestCLASign_fetchRenderFailureAuditsToolErr(t *testing.T) {
+	fake := chain.NewFake() // no render seeded — Render errors
+	s, auditBuf := registerCLASignForTest(t, fake)
+
+	_, err := s.Registry().Call(context.Background(), "gno_cla_sign", map[string]any{
+		"profile": "local",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "render gno.land/r/sys/cla")
+
+	entries := parseAuditEntries(t, auditBuf)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "tool_err", entries[0].Result)
 }
