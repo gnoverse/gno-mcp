@@ -93,8 +93,10 @@ body:
     attributes:
       label: Logs
       description: >-
-        MCP client logs and/or the gnomcp audit log (`gnomcp audit`). Redact addresses or
-        anything sensitive if needed.
+        MCP client logs and/or the gnomcp audit log (`gnomcp audit`). Note that most MCP
+        clients hide tool calls by default — in Claude Code, press Ctrl+O to expand the
+        full tool call transcript (arguments and results). Redact addresses or anything
+        sensitive if needed.
       value: |-
         <details>
 
