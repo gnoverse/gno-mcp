@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🔗 gno language / GnoVM / chain bugs
+    url: https://github.com/gnolang/gno/issues
+    about: Bugs in the gno language, VM, or the gno.land chain itself belong upstream.
+  - name: 📖 Documentation
+    url: https://github.com/gnoverse/gno-mcp/tree/main/docs
+    about: Setup, tool catalog, security model, and configuration reference.
