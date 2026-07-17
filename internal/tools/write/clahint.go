@@ -22,14 +22,15 @@ const claRealm = "gno.land/r/sys/cla"
 const claUnsignedLog = "has not signed the required CLA"
 
 // claHint is the actionable guidance appended to a CLA rejection. It routes
-// recovery through gno_cla_sign — the tool fetches the live required hash and
-// document URL from the realm, so nothing here can go stale — and carries the
-// show-the-user step that is the reason the dedicated tool exists.
+// recovery through the gno_cla_info / gno_cla_sign pair — gno_cla_info reports
+// the live required hash and document URL from the realm, so nothing here can
+// go stale — and carries the show-the-user step that is the reason the
+// dedicated tools exist.
 const claHint = "This chain enforces a Contributor License Agreement (gno.land/r/sys/cla) that the signing key has not accepted.\n" +
-	"Clear it with gno_cla_sign, then retry the deploy:\n" +
-	"  1. Call gno_cla_sign (without confirmed) to fetch the required hash and the CLA document URL.\n" +
+	"Clear it, then retry the deploy:\n" +
+	"  1. Call gno_cla_info to fetch the required hash and the CLA document URL.\n" +
 	"  2. Show the URL to the user and get their explicit confirmation.\n" +
-	"  3. Call gno_cla_sign with confirmed=true and the hash, using the same key that deploys."
+	"  3. Call gno_cla_sign with that hash, using the same key that deploys."
 
 // withCLAHint converts the keeper's CLA-gate rejection into a typed
 // cla_unsigned ToolError carrying actionable guidance, and returns err unchanged
