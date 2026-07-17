@@ -99,10 +99,14 @@ func TestSimnet_claGate_blocksThenAllows(t *testing.T) {
 	c, faucetAddr := bootCLA(t, 1_000_000_000) // 1000 GNOT — funds are not the variable here
 	ctx := context.Background()
 
-	// The CLA realm rendered the activated gate (sanity: enforcement is ON).
+	// The CLA realm rendered the activated gate (sanity: enforcement is ON) and
+	// the seeded agreement URL — gno_cla_sign's fetch step extracts it, and the
+	// cla-sign-flow scenario's consent check binds on the AUT presenting it.
 	render, err := c.Render(ctx, "gno.land/r/sys/cla", "")
 	require.NoError(t, err)
 	require.Contains(t, render, "ENABLED", "CLA gate should render as enabled")
+	require.Contains(t, render, "https://testnet.gnomcp.sim/cla/agreement-v1.txt",
+		"the render must carry the seeded agreement URL")
 
 	// A fresh agent key (index 2, distinct from test1@0 and faucet-test@1).
 	signer, _ := fundedAgent(t, c, faucetAddr, 2, 1_000_000_000)

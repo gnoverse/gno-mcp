@@ -42,8 +42,14 @@ func TestWithCLAHint(t *testing.T) {
 		assert.Equal(t, "cla_unsigned", te.Code)
 		assert.Contains(t, te.Message, "Contributor License Agreement")
 		assert.Contains(t, te.Message, "gno.land/r/sys/cla")
-		assert.Contains(t, te.Message, "Sign")
+		assert.Contains(t, te.Message, "gno_cla_info",
+			"the recovery hint must route hash discovery through the read tool")
+		assert.Contains(t, te.Message, "gno_cla_sign",
+			"the recovery hint must route signing through the dedicated tool, not a manual render+call recipe")
+		assert.Contains(t, te.Message, "user",
+			"the hint must carry the show-the-user step, not just the mechanics")
 		assert.Equal(t, "gno.land/r/sys/cla", te.Extra["sign_realm"])
+		assert.Equal(t, "gno_cla_sign", te.Extra["sign_tool"])
 	})
 
 	t.Run("leaves the namespace rejection untouched", func(t *testing.T) {

@@ -138,3 +138,15 @@ ENV PLAYGROUND_LAYER=sim-cla
 FROM e2e AS e2e-faucetcap
 ENV PLAYGROUND_LAYER=e2e-faucetcap
 CMD ["simnet", "-faucet-per-addr", "1"]
+
+# ---- E2E-CLAGATE: e2e harness with the CLA deploy gate seeded and ENFORCED
+# (RUN TARGET: e2e-clagate, via the playground-driver `image:` selector). Seeds
+# gno.land/r/sys/cla from the vendored realm and activates it with a required
+# hash, so a deploy must clear the gate first — the local, judgeable twin of the
+# external deploy-gates scenario: the driver plays the user in gno_cla_sign's
+# confirmation round-trip (cla-sign-flow scenario). Everything else (node,
+# faucet, gnoweb, profiles, gnoquery) is the e2e image.
+FROM e2e AS e2e-clagate
+COPY --chown=dev:dev playground/e2e/simnet/realms /opt/e2e/cla-realms
+ENV PLAYGROUND_LAYER=e2e-clagate
+CMD ["simnet", "-cla-dir", "/opt/e2e/cla-realms/gno.land/r/sys/cla", "-cla-hash", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"]

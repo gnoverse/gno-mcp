@@ -1,6 +1,6 @@
 # Tools
 
-23 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
+25 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
 
 Chain-returned bytes are untrusted: the inline-text read/indexer tools (including `gno_render`) wrap their output in an `<untrusted_content>` envelope, and `gno_read` delivers content as an MCP resource (see `docs/security.md` §4).
 
@@ -88,7 +88,7 @@ gnomcp signs writes with one of two identities, chosen per call via the `identit
 
 Every write result names the signer (`Signed by: agent test1 (g1…)` or `Signed by: session g1… on behalf of master g1…`) and the structured output carries `identity` + `signer_address`.
 
-Registration: every allowed chain (local dev or testnet) has an agent key path, so `gno_call`, `gno_run`, `gno_addpkg`, `gno_key_send`, `gno_key_address`, `gno_key_list`, `gno_key_generate`, and `gno_key_delete` always register. `gno_faucet_fund` appears when a testnet profile exists (including one added mid-session via `gno_profile_add`).
+Registration: every allowed chain (local dev or testnet) has an agent key path, so `gno_call`, `gno_run`, `gno_addpkg`, `gno_cla_info`, `gno_cla_sign`, `gno_key_send`, `gno_key_address`, `gno_key_list`, `gno_key_generate`, and `gno_key_delete` always register. `gno_faucet_fund` appears when a testnet profile exists (including one added mid-session via `gno_profile_add`).
 
 A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, default 5), so the agent can fund secondary accounts and exercise realms involving multiple addresses. The write and key tools take an optional `key` arg (default `"default"`) selecting which key to act with; `gno_key_list` enumerates them. `key` applies to `identity=agent` only and is rejected with `identity=session`.
 
@@ -127,6 +127,18 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Args:** `profile` (required), `deploy_path` (required), `files[]` (required — each `{name, body}`), `simulate?`, `key?`
 - **Returns:** deploy (or `simulate`) result, prefixed with the signing identity.
 - Deploys a package/realm via `vm/MsgAddPackage`, signed by the agent key (local: test1, testnet: generated key). A `gnomod.toml` is generated automatically if omitted.
+
+### `gno_cla_info`
+
+- **Args:** `profile` (required)
+- **Returns:** the chain's CLA state from `gno.land/r/sys/cla` — whether enforcement is enabled, the current required hash, and the agreement document URL (a disabled chain returns `enabled=false`: nothing to sign). Read-only; signs nothing.
+- The read-side companion of `gno_cla_sign`: the URL is meant for **the user** to review before the agreement is signed on their behalf. The inline document URL is realm-authored and arrives inside the untrusted envelope.
+
+### `gno_cla_sign`
+
+- **Args:** `profile` (required), `hash` (required — from `gno_cla_info`), `key?`
+- **Returns:** the broadcast result of `gno.land/r/sys/cla.Sign(hash)`, signed by the agent key, with the signing identity named.
+- Use when a deploy fails with `cla_unsigned` (the error's hint walks the flow) and **after the user has seen and confirmed the agreement URL** from `gno_cla_info`. Does not fetch the hash and does not sign as the user/session.
 
 ### `gno_key_address`
 

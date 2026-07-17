@@ -8,6 +8,13 @@ import "gno.land/p/moul/addrset"
 // the agent under test — closing the obvious "just disable the CLA" shortcut.
 var genesisAdmin = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
 
+// The live network sets the agreement URL through the same GovDAO proposal
+// that sets the hash; the simnet seeds it at deploy so the render carries the
+// link that gno_cla_sign's confirmation flow presents to the user.
+func init() {
+	claURL = "https://testnet.gnomcp.sim/cla/agreement-v1.txt"
+}
+
 // SetRequiredHash activates (newHash != "") or clears (newHash == "") CLA
 // enforcement directly. The live network sets the hash through a GovDAO
 // ProposeNewCLA proposal (admin.gno upstream); the simnet has no gov/dao realm,

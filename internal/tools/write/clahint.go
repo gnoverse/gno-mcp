@@ -21,14 +21,16 @@ const claRealm = "gno.land/r/sys/cla"
 // the two apart.
 const claUnsignedLog = "has not signed the required CLA"
 
-// claHint is the actionable guidance appended to a CLA rejection. It names the
-// realm and the two operations (read the hash, then Sign) without reciting the
-// hash itself — the required hash is per-chain state that the realm's render
-// reports live, and hardcoding it here would go stale.
-const claHint = "This chain enforces a Contributor License Agreement (CLA) that the signing key has not accepted.\n" +
-	"Sign it once from the same key, then retry the deploy:\n" +
-	"  1. Read the required hash: render gno.land/r/sys/cla (its output lists \"Required Hash\").\n" +
-	"  2. Call gno.land/r/sys/cla function Sign with that hash, signed by the same key."
+// claHint is the actionable guidance appended to a CLA rejection. It routes
+// recovery through the gno_cla_info / gno_cla_sign pair — gno_cla_info reports
+// the live required hash and document URL from the realm, so nothing here can
+// go stale — and carries the show-the-user step that is the reason the
+// dedicated tools exist.
+const claHint = "This chain enforces a Contributor License Agreement (gno.land/r/sys/cla) that the signing key has not accepted.\n" +
+	"Clear it, then retry the deploy:\n" +
+	"  1. Call gno_cla_info to fetch the required hash and the CLA document URL.\n" +
+	"  2. Show the URL to the user and get their explicit confirmation.\n" +
+	"  3. Call gno_cla_sign with that hash, using the same key that deploys."
 
 // withCLAHint converts the keeper's CLA-gate rejection into a typed
 // cla_unsigned ToolError carrying actionable guidance, and returns err unchanged
@@ -46,7 +48,7 @@ func withCLAHint(err error) error {
 	return &server.ToolError{
 		Code:    "cla_unsigned",
 		Message: err.Error() + "\n\n" + claHint,
-		Extra:   map[string]any{"sign_realm": claRealm},
+		Extra:   map[string]any{"sign_realm": claRealm, "sign_tool": "gno_cla_sign"},
 	}
 }
 
