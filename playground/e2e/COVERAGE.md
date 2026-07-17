@@ -47,6 +47,8 @@ listed).
 | write.call | gno_call broadcast | 02 | covered |
 | write.simulate | gas estimate without broadcast | 02 | covered |
 | write.addpkg | gno_addpkg deploy | 02 | covered |
+| write.short-name-expansion | gno_addpkg expands a bare package name to gno.land/r/<agent-address>/<name>, regenerating the auto-injected gnomod.toml for the expanded path | 13 | covered |
+| write.address-namespace | short-form deploys land under the agent own-address namespace (always authorized, gnoweb-safe) | 13 | covered |
 | write.deploy-gates | deploy clears the genesis-activated namespace + CLA gates (own-address namespace + sign r/sys/cla); the gno_addpkg CLA hint guides recovery on the unsigned-CLA error | 14 | covered (live-only; the default e2e simnet has the gates off) |
 | write.cla-sign-tool | the gno_cla_info / gno_cla_sign pair: fetch hash + agreement URL, then sign with that hash | 12, 14 | covered (12 on the e2e-clagate image — CLA gate enforced on simnet; 14 accepts it as the preferred live path) |
 | write.cla-user-confirmation | the AUT presents the agreement URL and waits for the user's yes BEFORE any gno_cla_sign call — a silent same-turn sign fails | 12 | covered (e2e-clagate image; the driver plays the user in the consent round-trip) |
