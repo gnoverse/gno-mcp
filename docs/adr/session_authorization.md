@@ -28,7 +28,7 @@ Writes are signed by one of two identities, selected per call via the `identity`
 
 Sessions are immutable after creation; scope expansion means a new session. Among multiple matching sessions, gnomcp picks the most recently created active one whose scope covers the call.
 
-**Scope policy** resolves proposal arguments through four layers (high to low): agent-explicit values → per-profile defaults (`default-spend-limit`, `default-expires-in`) → hardcoded defaults (`100000000ugnot`, sized so a default session covers ~10 calls at the chain's 10M-ugnot per-tx GasFee reservation; `1h`) → hard-limit clamps derived from chain-id locality:
+**Scope policy** resolves proposal arguments through four layers (high to low): agent-explicit values → per-profile defaults (`default-spend-limit`, `default-expires-in`) → hardcoded defaults (`100000000ugnot`, sized so a default session covers ~500 calls at the 200000-ugnot per-tx GasFee floor; `1h`) → hard-limit clamps derived from chain-id locality:
 
 | locality | max `spend_limit` | max `expires_in` | max `allow_paths` |
 |---|---|---|---|

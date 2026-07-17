@@ -66,7 +66,7 @@ func TestSimnet_feeIsWhatWeOffer(t *testing.T) {
 		index    uint32
 		feeUgnot int64
 	}{
-		{"fee_min_our_default", 10, chain.DefaultGasFeeUgnot}, // 10_000 ugnot
+		{"fee_min_our_default", 10, chain.DefaultGasFeeUgnot}, // 200_000 ugnot
 		{"fee_1_GNOT", 11, 1_000_000},
 		{"fee_10_GNOT_old_default", 12, 10_000_000},
 	}
