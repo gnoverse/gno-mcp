@@ -127,6 +127,7 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Args:** `profile` (required), `deploy_path` (required), `files[]` (required — each `{name, body}`), `simulate?`, `key?`
 - **Returns:** deploy (or `simulate`) result, prefixed with the signing identity.
 - Deploys a package/realm via `vm/MsgAddPackage`, signed by the agent key (local: test1, testnet: generated key). A `gnomod.toml` is generated automatically if omitted.
+- `deploy_path` accepts a full package path, or a **short name** (no `/`) that expands to the agent's own-address namespace `gno.land/r/<agent-address>/<name>` — always authorized, no registration, gnoweb-safe (no hyphens). A short name cannot be combined with a caller-supplied `gnomod.toml` (its module line cannot be rewritten); pass the full path in that case.
 
 ### `gno_cla_info`
 
