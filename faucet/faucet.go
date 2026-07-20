@@ -5,19 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 )
 
 var (
-	ErrChainRefused  = errors.New("faucet: chain-id is not a testnet")
 	ErrChainMismatch = errors.New("faucet: chain-id does not match this faucet")
 	ErrBadAddress    = errors.New("faucet: invalid recipient address")
 	ErrFundingLow    = errors.New("faucet: funding wallet below minimum balance")
-
-	// testnet only; dev (local) and everything else are refused.
-	testChainRE = regexp.MustCompile(`^test-?\d+$`)
 )
 
 // Faucet dispenses a fixed ugnot grant to testnet addresses, bounded by a Limiter.
@@ -78,9 +73,6 @@ func New(chainID string, grantUgnot int64, d Dispenser, l *Limiter, opts ...Opti
 	return f
 }
 
-// IsTestnetChainID reports whether id matches the testnet chain-id pattern (test-?N).
-func IsTestnetChainID(id string) bool { return testChainRE.MatchString(id) }
-
 // FaucetLimits is the public, policy-only view served at GET /limits. It
 // deliberately omits per-IP, the daily cap, the drip bucket, and all live
 // remaining state — those are anti-abuse internals or metrics-only.
@@ -116,16 +108,15 @@ func (f *Faucet) retryAfterSeconds() int {
 }
 
 // Fund validates the chain-id and recipient, applies rate-limits/cap, then
-// dispenses the grant. Check order: chain-id is-testnet -> chain-id matches this
-// faucet -> recipient is valid -> rate-limit -> dispense. The recipient is parsed
+// dispenses the grant. Check order: chain-id matches this faucet -> recipient
+// is valid -> rate-limit -> dispense. The faucet imposes no chain-id naming
+// scheme — the operator's configured chain-id is authoritative, and the request
+// must name it exactly. The recipient is parsed
 // before the limiter is touched so a garbage address cannot burn the daily cap,
 // and the limiter is keyed on the canonical address so case variants share one
 // bucket. A dispense failure refunds the limiter so a chain hiccup doesn't
 // consume the requester's cooldown or the global budget.
 func (f *Faucet) Fund(ctx context.Context, address, ip, reqChainID string) (string, error) {
-	if !IsTestnetChainID(reqChainID) {
-		return "", ErrChainRefused
-	}
 	if reqChainID != f.chainID {
 		return "", ErrChainMismatch
 	}

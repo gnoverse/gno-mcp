@@ -17,7 +17,6 @@ func TestClassify(t *testing.T) {
 	}{
 		{"success", nil, http.StatusOK, OutcomeSuccess},
 		{"bad address", ErrBadAddress, http.StatusBadRequest, OutcomeBadRequest},
-		{"chain refused", ErrChainRefused, http.StatusForbidden, OutcomeChainRefused},
 		{"chain mismatch", ErrChainMismatch, http.StatusForbidden, OutcomeChainMismatch},
 		{"cooldown", ErrCooldown, http.StatusTooManyRequests, OutcomeCooldown},
 		{"rate limited", ErrRateLimited, http.StatusTooManyRequests, OutcomeRateLimited},

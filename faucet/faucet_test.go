@@ -49,10 +49,27 @@ func TestFaucet_Fund(t *testing.T) {
 	require.ErrorIs(t, err, ErrCooldown, "second request, same address, blocked")
 
 	_, err = f.Fund(context.Background(), "g1xyz", "1.1.1.1", "mainnet")
-	require.ErrorIs(t, err, ErrChainRefused, "non-test chain refused")
+	require.ErrorIs(t, err, ErrChainMismatch, "chain this faucet does not serve refused")
 
 	_, err = f.Fund(context.Background(), "g1xyz", "1.1.1.1", "test99")
 	require.ErrorIs(t, err, ErrChainMismatch, "test chain but not this faucet's chain")
+}
+
+// The faucet imposes no chain-id naming scheme — the operator's -chain-id is
+// authoritative (a codenamed testnet must not require a faucet release naming
+// it). The only chain guard is equality with the configured chain-id.
+func TestFaucet_Fund_codenamedChain(t *testing.T) {
+	fd := &fakeDispenser{}
+	f := New("somenet-1", 1_000_000, fd, NewLimiter(LimiterCfg{
+		PerAddrMax: 1, PerIPMax: 5, DailyCapUgnot: 1_000_000_000, GrantUgnot: 1_000_000,
+	}))
+
+	tx, err := f.Fund(context.Background(), validAddr, "1.1.1.1", "somenet-1")
+	require.NoError(t, err)
+	assert.Equal(t, "0xhash", tx)
+
+	_, err = f.Fund(context.Background(), "g1xyz", "1.1.1.1", "othernet-1")
+	require.ErrorIs(t, err, ErrChainMismatch, "any non-matching chain-id refused")
 }
 
 func TestFaucet_caseVariantAddressSharesCooldownBucket(t *testing.T) {
