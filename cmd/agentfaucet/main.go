@@ -47,7 +47,7 @@ func main() {
 	metricsAddr := flag.String("metrics-addr", "", "address for the Prometheus /metrics listener, e.g. 127.0.0.1:8591 (empty disables; opt-in)")
 	trustedProxies := flag.Int("trusted-proxies", 0, "number of trusted reverse-proxy hops for X-Forwarded-For client IP (0 = ignore XFF, use direct peer; set to the proxy count, e.g. 1 behind a single ALB)")
 	grant := flag.Int64("grant", 1_000_000_000, "ugnot amount granted per fund request")
-	// Gas is scoped to the faucet's only tx type — a bank send (~1.6M on test-13).
+	// Gas is scoped to the faucet's only tx type — a bank send (~1.6M on recent testnets).
 	// The GasFee is not a flag: it is priced per dispense from the chain's live gas
 	// price (auth/gasprice), so the faucet adapts to congestion without overpaying.
 	// gas-wanted is the execution ceiling only, orthogonal to price.
@@ -72,9 +72,6 @@ func main() {
 	}
 	if *rpcURL == "" || *chainID == "" || *mnemonic == "" {
 		fatal("missing required config", "need", "-rpc-url, -chain-id, and -mnemonic (or GNOMCP_FAUCET_MNEMONIC)")
-	}
-	if !faucet.IsTestnetChainID(*chainID) {
-		fatal("chain-id is not a testnet (only test* is allowed)", "chain_id", *chainID)
 	}
 	if *gasWanted <= 0 {
 		fatal("gas-wanted must be positive", "gas_wanted", *gasWanted)

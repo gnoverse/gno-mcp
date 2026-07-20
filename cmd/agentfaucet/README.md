@@ -25,13 +25,13 @@ The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC`, never a flag default
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `-rpc-url` | *(required)* | gno node RPC URL |
-| `-chain-id` | *(required)* | target testnet chain-id; must match `test<N>` or `test-<N>` (e.g. `test-13`) |
+| `-chain-id` | *(required)* | chain-id of the target testnet (e.g. `test-13`); no naming scheme is imposed — fund requests must present this exact `chain_id` |
 | `-mnemonic` | `$GNOMCP_FAUCET_MNEMONIC` | BIP-39 mnemonic for the funding key — prefer the env var |
 | `-listen` | `127.0.0.1:8590` | address to listen on |
 | `-metrics-addr` | *(empty — off)* | enable the Prometheus `/metrics` listener on this address (e.g. `127.0.0.1:8591`); a separate listener, so metrics stay off the public fund port. Opt-in: empty disables |
 | `-trusted-proxies` | `0` | number of trusted reverse-proxy hops for `X-Forwarded-For` client-IP extraction (`0` = ignore XFF, use the direct peer; set to the proxy count, e.g. `1` behind a single ALB) |
 | `-grant` | `1000000000` | ugnot dispensed per drip (1,000 GNOT — ugnot is micro-GNOT, 1 GNOT = 1,000,000 ugnot) |
-| `-gas-wanted` | `5000000` | gas limit per dispense tx (a test-13 bank send burns ~1.6M). The GasFee is not a flag — it is priced per dispense from the chain's live gas price (`auth/gasprice`), so the faucet adapts to congestion without overpaying |
+| `-gas-wanted` | `5000000` | gas limit per dispense tx (a testnet bank send burns ~1.6M). The GasFee is not a flag — it is priced per dispense from the chain's live gas price (`auth/gasprice`), so the faucet adapts to congestion without overpaying |
 | `-per-addr-cooldown` | `24h` | minimum time between grants to the same address |
 | `-per-ip-max` | `60` | max grants per IP per `-per-ip-window` |
 | `-per-ip-window` | `1h` | sliding window for the per-IP limit |
@@ -77,7 +77,7 @@ curl -sX POST http://127.0.0.1:8590/fund \
 |--------|------|------|
 | `200` | granted | `{"tx_hash": "...", "amount_ugnot": 1000000000}` |
 | `400` | malformed JSON, empty address, or invalid recipient address | plain text |
-| `403` | `chain_id` is not a testnet, or doesn't match this faucet's chain | plain text (`faucet: chain-id …`) |
+| `403` | `chain_id` doesn't match this faucet's chain | plain text (`faucet: chain-id …`) |
 | `429` | a limit tripped (cooldown / per-IP / daily cap / drip) | the limit message above |
 | `502` | the on-chain dispense failed | generic `faucet: dispense failed` (details only in the service logs, to avoid leaking probe signal to anonymous callers) |
 | `503` | the funding wallet is below `-min-funding-balance` | `faucet: funding wallet below minimum balance` |
@@ -102,7 +102,7 @@ GET /metrics   ->  Prometheus text exposition
 
 | Metric | Type | Labels | Meaning |
 |--------|------|--------|---------|
-| `faucet_fund_requests_total` | counter | `outcome` | fund requests by outcome (`success`, `bad_request`, `chain_refused`, `chain_mismatch`, `cooldown`, `rate_limited`, `daily_cap`, `drip_limited`, `funding_low`, `dispense_failed`) |
+| `faucet_fund_requests_total` | counter | `outcome` | fund requests by outcome (`success`, `bad_request`, `chain_mismatch`, `cooldown`, `rate_limited`, `daily_cap`, `drip_limited`, `funding_low`, `dispense_failed`) |
 | `faucet_funding_balance_ugnot` | gauge | — | funding wallet balance, polled every 30s (so a scrape never blocks on an RPC) — alert before it runs dry |
 | `faucet_drip_tokens_available` | gauge | — | global drip token-bucket headroom in ugnot (absent when the drip control is disabled) |
 | `faucet_daily_cap_remaining_ugnot` | gauge | — | remaining daily outflow budget for the current UTC day |

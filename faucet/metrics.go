@@ -11,7 +11,6 @@ import (
 const (
 	OutcomeSuccess        = "success"
 	OutcomeBadRequest     = "bad_request"
-	OutcomeChainRefused   = "chain_refused"
 	OutcomeChainMismatch  = "chain_mismatch"
 	OutcomeCooldown       = "cooldown"
 	OutcomeRateLimited    = "rate_limited"
@@ -42,8 +41,6 @@ func classify(err error) (status int, outcome string) {
 		return http.StatusOK, OutcomeSuccess
 	case errors.Is(err, ErrBadAddress):
 		return http.StatusBadRequest, OutcomeBadRequest
-	case errors.Is(err, ErrChainRefused):
-		return http.StatusForbidden, OutcomeChainRefused
 	case errors.Is(err, ErrChainMismatch):
 		return http.StatusForbidden, OutcomeChainMismatch
 	case errors.Is(err, ErrCooldown):
