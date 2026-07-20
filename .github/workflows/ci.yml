@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with: { go-version: '1.26.5' }
       - run: go test -short -race ./...
       - run: go vet ./...
@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with: { go-version: '1.26.5' }
       # vulncheck.sh wraps govulncheck with an advisory ignore list — see the
       # script for the rationale on each ignored entry.
@@ -45,7 +45,7 @@ jobs:
           echo "GORELEASER_CURRENT_TAG=$tag" >> "$GITHUB_ENV"
       - run: ./scripts/bump-version_test.sh
       - run: ./scripts/bump-version.sh --check
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with: { go-version: '1.26.5' }
       # QEMU + buildx so the snapshot can build the arm64 image layer on this
       # amd64 runner (the Dockerfiles only COPY a prebuilt binary — no compile).
