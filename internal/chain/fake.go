@@ -43,6 +43,7 @@ type Fake struct {
 	bankSends       []SendRecord              // every bank/MsgSend via Send, in order
 	sendErr         error                     // when set, Send returns it
 	gasFee          int64                     // GasFeeUgnot result; default DefaultGasFeeUgnot (genesis floor)
+	gasFeeErr       error                     // when set, GasFeeUgnot returns it
 }
 
 // SendRecord captures one bank/MsgSend made through the Fake (test introspection).
@@ -385,8 +386,17 @@ func (f *Fake) Status(_ context.Context) (NodeStatus, error) {
 // results, simulating a chain whose live gas price differs from the genesis floor.
 func (f *Fake) SetGasFee(ugnot int64) { f.gasFee = ugnot }
 
+// SetGasFeeErr makes GasFeeUgnot fail, simulating an unreachable gas-price
+// endpoint.
+func (f *Fake) SetGasFeeErr(err error) { f.gasFeeErr = err }
+
 // GasFeeUgnot returns the Fake's configured fee (default DefaultGasFeeUgnot).
-func (f *Fake) GasFeeUgnot(_ context.Context) (int64, error) { return f.gasFee, nil }
+func (f *Fake) GasFeeUgnot(_ context.Context) (int64, error) {
+	if f.gasFeeErr != nil {
+		return 0, f.gasFeeErr
+	}
+	return f.gasFee, nil
+}
 
 // withFee stamps the Fake's configured fee onto a broadcast result that left it
 // unset, so seeded results carry the offered fee that real broadcasts do.

@@ -16,7 +16,10 @@ import (
 // emitted as "--allow-paths vm/exec:<realm>" — the chain's session permission
 // format for MsgCall is "<route>/<type>:<resource>". Multiple --allow-paths
 // flags accumulate into a slice in gnokey's flag parser.
-func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, scope Scope) string {
+// feeUgnot is the chain's live per-write GasFee (chain.Client.GasFeeUgnot) to
+// stamp as --gas-fee; <=0 falls back to the floor (a chain priced above the
+// genesis floor rejects the floor fee, so callers should pass the live value).
+func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, scope Scope, feeUgnot int64) string {
 	var sb strings.Builder
 	sb.WriteString("gnokey maketx session create \\\n")
 	fmt.Fprintf(&sb, "  --pubkey %s \\\n", sessionPubkey)
@@ -29,7 +32,11 @@ func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, 
 	fmt.Fprintf(&sb, "  --spend-limit %s \\\n", scope.SpendLimit)
 	expiresAt := time.Now().Add(scope.ExpiresIn).Unix()
 	fmt.Fprintf(&sb, "  --expires-at %d \\\n", expiresAt)
-	fmt.Fprintf(&sb, "  --gas-fee %s \\\n", defaultGnokeyGasFee)
+	gasFee := defaultGnokeyGasFee
+	if feeUgnot > 0 {
+		gasFee = fmt.Sprintf("%dugnot", feeUgnot)
+	}
+	fmt.Fprintf(&sb, "  --gas-fee %s \\\n", gasFee)
 	fmt.Fprintf(&sb, "  --gas-wanted %d \\\n", defaultGnokeyGasWanted)
 	fmt.Fprintf(&sb, "  --remote %s \\\n", profile.RPCURL)
 	fmt.Fprintf(&sb, "  --chainid %s \\\n", profile.ChainID)
@@ -49,12 +56,17 @@ var (
 )
 
 // FormatGnokeyRevokeCommand returns the gnokey shell command the user must run
-// to revoke a session key on chain.
-func FormatGnokeyRevokeCommand(profile *profiles.Profile, sessionPubkey string) string {
+// to revoke a session key on chain. feeUgnot is the chain's live per-write
+// GasFee to stamp as --gas-fee; <=0 falls back to the floor.
+func FormatGnokeyRevokeCommand(profile *profiles.Profile, sessionPubkey string, feeUgnot int64) string {
+	gasFee := defaultGnokeyGasFee
+	if feeUgnot > 0 {
+		gasFee = fmt.Sprintf("%dugnot", feeUgnot)
+	}
 	var sb strings.Builder
 	sb.WriteString("gnokey maketx session revoke \\\n")
 	fmt.Fprintf(&sb, "  --pubkey %s \\\n", sessionPubkey)
-	fmt.Fprintf(&sb, "  --gas-fee %s \\\n", defaultGnokeyGasFee)
+	fmt.Fprintf(&sb, "  --gas-fee %s \\\n", gasFee)
 	fmt.Fprintf(&sb, "  --gas-wanted %d \\\n", defaultGnokeyGasWanted)
 	fmt.Fprintf(&sb, "  --remote %s \\\n", profile.RPCURL)
 	fmt.Fprintf(&sb, "  --chainid %s \\\n", profile.ChainID)

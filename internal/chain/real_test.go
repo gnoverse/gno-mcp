@@ -6,12 +6,92 @@ import (
 	"testing"
 
 	"github.com/gnolang/gno/gno.land/pkg/gnoland"
+	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
 	"github.com/gnolang/gno/tm2/pkg/amino"
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 	"github.com/gnolang/gno/tm2/pkg/std"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// ---- Session spend pre-flight (mirrors the chain ante's Phase 2a)
+
+func preflightSession(limitUgnot, usedUgnot, reset, period int64) *gnoland.GnoSessionAccount {
+	ugnotCoins := func(n int64) std.Coins {
+		if n == 0 {
+			return nil
+		}
+		return std.Coins{std.Coin{Denom: "ugnot", Amount: n}}
+	}
+	return &gnoland.GnoSessionAccount{
+		BaseSessionAccount: std.BaseSessionAccount{
+			SpendLimit:  ugnotCoins(limitUgnot),
+			SpendUsed:   ugnotCoins(usedUgnot),
+			SpendReset:  reset,
+			SpendPeriod: period,
+		},
+	}
+}
+
+func preflightTx(master crypto.Address, feeUgnot, sendUgnot int64) *std.Tx {
+	tx := &std.Tx{}
+	if feeUgnot > 0 {
+		tx.Fee.GasFee = std.Coin{Denom: "ugnot", Amount: feeUgnot}
+	}
+	var send std.Coins
+	if sendUgnot > 0 {
+		send = std.Coins{std.Coin{Denom: "ugnot", Amount: sendUgnot}}
+	}
+	tx.Msgs = []std.Msg{vm.MsgCall{Caller: master, Send: send, PkgPath: "gno.land/r/test/x", Func: "Do"}}
+	return tx
+}
+
+func TestCheckSessionSpendForTx_feeAboveRemainingErrors(t *testing.T) {
+	// The test13 shape: 1000000ugnot limit, 4000000ugnot offered fee. The
+	// chain would reject with a bare "session not allowed error"; the
+	// pre-flight must fail first with the numbers and a recovery hint.
+	master := crypto.Address{1}
+	err := checkSessionSpendForTx(preflightSession(1_000_000, 0, 0, 0), preflightTx(master, 4_000_000, 0), master, 1000)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "4000000ugnot")
+	assert.Contains(t, err.Error(), "1000000ugnot")
+	assert.Contains(t, err.Error(), "gno_session_propose", "error should point at the recovery path")
+}
+
+func TestCheckSessionSpendForTx_feeWithinRemainingOK(t *testing.T) {
+	master := crypto.Address{1}
+	err := checkSessionSpendForTx(preflightSession(1_000_000, 0, 0, 0), preflightTx(master, 400_000, 0), master, 1000)
+	require.NoError(t, err)
+}
+
+func TestCheckSessionSpendForTx_feePlusSendCounted(t *testing.T) {
+	// fee 400000 + send 700000 = 1100000 > 1000000 limit: the msg's declared
+	// outflow counts, exactly as the ante's Phase 2a totals it.
+	master := crypto.Address{1}
+	err := checkSessionSpendForTx(preflightSession(1_000_000, 0, 0, 0), preflightTx(master, 400_000, 700_000), master, 1000)
+	require.Error(t, err)
+}
+
+func TestCheckSessionSpendForTx_spendUsedCounted(t *testing.T) {
+	master := crypto.Address{1}
+	err := checkSessionSpendForTx(preflightSession(1_000_000, 900_000, 0, 0), preflightTx(master, 200_000, 0), master, 1000)
+	require.Error(t, err)
+}
+
+func TestCheckSessionSpendForTx_elapsedPeriodResetsUsed(t *testing.T) {
+	// SpendPeriod elapsed: used resets, the write fits again — the pre-flight
+	// must not reject a session the chain would accept.
+	master := crypto.Address{1}
+	acc := preflightSession(1_000_000, 900_000, 1000, 3600)
+	err := checkSessionSpendForTx(acc, preflightTx(master, 200_000, 0), master, 1000+7200)
+	require.NoError(t, err)
+}
+
+func TestCheckSessionSpendForTx_zeroOutflowOK(t *testing.T) {
+	master := crypto.Address{1}
+	err := checkSessionSpendForTx(preflightSession(1_000_000, 0, 0, 0), preflightTx(master, 0, 0), master, 1000)
+	require.NoError(t, err)
+}
 
 // ---- Real.CallAsUser tests
 

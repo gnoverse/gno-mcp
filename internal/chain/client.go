@@ -37,7 +37,9 @@ var ErrSessionQueryUnsupported = errors.New("chain: session query not supported"
 
 // CallResult is the outcome of a vm/MsgCall broadcast (or simulation).
 // GasFeeUgnot is the ugnot GasFee offered on the tx (the chain bills the full
-// offered fee, not GasUsed); the floor for simulations, which pay no fee.
+// offered fee, not GasUsed). Simulations offer the same live-priced fee as
+// broadcasts (they pay nothing, but the offered value feeds the ante's
+// session spend pre-check, so a floor-priced simulate would lie).
 type CallResult struct {
 	TxHash      string
 	Height      int64

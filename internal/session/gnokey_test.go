@@ -1,10 +1,12 @@
 package session
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +30,7 @@ func testGnokeyScope(paths []string) Scope {
 func TestFormatCreate_includesAllExpectedFlags(t *testing.T) {
 	profile := testGnokeyProfile()
 	scope := testGnokeyScope([]string{"gno.land/r/test/blog"})
-	cmd := FormatGnokeyCreateCommand(profile, "gpub1abcdeftest", scope)
+	cmd := FormatGnokeyCreateCommand(profile, "gpub1abcdeftest", scope, 0)
 
 	checks := []string{
 		"gnokey maketx session create",
@@ -52,7 +54,7 @@ func TestFormatCreate_multipleAllowPaths(t *testing.T) {
 		"gno.land/r/test/other",
 	}
 	scope := testGnokeyScope(paths)
-	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
+	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope, 0)
 
 	for _, p := range paths {
 		assert.Contains(t, cmd, p, "command missing path %q", p)
@@ -65,7 +67,7 @@ func TestFormatCreate_allowRunAppendsVMRun(t *testing.T) {
 	profile := testGnokeyProfile()
 	scope := testGnokeyScope([]string{"gno.land/r/test/blog"})
 	scope.AllowRun = true
-	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
+	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope, 0)
 
 	assert.Contains(t, cmd, "--allow-paths vm/run", "expected --allow-paths vm/run line when AllowRun=true")
 	// vm/exec entries should come before vm/run.
@@ -82,7 +84,7 @@ func TestFormatCreate_allowRunOnly(t *testing.T) {
 		ExpiresIn:  time.Hour,
 		AllowRun:   true,
 	}
-	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
+	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope, 0)
 
 	assert.Contains(t, cmd, "--allow-paths vm/run", "expected --allow-paths vm/run")
 	assert.NotContains(t, cmd, "vm/exec:", "unexpected vm/exec entry when AllowPaths empty")
@@ -91,22 +93,48 @@ func TestFormatCreate_allowRunOnly(t *testing.T) {
 func TestFormatCreate_noAllowRunOmitsVMRun(t *testing.T) {
 	profile := testGnokeyProfile()
 	scope := testGnokeyScope([]string{"gno.land/r/test/blog"})
-	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope)
+	cmd := FormatGnokeyCreateCommand(profile, "gpub1test", scope, 0)
 
 	assert.NotContains(t, cmd, "vm/run", "unexpected vm/run entry when AllowRun=false")
 }
 
 func TestFormatGnokeyCreate_HasGasAndBroadcast(t *testing.T) {
 	p := &profiles.Profile{RPCURL: "https://rpc.test13.testnets.gno.land:443", ChainID: "test-13"}
-	cmd := FormatGnokeyCreateCommand(p, "gpub...", Scope{SpendLimit: "1000ugnot", ExpiresIn: time.Hour})
+	cmd := FormatGnokeyCreateCommand(p, "gpub...", Scope{SpendLimit: "1000ugnot", ExpiresIn: time.Hour}, 0)
 	for _, want := range []string{"--gas-fee", "--gas-wanted", "--broadcast"} {
 		assert.Contains(t, cmd, want, "create command missing %q", want)
 	}
 }
 
+func TestFormatGnokeyCreate_usesLiveFee(t *testing.T) {
+	// A chain priced above the genesis floor rejects the floor fee with
+	// "insufficient fee": the pasted command must carry the live fee.
+	p := &profiles.Profile{RPCURL: "https://rpc.test13.testnets.gno.land:443", ChainID: "test-13"}
+	cmd := FormatGnokeyCreateCommand(p, "gpub...", Scope{SpendLimit: "10000000ugnot", ExpiresIn: time.Hour}, 4_000_000)
+	assert.Contains(t, cmd, "--gas-fee 4000000ugnot")
+}
+
+func TestFormatGnokeyCreate_zeroFeeFallsBackToFloor(t *testing.T) {
+	p := &profiles.Profile{RPCURL: "https://rpc.test13.testnets.gno.land:443", ChainID: "test-13"}
+	cmd := FormatGnokeyCreateCommand(p, "gpub...", Scope{SpendLimit: "1000ugnot", ExpiresIn: time.Hour}, 0)
+	assert.Contains(t, cmd, fmt.Sprintf("--gas-fee %dugnot", chain.DefaultGasFeeUgnot))
+}
+
+func TestFormatRevoke_usesLiveFee(t *testing.T) {
+	profile := testGnokeyProfile()
+	cmd := FormatGnokeyRevokeCommand(profile, "gpub1abcdef", 4_000_000)
+	assert.Contains(t, cmd, "--gas-fee 4000000ugnot")
+}
+
+func TestFormatRevoke_zeroFeeFallsBackToFloor(t *testing.T) {
+	profile := testGnokeyProfile()
+	cmd := FormatGnokeyRevokeCommand(profile, "gpub1abcdef", 0)
+	assert.Contains(t, cmd, fmt.Sprintf("--gas-fee %dugnot", chain.DefaultGasFeeUgnot))
+}
+
 func TestFormatRevoke_includesPubkey(t *testing.T) {
 	profile := testGnokeyProfile()
-	cmd := FormatGnokeyRevokeCommand(profile, "gpub1abcdef")
+	cmd := FormatGnokeyRevokeCommand(profile, "gpub1abcdef", 0)
 
 	checks := []string{
 		"gnokey maketx session revoke",

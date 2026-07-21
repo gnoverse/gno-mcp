@@ -61,8 +61,8 @@ func registerAllTools(d *toolDeps) {
 	writetools.RegisterCLAInfo(s, d.chainResolver)
 	writetools.RegisterCLASign(s, d.keystore, d.chainResolver, d.auditLog)
 	writetools.RegisterAuthStatus(s, d.sessionMgr, d.chainResolver)
-	writetools.RegisterSessionPropose(s, d.sessionMgr)
-	writetools.RegisterSessionRevoke(s, d.sessionMgr)
+	writetools.RegisterSessionPropose(s, d.sessionMgr, d.chainResolver)
+	writetools.RegisterSessionRevoke(s, d.sessionMgr, d.chainResolver)
 
 	// Agent-only tools — every allowed chain (local dev or testnet) has an
 	// agent key path (test1 or generated key), so these are unconditional.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	gnoclient "github.com/gnolang/gno/gno.land/pkg/gnoclient"
 	"github.com/gnolang/gno/gno.land/pkg/gnoland"
@@ -16,6 +17,7 @@ import (
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 	tmed25519 "github.com/gnolang/gno/tm2/pkg/crypto/ed25519"
+	"github.com/gnolang/gno/tm2/pkg/sdk/auth"
 	"github.com/gnolang/gno/tm2/pkg/sdk/bank"
 	"github.com/gnolang/gno/tm2/pkg/std"
 )
@@ -221,7 +223,7 @@ func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn st
 	if err != nil {
 		return CallResult{}, err
 	}
-	fee, err := r.feeForTx(simulate)
+	fee, err := r.currentGasFee()
 	if err != nil {
 		return CallResult{}, fmt.Errorf("call as user: %w", err)
 	}
@@ -251,7 +253,7 @@ func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn st
 // RunAsUser broadcasts (or simulates) a session-signed vm/MsgRun. The code is
 // wrapped in a single-file MemPackage with package name "main".
 func (r *Real) RunAsUser(_ context.Context, signer Signer, master, code string, simulate bool) (RunResult, error) {
-	fee, err := r.feeForTx(simulate)
+	fee, err := r.currentGasFee()
 	if err != nil {
 		return RunResult{}, fmt.Errorf("run as user: %w", err)
 	}
@@ -334,16 +336,20 @@ func splitAllowPaths(chainPaths []string) (realmPaths []string, allowRun bool) {
 	return realmPaths, allowRun
 }
 
-// signTxForSession runs the session-signing flow: query the session account
-// for its (account_number, sequence), compute sign-bytes, sign with the
-// session keypair, then inject Signature.SessionAddr.
+// signTxForSession runs the session-signing flow: query the session account,
+// pre-check the tx's outflow against its spend limit, compute sign-bytes,
+// sign with the session keypair, then inject Signature.SessionAddr.
 func (r *Real) signTxForSession(unsignedTx *std.Tx, signer Signer, masterAddr, sessionAddr crypto.Address) (*std.Tx, error) {
-	accNum, seq, err := r.querySessionSequence(masterAddr, sessionAddr)
+	acc, err := r.querySessionAccount(masterAddr, sessionAddr)
 	if err != nil {
-		return nil, fmt.Errorf("query session sequence: %w", err)
+		return nil, fmt.Errorf("query session account: %w", err)
 	}
 
-	signBytes, err := unsignedTx.GetSignBytes(r.chainID, accNum, seq)
+	if err := checkSessionSpendForTx(acc, unsignedTx, masterAddr, time.Now().UTC().Unix()); err != nil {
+		return nil, err
+	}
+
+	signBytes, err := unsignedTx.GetSignBytes(r.chainID, acc.AccountNumber, acc.Sequence)
 	if err != nil {
 		return nil, fmt.Errorf("get sign bytes: %w", err)
 	}
@@ -369,23 +375,50 @@ func (r *Real) signTxForSession(unsignedTx *std.Tx, signer Signer, masterAddr, s
 	return &signedTx, nil
 }
 
-// querySessionSequence returns the session account's (AccountNumber, Sequence)
-// from auth/accounts/<master>/session/<sessionAddr>. The response is
+// querySessionAccount returns the decoded session account from
+// auth/accounts/<master>/session/<sessionAddr>. The response is
 // amino-JSON-encoded (NOT std JSON) so we route through decodeSessionAccount.
-func (r *Real) querySessionSequence(master, sessionAddr crypto.Address) (uint64, uint64, error) {
+func (r *Real) querySessionAccount(master, sessionAddr crypto.Address) (*gnoland.GnoSessionAccount, error) {
 	path := fmt.Sprintf("auth/accounts/%s/session/%s", master.String(), sessionAddr.String())
 	qres, err := r.cli.Query(gnoclient.QueryCfg{Path: path})
 	if err != nil {
-		return 0, 0, fmt.Errorf("auth/accounts query: %w", err)
+		return nil, fmt.Errorf("auth/accounts query: %w", err)
 	}
 	if len(qres.Response.Data) == 0 || string(qres.Response.Data) == "null" {
-		return 0, 0, errors.New("session not found")
+		return nil, errors.New("session not found")
 	}
 	acc, err := decodeSessionAccount(qres.Response.Data)
 	if err != nil {
-		return 0, 0, fmt.Errorf("decode session account: %w", err)
+		return nil, fmt.Errorf("decode session account: %w", err)
 	}
-	return acc.AccountNumber, acc.Sequence, nil
+	return acc, nil
+}
+
+// checkSessionSpendForTx mirrors the chain ante's Phase 2a pre-check
+// client-side: the full offered GasFee plus each msg's declared outflow must
+// fit in the session's remaining spend limit, or the chain rejects the tx
+// with a bare "session not allowed error". Failing before broadcast surfaces
+// the numbers and the recovery path instead. The check itself is the chain's
+// own (auth.CheckSessionSpend), fed the same total the ante computes; the
+// local clock stands in for block time (skew is seconds against
+// period-length windows).
+func checkSessionSpendForTx(acc std.DelegatedAccount, tx *std.Tx, master crypto.Address, nowUnix int64) error {
+	total := std.Coins{}
+	if !tx.Fee.GasFee.IsZero() {
+		total = total.Add(std.Coins{tx.Fee.GasFee})
+	}
+	for _, msg := range tx.GetMsgs() {
+		if est, ok := msg.(std.SpendEstimator); ok {
+			total = total.Add(est.SpendForSigner(master))
+		}
+	}
+	if err := auth.CheckSessionSpend(acc, total, nowUnix); err != nil {
+		return fmt.Errorf(
+			"session spend pre-check: this tx's outflow %s (gas fee + send) does not fit in the session's spend limit %s (already used: %s): %w — propose a session with a larger spend limit via gno_session_propose, or wait for the spend window to reset",
+			total, acc.GetSpendLimit(), acc.GetSpendUsed(), err,
+		)
+	}
+	return nil
 }
 
 // decodeSessionAccount parses the amino-JSON payload returned by
@@ -497,7 +530,7 @@ func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string
 	if err != nil {
 		return CallResult{}, err
 	}
-	fee, err := r.feeForTx(simulate)
+	fee, err := r.currentGasFee()
 	if err != nil {
 		return CallResult{}, fmt.Errorf("call: %w", err)
 	}
@@ -525,7 +558,7 @@ func (r *Real) Run(_ context.Context, signer gnoclient.Signer, code string, simu
 	if err != nil {
 		return RunResult{}, err
 	}
-	fee, err := r.feeForTx(simulate)
+	fee, err := r.currentGasFee()
 	if err != nil {
 		return RunResult{}, fmt.Errorf("run: %w", err)
 	}
@@ -555,7 +588,7 @@ func (r *Real) AddPackage(_ context.Context, signer gnoclient.Signer, deployPath
 	if err != nil {
 		return AddPackageResult{}, err
 	}
-	fee, err := r.feeForTx(simulate)
+	fee, err := r.currentGasFee()
 	if err != nil {
 		return AddPackageResult{}, fmt.Errorf("addpackage: %w", err)
 	}

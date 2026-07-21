@@ -40,16 +40,6 @@ func (r *Real) GasFeeUgnot(_ context.Context) (int64, error) {
 	return r.currentGasFee()
 }
 
-// feeForTx is the GasFee to offer for a write. A simulation pays no fee and the
-// offered value does not affect the gas estimate, so it uses the floor and skips
-// the network round-trip; a broadcast queries the chain's live gas price.
-func (r *Real) feeForTx(simulate bool) (int64, error) {
-	if simulate {
-		return DefaultGasFeeUgnot, nil
-	}
-	return r.currentGasFee()
-}
-
 // baseTxCfg builds the gnoclient tx config for an offered fee of feeUgnot.
 func baseTxCfg(feeUgnot int64) gnoclient.BaseTxCfg {
 	return gnoclient.BaseTxCfg{
