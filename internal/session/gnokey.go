@@ -46,10 +46,10 @@ func FormatGnokeyCreateCommand(profile *profiles.Profile, sessionPubkey string, 
 }
 
 // Defaults baked into the emitted session create/revoke gnokey commands so the
-// user can paste and run without hunting for flag values. These master-signed,
-// infrequent admin txs use the gas-fee floor; on a congested chain the user
-// bumps --gas-fee from gnokey's insufficient-fee error. (gnomcp's own write
-// broadcasts query the chain's live gas price — see chain.currentGasFee.)
+// user can paste and run without hunting for flag values. The --gas-fee is
+// normally the chain's live price supplied by the caller; the floor here is
+// the fallback when the fee is unknown, in which case the user bumps
+// --gas-fee from gnokey's insufficient-fee error.
 var (
 	defaultGnokeyGasFee    = fmt.Sprintf("%dugnot", chain.DefaultGasFeeUgnot)
 	defaultGnokeyGasWanted = chain.DefaultGasWanted

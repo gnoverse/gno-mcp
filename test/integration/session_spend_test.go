@@ -13,6 +13,7 @@ import (
 	"github.com/gnolang/gno/tm2/pkg/std"
 	"github.com/stretchr/testify/require"
 
+	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/session"
 )
 
@@ -82,7 +83,10 @@ func TestIntegration_sessionSpendWithinLimitBroadcasts(t *testing.T) {
 
 	res, err := c.CallAsUser(ctx, kp, master.String(), counterRealm, "Increment", nil, "", false)
 	require.NoError(t, err, "session-signed broadcast")
-	require.Equal(t, liveFee, res.GasFeeUgnot)
+	require.Equal(t, liveFee, res.GasFeeUgnot,
+		"a light tx floors to DefaultGasWanted, so its fee equals the floor-sized live fee")
+	require.Equal(t, chain.DefaultGasWanted, res.GasWanted,
+		"session broadcasts right-size gas-wanted (light tx -> floor)")
 
 	out, err := c.Eval(ctx, counterRealm, "Total()")
 	require.NoError(t, err)

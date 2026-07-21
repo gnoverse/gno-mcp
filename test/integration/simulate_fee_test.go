@@ -28,5 +28,8 @@ func TestIntegration_simulateOffersLiveFee(t *testing.T) {
 	res, err := c.Call(ctx, test1Signer(t), "gno.land/r/test/counter", "Increment", nil, "", true)
 	require.NoError(t, err, "simulate increment")
 	require.True(t, res.Simulated)
-	require.Equal(t, liveFee, res.GasFeeUgnot, "simulate must offer the live fee, not the floor")
+	require.Equal(t, liveFee, res.GasFeeUgnot,
+		"a light tx floors to DefaultGasWanted, so simulate reports the floor-sized live fee")
+	require.Equal(t, chain.DefaultGasWanted, res.GasWanted,
+		"simulate reports the right-sized gas-wanted the broadcast would reserve")
 }
