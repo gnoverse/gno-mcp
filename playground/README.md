@@ -13,7 +13,7 @@ must never use it (a hard-fail invariant, see the driver's judging rules).
 | `make playground-fresh` | L1 | clean Claude Code only | the first-time-user install UX (install the plugin + MCP yourself) |
 | `make playground-gnomcp` | L2 | L1 + skill + agent + MCP pre-installed, **no gnodev** | gnomcp against a remote testnet (no local node) |
 | `make playground-full` | L3 | L2 + `gnodev` | the full local-devnet experience |
-| `make playground-sim` | e2e | L3 + **simnet running** (in-memory node + faucet + gnoweb, chain `test9999`) | hands-on work against the simulated testnet; gnoweb published to the host — `GNOWEB_PORT=9999` overrides the default `8688` |
+| `make playground-sim` | e2e | L3 + **simnet running** (in-memory node + faucet + gnoweb, chain `test-9999`) | hands-on work against the simulated testnet; gnoweb published to the host — `GNOWEB_PORT=9999` overrides the default `8688` |
 
 `L3 builds on L2 builds on L1`; `docker build --target` builds the ancestors automatically.
 
@@ -62,7 +62,7 @@ Claude session). Run `claude` when you want it. Override the engine with `DOCKER
 
 A driver Claude (host) QAs the containerized Claude+gnomcp+gno-skill (the AUT) scenario by
 scenario: it plays the user turn-by-turn over `docker exec`, verifies chain ground truth against
-the in-container **simnet** (in-memory gnoland node + faucet + gnoweb on chain `test9999`, the
+the in-container **simnet** (in-memory gnoland node + faucet + gnoweb on chain `test-9999`, the
 `e2e` Docker target's main process), then interviews the AUT about its tool and skill choices.
 
 > **Working on the harness?** Load the **`playground-driver`** skill first — for any of it:

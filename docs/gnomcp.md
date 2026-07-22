@@ -110,7 +110,7 @@ For in-repo development register a dev server once: `claude mcp add gnomcp -- go
 
 ## Configuration
 
-Profiles are the source of truth for which chains gnomcp can reach; `testnet` and `local` ship built in. Any format-safe chain-id can be added: dev and testnet chains are read/write, while mainnet and betanet are admitted **read-only** — the agent can inspect and audit deployed code, but no code path signs a transaction there, and `master-address` on a read-only chain is rejected.
+Profiles are the source of truth for which chains gnomcp can reach; `testnet` (the current public testnet), its sunset predecessor (e.g. `test13` — still writable, labeled sunset), and `local` ship built in — `gno_profile_list` shows the loaded catalog with each profile's chain-id and endpoints. Any format-safe chain-id can be added: dev and testnet chains are read/write, while mainnet and betanet are admitted **read-only** — the agent can inspect and audit deployed code, but no code path signs a transaction there, and `master-address` on a read-only chain is rejected.
 
 gnomcp can connect to a chain on the fly during a session, but a chain added that way isn't saved. Persist the ones you want it to remember between runs with `gnomcp profile add` (below); a saved profile is also what user-session writes need, since it carries the `master-address`.
 
@@ -147,6 +147,7 @@ default-spend-limit  = "50000000ugnot" # optional; per-session default — must 
 default-expires-in   = "1h"          # optional; Go duration string
 faucet-url           = "..."         # optional; faucet page gno_faucet_fund links the user to
 faucet-service-url   = "..."         # optional; automatic faucet service gno_faucet_fund calls
+sunset               = false         # optional; advisory: marks a retiring chain — still fully writable, labeled so new work targets the current testnet
 ```
 
 ## Write authorization

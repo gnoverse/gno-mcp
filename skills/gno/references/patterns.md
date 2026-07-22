@@ -383,7 +383,7 @@ Gas is a measure of computational and storage cost. Every read, write, allocatio
 
 ## Common library imports
 
-Packages that survived the `examples/quarantined/` cull — the test-13 safe-list (PR #5726) that moved unaudited/personal-namespace packages to `examples/quarantined/`. Re-verify against the current master tree before relying on an import; the split moves over time:
+Packages that survived the `examples/quarantined/` cull — the test-13 safe-list (PR #5726) that moved unaudited/personal-namespace packages to `examples/quarantined/`. Re-verify against the current master tree before relying on an import; the split moves over time, and the live testnet may not carry a listed package at all — on topaz (test14), `p/demo/tokens/grc721` is not deployed. Verify each import against the target chain, not just master:
 
 | Need | Canonical import |
 |---|---|
@@ -396,9 +396,10 @@ Packages that survived the `examples/quarantined/` cull — the test-13 safe-lis
 | Pagination | `gno.land/p/jeronimoalbi/pager` |
 | DAO primitives | `gno.land/p/nt/commondao/v0` |
 | Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` |
-| Non-fungible tokens | `gno.land/p/demo/tokens/grc721` |
 
 Prefer these over re-implementation — they're reviewed, used, and stable.
+
+There is no canonical GRC721/NFT package deployed on topaz (test14) — `gno.land/p/demo/tokens/grc721` does not resolve on-chain (verified on topaz and test13, `InvalidPackageError`). If you need NFTs, query the target chain for an available implementation rather than assuming a path.
 
 **Don't** import `gno.land/r/tests/vm/test20` — deliberately insecure test fixture exporting `PrivateLedger`. Using it in production code = instant compromise (see `security.md` § Encapsulation pattern).
 

@@ -6,14 +6,14 @@ image: l2-gnomcp
 timeout-minutes: 20
 covers: [write.key-generate, write.faucet-fund, external.faucet-live, external.testnet-key-cycle]
 ---
-# Funding an agent on the LIVE test13 testnet via the built-in faucet service
+# Funding an agent on the LIVE topaz testnet via the built-in faucet service
 
 Driver context: the AUT runs the `l2-gnomcp` image — gnomcp + the gno skill installed, but NO
 `profiles.toml` override (unlike the simnet `e2e` image), so the built-in `testnet` profile resolves
-to the real network: chain-id `test-13`, RPC `https://rpc.test13.testnets.gno.land:443`,
-faucet-service-url `https://faucet-agent.test13.testnets.gno.land`. This is the only scenario that
+to the real network: chain-id `topaz-1`, RPC `https://rpc.topaz.testnets.gno.land:443`,
+faucet-service-url `https://faucet-agent.topaz.testnets.gno.land`. This is the only scenario that
 drives the deployed agent-faucet end to end, and it validates the built-in `faucet-service-url`
-default. External tier: it needs egress to test13 and polls the live faucet (~10–60s). Mark `blocked`
+default. External tier: it needs egress to topaz and polls the live faucet (~10–60s). Mark `blocked`
 (never `fail`) if the live faucet/chain is unreachable or rate-limits the request — that is an
 outage outside the AUT, not an agent error. No `gnoquery` for external chains: verify funding through
 the AUT's own `gno_account` reading (turn-log: the tool was called and reported a non-zero balance).

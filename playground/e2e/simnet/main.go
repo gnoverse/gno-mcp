@@ -13,7 +13,7 @@ import (
 func main() {
 	var (
 		realmsDir     = flag.String("realms", "/opt/e2e/realms", "realm tree to deploy at genesis")
-		chainID       = flag.String("chain-id", "test9999", "chain id (must match ^test-?\\d+$)")
+		chainID       = flag.String("chain-id", "test-9999", "chain id (must be on gnomcp's writable testnet list, e.g. test-9999)")
 		rpcListen     = flag.String("rpc-listen", "tcp://127.0.0.1:26687", "node RPC listen address")
 		faucetListen  = flag.String("faucet-listen", "127.0.0.1:8590", "faucet HTTP listen address")
 		webListen     = flag.String("web-listen", "127.0.0.1:8688", "gnoweb HTTP listen address")

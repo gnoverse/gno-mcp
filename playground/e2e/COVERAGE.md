@@ -151,21 +151,21 @@ tree: a regression shows up here only after it ships.
 ## External tier (real testnet)
 
 Scenarios 11–12 (install from scratch, GitHub egress — above) plus 13 (the live
-agent-faucet) and 14 (the live deploy gates). Scenarios 13 and 14 drive the real test13
+agent-faucet) and 14 (the live deploy gates). Scenarios 13 and 14 drive the real topaz
 chain: they run the `l2-gnomcp` image (gnomcp + skill, no simnet `profiles.toml` override),
 so the built-in `testnet` profile (`internal/profiles/config.go`) resolves to the live
-network (chain-id `test-13`, RPC `https://rpc.test13.testnets.gno.land:443`,
-faucet-service-url `https://faucet-agent.test13.testnets.gno.land`). 13 validates the
+network (chain-id `topaz-1`, RPC `https://rpc.topaz.testnets.gno.land:443`,
+faucet-service-url `https://faucet-agent.topaz.testnets.gno.land`). 13 validates the
 zero-config faucet default; 14 covers what only the live chain exercises — the namespace +
 CLA deploy gates, which the simnet leaves off. `blocked` is tolerated when the live faucet
 or chain is unreachable or rate-limits.
 
 | Key | Feature | Scenarios | Status |
 |---|---|---|---|
-| external.faucet-live | gno_faucet_fund tier-2 against the LIVE test13 agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
+| external.faucet-live | gno_faucet_fund tier-2 against the LIVE topaz agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
 | external.testnet-key-cycle | built-in `testnet` profile end to end on the live network: generate agent key → faucet fund → balance | 13 | covered |
-| external.cla-sign | agent signs the live test13 CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | covered |
-| external.session-spend | session flow against LIVE test13 gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, and the chain's spend_used tracks the right-sized fee | 15 | covered |
+| external.cla-sign | agent signs the live topaz CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | covered |
+| external.session-spend | session flow against LIVE topaz gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, and the chain's spend_used tracks the right-sized fee | 15 | covered |
 
 ## Known harness constraints (not feature gaps)
 

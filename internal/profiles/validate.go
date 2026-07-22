@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/gnolang/gno/tm2/pkg/crypto"
@@ -14,11 +16,14 @@ var (
 	// lowercase letters (e.g. "1000000ugnot", "10gnot"). Cross-denom mixes rejected.
 	spendLimitRE = regexp.MustCompile(`^[0-9]+[a-z]+$`)
 
-	// chainIDWritableRE marks the write-capable chains: local dev and numbered
-	// testnets. Admits both the bare "test5" and hyphenated "test-13" forms. Anything else
-	// (betanet "gnoland1", "staging", ...) is admitted read-only, not writable —
-	// it has no agent key path and is excluded from every write tool's profile enum.
-	chainIDWritableRE = regexp.MustCompile(`^(dev|test-?\d+)$`)
+	// testnetChainNames lists the chain-id names recognized as testnets.
+	// Codenamed testnets (topaz-1) cannot be told apart from other chains
+	// syntactically, so this is a release-time list: append the codename when a
+	// new testnet rolls. A name admits both the bare and hyphenated forms
+	// (test5, test-13, topaz-1). Anything else (betanet "gnoland1", "staging",
+	// ...) is admitted read-only, not writable — it has no agent key path and
+	// is excluded from every write tool's profile enum.
+	testnetChainNames = []string{"test", "topaz"}
 
 	// chainIDFormatRE is the format-safety gate applied to every chain-id,
 	// writable or read-only: the chain-id is interpolated into the `gnomcp
@@ -59,11 +64,20 @@ func ValidRPCURL(s string) bool {
 	return rpcURLRE.MatchString(s)
 }
 
+// IsTestnetChainID reports whether id names a known testnet chain: it starts
+// with one of the recognized testnet names, bare or hyphenated (test5,
+// test-13, topaz-1).
+func IsTestnetChainID(id string) bool {
+	return slices.ContainsFunc(testnetChainNames, func(name string) bool {
+		return strings.HasPrefix(id, name)
+	})
+}
+
 // ChainIDWritable reports whether a chain-id is write-capable: local dev or a
-// numbered testnet. These get an agent key path (test1 or a generated key) and
+// known testnet. These get an agent key path (test1 or a generated key) and
 // appear in the write tools' profile enums. Any other chain-id is read-only.
 func ChainIDWritable(chainID string) bool {
-	return chainIDWritableRE.MatchString(chainID)
+	return chainID == "dev" || IsTestnetChainID(chainID)
 }
 
 // ChainIDValid reports whether a chain-id is safe to admit into config and to
@@ -111,7 +125,7 @@ func (c *Config) Validate() (warn error, err error) {
 		}
 		if p.MasterAddress != "" {
 			if !ChainIDWritable(p.ChainID) {
-				return nil, fmt.Errorf("profile %q: master-address is set but chain-id %q is read-only (mainnet/betanet) — read-only chains cannot perform writes; remove master-address or target a dev/testNN chain", name, p.ChainID)
+				return nil, fmt.Errorf("profile %q: master-address is set but chain-id %q is read-only (mainnet/betanet) — read-only chains cannot perform writes; remove master-address or target a dev/testnet chain", name, p.ChainID)
 			}
 			if _, err := crypto.AddressFromBech32(p.MasterAddress); err != nil {
 				return nil, fmt.Errorf("profile %q: invalid master-address %q: %w", name, p.MasterAddress, err)

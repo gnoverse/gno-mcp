@@ -26,13 +26,13 @@ case "${PLAYGROUND_LAYER:-unknown}" in
     echo "  Then run 'claude' to start."
     ;;
   sim)
-    echo "[playground:sim] simulated testnet serving — node :26687, faucet :8590, gnoweb :8688 (chain test9999)."
+    echo "[playground:sim] simulated testnet serving — node :26687, faucet :8590, gnoweb :8688 (chain test-9999)."
     echo "  The 'testnet' profile is pre-pointed at it. Run 'claude' to start; gnodev stays manual."
     ;;
   sim-cla)
     echo "[playground:sim-cla] simulated testnet with the test13 CLA deploy gate seeded — a deploy must sign r/sys/cla first."
     echo "  Faucet drip ${SIMNET_GRANT:-?} ugnot; at the minimum gas fee this clears the whole Sign+deploy+bump flow."
-    echo "  node :26687, faucet :8590, gnoweb :8688 (chain test9999). Run 'claude' to start."
+    echo "  node :26687, faucet :8590, gnoweb :8688 (chain test-9999). Run 'claude' to start."
     ;;
   *)
     echo "[playground] layer: ${PLAYGROUND_LAYER:-unknown}"

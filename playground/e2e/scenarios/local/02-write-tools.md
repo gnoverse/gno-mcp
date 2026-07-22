@@ -8,7 +8,7 @@ covers: [write.key-generate, write.key-address, write.faucet-fund, write.funds-r
 # Agent-identity write flow: key generate → faucet → call → addpkg → simulate
 
 The agent-identity write path on simnet: generate a key, fund it, call, deploy, simulate.
-Profile `testnet` (test9999) has faucet-service-url set ⇒ tier-2 automatic funding.
+Profile `testnet` (test-9999) has faucet-service-url set ⇒ tier-2 automatic funding.
 The agent key signs (never test1 on testnet). Run AFTER read-tools is green.
 Watch: does the AUT discover gno_faucet_fund from the insufficient_funds error itself?
 Watch: gno_account to check its own balance during the funding flow (watch-level —

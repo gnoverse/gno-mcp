@@ -150,7 +150,7 @@ See `build.md` for filetest layout and authoring patterns.
 
 ## Common community packages (kept in `examples/`)
 
-The packages below survived the test-13 quarantine (`examples/quarantined/` got everything else) — safe to import:
+The packages below survived the test-13 quarantine (`examples/quarantined/` got everything else) — safe to import, but verify against the target chain: on topaz (test14) not every listed package is deployed (grc721 is not):
 
 | Purpose | Import path |
 |---|---|
@@ -163,7 +163,8 @@ The packages below survived the test-13 quarantine (`examples/quarantined/` got 
 | Pagination | `gno.land/p/jeronimoalbi/pager` |
 | DAO primitives | `gno.land/p/nt/commondao/v0` |
 | Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` |
-| Non-fungible tokens | `gno.land/p/demo/tokens/grc721` |
+
+There is no canonical GRC721/NFT package deployed on topaz (test14) — `gno.land/p/demo/tokens/grc721` does not resolve on-chain (verified on topaz and test13). Query the target chain before assuming an NFT import path.
 
 **Use `avl.Tree` (or `bptree`) instead of Go's `map`** for growing keyed state — a persisted map rewrites wholesale on every mutation, and its insertion-order iteration is an impl detail, not an ordering contract. (Iteration is deterministic, so it's a gas/design issue, not a consensus risk.) See `patterns.md` and `memory.md` § Map iteration order.
 

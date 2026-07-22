@@ -22,12 +22,17 @@ import (
 func addProfileArg(s *server.Server, props map[string]any, required *[]string) {
 	ps := s.ProfileSchema()
 	arg := map[string]any{"type": "string"}
+	chainList := ""
+	if len(ps.Enum) > 0 {
+		chainList = " Configured: " + server.ProfileChainList(s.Config(), ps.Enum) + "."
+	}
 	if ps.Default != "" {
 		arg["default"] = ps.Default
 		arg["description"] = fmt.Sprintf(
-			"Target chain profile — any configured profile name (see the server instructions for the list), including one added at runtime via gno_profile_add. Default: %q.", ps.Default)
+			"Target chain profile — any configured profile name, including one added at runtime via gno_profile_add.%s Default: %q.", chainList, ps.Default)
 	} else {
-		arg["description"] = "Target chain profile — any configured profile name (see the server instructions for the list), including one added at runtime via gno_profile_add. Required (no default — pick one explicitly)."
+		arg["description"] = fmt.Sprintf(
+			"Target chain profile — any configured profile name, including one added at runtime via gno_profile_add.%s Required (no default — pick one explicitly).", chainList)
 	}
 	props["profile"] = arg
 	if ps.Required {

@@ -22,6 +22,16 @@ func testnet9999Profile() profiles.Profile {
 	return profiles.Profile{ChainID: "test9999", RPCURL: "x"}
 }
 
+// A sunset testnet keeps its agent key path: the label is advisory, and
+// deploying to a retiring chain (which needs a funded key) must still work.
+func TestGenerateForProfile_sunsetAllowed(t *testing.T) {
+	k := New(t.TempDir(), "", testCap)
+	p := profiles.Profile{ChainID: "test9999", RPCURL: "x", Sunset: true}
+	addr, err := k.GenerateForProfile("oldnet", DefaultKeyName, p)
+	require.NoError(t, err, "sunset testnet must keep the agent key path")
+	require.NotEmpty(t, addr)
+}
+
 func TestAgentAddress_dev_isTest1(t *testing.T) {
 	got, err := New(t.TempDir(), "", testCap).AgentAddress("dev", "", devProfile())
 	require.NoError(t, err, "AgentAddress dev")

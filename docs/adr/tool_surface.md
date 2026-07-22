@@ -1,6 +1,6 @@
 # Tool Surface
 
-**Status: implemented — 25 tools.**
+**Status: implemented — 26 tools.**
 
 ## Context
 
@@ -8,7 +8,7 @@ The v1 server exposed 16 tools mixing reads, open-ended writes, config mutation,
 
 ## Decision
 
-25 tools, registered conditionally and re-registered after dynamic profile adds (gates re-evaluate, profile enums regenerate, `tools/list_changed` notifies clients):
+26 tools, registered conditionally and re-registered after dynamic profile adds (gates re-evaluate, profile enums regenerate, `tools/list_changed` notifies clients):
 
 | Tool | Category | Backend | Registered when |
 |---|---|---|---|
@@ -18,6 +18,7 @@ The v1 server exposed 16 tools mixing reads, open-ended writes, config mutation,
 | `gno_packages` | chain read | `vm/qpaths` | always |
 | `gno_account` | chain read | `auth/accounts` | always |
 | `gno_status` | chain read | RPC `/status` + profile config | always |
+| `gno_profile_list` | chain read | profile config only (no node dial) | always |
 | `gno_connect` | discovery | gnoweb `gnoconnect` meta-tags | always |
 | `gno_profile_add` | admin | config + node verification | always |
 | `gno_list` | indexer read | tx-indexer GraphQL | any profile has `tx-indexer-url` |
@@ -38,7 +39,7 @@ The v1 server exposed 16 tools mixing reads, open-ended writes, config mutation,
 | `gno_key_delete` | agent key | keystore (testnet only at call time) | always |
 | `gno_faucet_fund` | agent key | faucet service/link + balance poll | a testnet profile exists |
 
-Cold-start counts: built-in defaults register 22 (no indexer profile); a local-only custom config registers 21 (no faucet); an indexer-bearing profile brings the full 25.
+Cold-start counts: built-in defaults register the full 26 (the built-in testnet carries an indexer and a faucet); a local-only custom config registers 22 (no indexer tools, no faucet).
 
 **Multiple named keys per profile.** A profile holds up to `GNOMCP_AGENT_MAX_KEYS` (default 5) named agent keys at `<keys-root>/<profile>/<name>.key`, so the agent can fund secondary accounts and exercise multi-address realms. The write and key tools take an optional `key` arg (default `"default"`) selecting which key; it applies to `identity=agent` only and is rejected with `identity=session`. Generation is purely additive (no overwrite); replacement is `gno_key_delete` then `gno_key_generate`. `gno_key_send` moves ugnot only between a profile's own keys — `to`/`from` are key names, never raw addresses, so there is no arbitrary-recipient path.
 
@@ -76,6 +77,6 @@ Cold-start counts: built-in defaults register 22 (no indexer profile); a local-o
 ## Consequences
 
 - Every registered tool can succeed in the configuration that registered it; the model never sees dead tools.
-- The surface (22 at cold start) exceeds the 5–15 guideline; the categories are disjoint enough that selection accuracy has held up in end-to-end use, and gating keeps most configurations below the full count. Splitting into toolsets remains an option if selection degrades.
+- The surface (26 at cold start) exceeds the 5–15 guideline; the categories are disjoint enough that selection accuracy has held up in end-to-end use, and gating keeps most configurations below the full count. Splitting into toolsets remains an option if selection degrades.
 - Three v1 drops were reversed with better shapes (`gno_account`, `gno_status`, agent-key keygen/faucet) — "dropped" decisions are cheap to revisit when a concrete need appears.
 - Clients that ignore `tools/list_changed` see summoned tools only after reconnect.

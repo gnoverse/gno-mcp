@@ -73,13 +73,23 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	}
 	tn, ok := cfg.Profiles["testnet"]
 	require.True(t, ok, "testnet default missing")
-	assert.Equal(t, "test-13", tn.ChainID, "testnet default chain-id")
-	assert.Equal(t, "https://rpc.test13.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
-	assert.Equal(t, "https://test13.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
-	assert.Equal(t, "https://indexer.test13.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
-	assert.Equal(t, "https://faucet-agent.test13.testnets.gno.land", tn.FaucetServiceURL, "testnet default agent-faucet service url")
+	assert.Equal(t, "topaz-1", tn.ChainID, "testnet default chain-id")
+	assert.Equal(t, "https://rpc.topaz.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
+	assert.Equal(t, "https://topaz.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
+	assert.Equal(t, "https://indexer.topaz.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
+	assert.Equal(t, "https://faucet-agent.topaz.testnets.gno.land", tn.FaucetServiceURL, "testnet default agent-faucet service url")
 	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
+
+	old, ok := cfg.Profiles["test13"]
+	require.True(t, ok, "sunset predecessor testnet missing from builtins")
+	assert.Equal(t, "test-13", old.ChainID, "test13 chain-id")
+	assert.True(t, old.Sunset, "test13 must be marked sunset")
+	assert.True(t, old.IsTestnet(), "sunset builtin must stay a writable testnet")
+	assert.Equal(t, "https://rpc.test13.testnets.gno.land:443", old.RPCURL, "test13 rpc-url")
+	assert.Equal(t, "https://test13.testnets.gno.land", old.GnowebURL, "test13 gnoweb-url")
+	assert.Equal(t, "https://faucet-agent.test13.testnets.gno.land", old.FaucetServiceURL, "test13 faucet (live) must be configured so deploys can fund")
+	assert.Equal(t, "https://indexer.test13.testnets.gno.land/graphql/query", old.TxIndexerURL, "test13 indexer (live) must be configured")
 }
 
 func TestLoad_parsesFaucetFields(t *testing.T) {
@@ -107,6 +117,16 @@ func TestProfile_LocalityDerivedFromChainID(t *testing.T) {
 	assert.False(t, tn.IsLocal())
 	assert.True(t, tn.IsTestnet(), "chain-id test-13 must be testnet")
 	assert.Equal(t, "testnet", tn.Kind())
+}
+
+// Sunset is an advisory lifecycle label, not a capability gate: a retiring
+// testnet stays fully writable (deploys must work on it without friction) —
+// the label only steers new work toward the current testnet.
+func TestProfile_sunsetStaysWritable(t *testing.T) {
+	p := Profile{ChainID: "test-13", Sunset: true}
+	assert.True(t, p.IsTestnet(), "sunset testnet must remain write-capable")
+	assert.False(t, p.IsReadOnly())
+	assert.Equal(t, "testnet", p.Kind())
 }
 
 func TestProfile_RealmViewURL(t *testing.T) {

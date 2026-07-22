@@ -37,7 +37,7 @@ func RegisterProfileAdd(s *server.Server, gnowebClient *http.Client, verify Chai
 			"profile list, e.g. after gno_connect discovers one. Two input forms (exactly one): " +
 			"rpc_url + chain_id (explicit), or gnoweb_url (discovers them from the page's gnoconnect " +
 			"meta-tags; treated as a hint — the node is dialed and must report the same chain-id either way). " +
-			"dev and numbered testnets are write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is " +
+			"dev and known testnets (test*, topaz-*) are write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is " +
 			"admitted READ-ONLY — readable via the read tools, but with no agent key, faucet, or write path, " +
 			"which is exactly what auditing deployed source on gno.land needs. " +
 			"Profiles loaded at startup cannot be overridden; re-adding a profile created by this tool replaces it. " +
@@ -63,32 +63,32 @@ func profileAddInputSchema() map[string]any {
 		"properties": map[string]any{
 			"name": map[string]any{
 				"type": "string",
-				"description": "Profile name: lowercase alphanumeric, internal '-' or '_' allowed (e.g. 'test13'). " +
+				"description": "Profile name: lowercase alphanumeric, internal '-' or '_' allowed (e.g. 'topaz'). " +
 					"Must not be 'default' or a name already loaded from profiles.toml/builtins. Required.",
 				"pattern": `^[a-z0-9][a-z0-9_-]*$`,
 			},
 			"rpc_url": map[string]any{
 				"type":   "string",
 				"format": "uri",
-				"description": "Chain RPC endpoint (absolute http(s) URL, e.g. 'https://rpc.test13.gno.land'). " +
+				"description": "Chain RPC endpoint (absolute http(s) URL, e.g. 'https://rpc.topaz.testnets.gno.land'). " +
 					"Required together with chain_id unless gnoweb_url is given.",
 			},
 			"chain_id": map[string]any{
 				"type": "string",
-				"description": "Chain-id the node reports (e.g. 'test-13', or 'gnoland1' for betanet — read-only). " +
-					"dev/testNN are write-capable; any other id is admitted read-only. " +
+				"description": "Chain-id the node reports (e.g. 'topaz-1', or 'gnoland1' for betanet — read-only). " +
+					"dev and known testnets (test*, topaz-*) are write-capable; any other id is admitted read-only. " +
 					"Required together with rpc_url unless gnoweb_url is given. Cross-checked against the live node.",
 			},
 			"gnoweb_url": map[string]any{
 				"type":   "string",
 				"format": "uri",
-				"description": "Gnoweb page URL to discover rpc_url + chain_id from (e.g. 'https://test13.testnets.gno.land'). " +
+				"description": "Gnoweb page URL to discover rpc_url + chain_id from (e.g. 'https://topaz.testnets.gno.land'). " +
 					"Mutually exclusive with rpc_url/chain_id. Discovery is a hint only — the node is still dialed and verified.",
 			},
 			"tx_indexer_url": map[string]any{
 				"type":   "string",
 				"format": "uri",
-				"description": "Optional tx-indexer GraphQL endpoint (e.g. 'https://indexer.test13.testnets.gno.land/graphql/query'); " +
+				"description": "Optional tx-indexer GraphQL endpoint (e.g. 'https://indexer.topaz.testnets.gno.land/graphql/query'); " +
 					"enables the indexer tools for this profile.",
 			},
 			"faucet_service_url": map[string]any{

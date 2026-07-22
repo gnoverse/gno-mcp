@@ -1,10 +1,33 @@
 package server
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 )
+
+// ProfileChainList renders "name (chain id[, label])" for each name, in the
+// given order, for embedding in profile-arg descriptions — the model resolves
+// a chain the user names ("on topaz", "on test13") to a profile from this map.
+// Labels: sunset (retiring testnet, still writable — prefer the current one
+// for new work) and read-only (mainnet/betanet, no write path).
+func ProfileChainList(cfg *profiles.Config, names []string) string {
+	parts := make([]string, 0, len(names))
+	for _, n := range names {
+		p := cfg.Profiles[n]
+		label := ""
+		switch {
+		case p.Sunset:
+			label = ", sunset"
+		case p.IsReadOnly():
+			label = ", read-only"
+		}
+		parts = append(parts, fmt.Sprintf("%s (chain %s%s)", n, p.ChainID, label))
+	}
+	return strings.Join(parts, ", ")
+}
 
 // ProfileSchema describes how the `profile` arg should appear on a tool.
 type ProfileSchema struct {

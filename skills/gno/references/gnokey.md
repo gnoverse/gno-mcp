@@ -56,8 +56,9 @@ ratio clears the chain's minimum (next section). So the two knobs interact only 
 raise `GasWanted` and you must raise `GasFee` to keep the ratio above the floor.
 
 **The floor.** The minimum acceptable fee is `GasWanted × minGasPrice`. The genesis price is
-**1 ugnot per 1000 gas** (test13 runs 10/1000), so for `GasWanted = 10_000_000` the genesis floor is
-**10,000 ugnot (0.01 GNOT)**. gnomcp does not offer a fixed pair: every write **dry-runs first at a
+**1 ugnot per 1000 gas** — topaz (test14) runs at that floor (`1ugnot/1000gas`); test13 had drifted
+to `10ugnot/1000gas`. Re-query `auth/gasprice` live; the floor moves per chain. At the genesis
+price, `GasWanted = 10_000_000` puts the floor at **10,000 ugnot (0.01 GNOT)**. gnomcp does not offer a fixed pair: every write **dry-runs first at a
 1B-gas measuring ceiling**, then broadcasts at `GasWanted = measured × 1.5` floored at
 `DefaultGasWanted = 10_000_000` (a realm call burns ~1–2M gas, a deploy ~5M — light writes stay on
 the floor; a heavy write sizes itself), and offers a fee priced for that GasWanted at the **live
@@ -77,7 +78,7 @@ price, and the floor moves with it (gnomcp queries the live price per write rath
 the config). gnomcp mirrors the genesis ratio as `minGasPriceDivisor`
 and its comment flags that it must change for a chain with a different `min_gas_prices`. Two price
 gates exist: this static config floor (checked in CheckTx) and an adaptive EIP-1559-style block price
-(skipped when zero, the common testnet case) — on test13 the static floor is the operative one.
+(skipped when zero, the common testnet case) — on topaz (test14) the static floor is the operative one (the adaptive block price is zero on the testnets checked).
 
 ## Failure modes — tell them apart
 
@@ -199,11 +200,11 @@ fee — every gnomcp write result echoes the real values):
 
 ```
 # gno_call{realm:"gno.land/r/demo/foo", func:"Bump", args:["1"], send:"", key:"alice"}
-# (light call on test13: gas-wanted floors at 10M, fee = 10M × 10ugnot/1000gas × 2)
+# (light call on topaz (test14): gas-wanted floors at 10M; live price 1ugnot/1000gas → fee = 10M × 1ugnot/1000gas × 2)
 gnokey maketx call \
   -pkgpath gno.land/r/demo/foo -func Bump -args 1 \
-  -gas-wanted 10000000 -gas-fee 200000ugnot \
-  -remote https://rpc.test13.testnets.gno.land:443 -chainid test-13 \
+  -gas-wanted 10000000 -gas-fee 20000ugnot \
+  -remote https://rpc.topaz.testnets.gno.land:443 -chainid topaz-1 \
   -broadcast alice
 ```
 
@@ -231,4 +232,5 @@ and fee/gas-price logic (`tm2/pkg/sdk/auth`, `tm2/pkg/std`), and the vm storage-
 (`gno.land/pkg/sdk/vm`) in gnolang/gno at the commit pinned in this repo's go.mod; the gnomcp write
 path (`internal/chain/real.go`, `internal/tools/write`); and the gnolang/gno issue tracker (#3805,
 #5086, #3704, #329, #2109, #4279, #5122, #203, #416, #3703). Mechanics verified against the live
-test13 deploy-gates flow. Flag surface is version-bound — confirm with `gnokey <cmd> -help`.
+topaz (test14) and test13 deploy-gate flows (note: the CLA gate is currently disabled on topaz and
+enabled on test13 — see sysrealms.md). Flag surface is version-bound — confirm with `gnokey <cmd> -help`.

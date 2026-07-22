@@ -7,7 +7,7 @@ covers: [read.render, read.read-package, read.outline, read.eval, profile.select
 ---
 # Read-tool surface: render, package read, outline, eval via gnomcp (not curl, not memory)
 
-The read-tool surface on simnet (chain test9999, profile `testnet` is the default).
+The read-tool surface on simnet (chain test-9999, profile `testnet` is the default).
 Fresh chain ⇒ counter Total: 0. Watch: profile choice on turn 1; whole-package read on step 2.
 
 ## Step 1: render counter

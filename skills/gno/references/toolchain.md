@@ -18,6 +18,7 @@ Scope: live chain targets. For a **local gnodev** target, use the `gno` already 
 3. Pick the **latest `chain/<chain-id>*` tag**. The store key is the tag name minus the `chain/` prefix (e.g. `gnoland1.1`). Two install-ref shapes:
    - **Semver twin** — a `v*` tag listing the same sha (e.g. `chain/gnoland1.1` = `v1.1.0`): use the semver tag as the ref.
    - **Commit-only** (e.g. `chain/test12`): tags containing `/` are not valid `go install @` refs — use the commit sha. In `ls-remote` output that is the tag's `^{}` (peeled) line when one exists, else the tag's own line.
+   - The tag uses the short chain **name**, not the chain-id: topaz (test14)'s tag is `chain/topaz`, not `chain/topaz-1` (commit-only, like `chain/test13`). Deriving the tag from the full chain-id string misses it.
 4. No matching chain tag (unreleased or dev chain): ask the user which ref tracks their chain; if they operate the node themselves, their local `gno` is the answer.
 
 ## Install into the store

@@ -6,7 +6,7 @@
 
 A chain's `chain-id` determines what gnomcp may do with it:
 
-- **Write-capable** — `chain-id` matching `^(dev|test-?\d+)$` (local dev, numbered testnets). These get an agent key path and appear in the write tools' profile enums.
+- **Write-capable** — `dev` (local), or a `chain-id` starting with a known testnet name (`test`, `topaz` — bare or hyphenated: `test5`, `test-13`, `topaz-1`). Codenamed testnets ended the numbered `test<N>` pattern, so recognition is a release-time name list (`testnetChainNames` in `internal/profiles/validate.go`), not a regex. These get an agent key path and appear in the write tools' profile enums.
 - **Read-only** — any other format-safe `chain-id` (betanet `gnoland1`, `staging`, mainnet). Admitted so deployed source can be audited, but excluded from every write tool: no agent key, no faucet, no session, and `master-address` is refused at config time. Reads only.
 
 The classification is enforced at startup config validation, at `gnomcp profile add`, and at `gno_profile_add` (which additionally dials the node and refuses the add unless it reports the declared chain-id). No override turns a read-only chain writable — the write path for mainnet/betanet does not exist in code. A `chain-id` carrying shell metacharacters or whitespace is rejected outright, since it is interpolated into the commands the user pastes into a terminal.
@@ -20,7 +20,7 @@ Writes sign with one of two identities — never with the user's key.
 - **Local profiles** use the built-in **test1** account (the well-known *public* test mnemonic). Structurally confined to dev chains by the chain-id capability gate.
 - **Testnet profiles** use keys generated and persisted by `gno_key_generate`. Each profile may hold up to `GNOMCP_AGENT_MAX_KEYS` (default 5) named keys, stored one file per key at `~/.local/share/gnomcp/agent-keys/<profile>/<name>.key` (mode `0600`); when `GNOMCP_SESSION_PASSPHRASE` is set they are encrypted at rest with scrypt+AES-256-GCM. `gno_key_send` moves ugnot only between a profile's own keys (the destination is a key name, never an arbitrary address).
 
-Both tiers are confined to dev/test by the chain-id capability gate (`^(dev|test-?\d+)$`); no path creates an agent key for a read-only chain (mainnet/betanet).
+Both tiers are confined to dev/testnet by the chain-id capability gate (the testnet name list above); no path creates an agent key for a read-only chain (mainnet/betanet).
 
 **Session — opt-in (`identity=session`), WIP.** The session path is functional end-to-end but young and will be reworked — use with caution: keep `allow_paths` tight, `spend_limit` low, and `expires_in` short. On any writable chain the agent can act *as the user* via a chain-bound session:
 
@@ -50,7 +50,7 @@ chain-returned bytes are untrusted. The control differs by delivery channel:
   </untrusted_content>
   ```
 
-  An envelope tag (opening or closing) embedded in chain content is neutralized first, so content cannot escape or forge the envelope. The write tools envelope the realm-controlled portions of their success text the same way: `gno_call`'s `Result` (kind `call_result`), `gno_run`'s `Output` (kind `run_output`), and `gno_cla_info`'s fetched document URL (kind `cla_url`; the required hash is regex-constrained hex and stays inline).
+  An envelope tag (opening or closing) embedded in chain content is neutralized first, so content cannot escape or forge the envelope. (`gno_profile_list` is the one inline text tool with no envelope: its output is rendered purely from local profile config — no chain-derived byte reaches it.) The write tools envelope the realm-controlled portions of their success text the same way: `gno_call`'s `Result` (kind `call_result`), `gno_run`'s `Output` (kind `run_output`), and `gno_cla_info`'s fetched document URL (kind `cla_url`; the required hash is regex-constrained hex and stays inline).
 
 - **The resource tool** (`gno_read`) returns content as an MCP `EmbeddedResource`, a distinct trust posture clients treat as resource data rather than inline instructions. Verbatim source (`full=true`, `symbols`) is not textually wrapped because that would corrupt the txtar archive and break byte fidelity (the body is audit evidence). The default **outline** is server-rendered rather than verbatim, so it additionally neutralizes embedded envelope tags — realm-authored doc comments cannot forge an envelope there. Both paths still rely on the client honoring the resource boundary.
 

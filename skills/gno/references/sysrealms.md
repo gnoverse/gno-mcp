@@ -54,7 +54,7 @@ wrong deployment).
 Never block on the MCP — it's an accelerator, not a dependency (see `mcp.md`). Raw ABCI recipe:
 
 ```bash
-RPC=https://rpc.test13.testnets.gno.land:443
+RPC=https://rpc.topaz.testnets.gno.land:443   # chain-id topaz-1
 hex=$(printf '%s' 'gno.land/r/sys/names.IsEnabled()' | xxd -p | tr -d '\n')
 curl -s "$RPC/abci_query?path=%22vm/qeval%22&data=0x$hex"   # value = base64 at result.response.ResponseBase.Data
 # paths: vm/qeval (eval expr) · vm/qfuncs (list exported funcs, data=pkgpath) · vm/qrender (data=pkgpath:renderpath)
@@ -100,8 +100,10 @@ assume**, and prefer checking both *before* deploying rather than reading it off
    namespace (`r/<your-g1address>/*` is always authorized — no registration), or hold a registered name
    whose current owner is you (register via the live controller, e.g. `r/sys/namereg/v1`, if it's
    deployed). Check: `IsAuthorizedAddressForNamespace(addr, ns)`.
-2. **CLA** (`r/sys/cla`). Enforced when a required hash is set. The signer must have signed the current
-   agreement. Check: `HasValidSignature(addr)`. To clear it, **sign once from the same key**. With a Gno
+2. **CLA** (`r/sys/cla`). Enforced when a required hash is set. As of the last check, CLA enforcement
+   is **off on topaz (test14)** (no required hash — no `Sign` step needed to deploy) and **on on test13** —
+   always confirm live via `gno_cla_info` or the render's `Required Hash` field. The signer must have
+   signed the current agreement. Check: `HasValidSignature(addr)`. To clear it, **sign once from the same key**. With a Gno
    MCP connected, use its `gno_cla_info` / `gno_cla_sign` pair — info reports the required hash and the
    agreement URL, and the user sees the URL before the signing call. Without an MCP: read
    the required hash from `r/sys/cla`'s render (the `Required Hash` field), show the linked agreement
@@ -138,12 +140,12 @@ the chain, don't recite it): `auth:p:fee_collector` (gas fee collector), `vm:p:s
 (storage-deposit collector — distinct from the gas one), `vm:p:storage_price`, `node:p:halt_height`,
 `bank:p:restricted_denoms`.
 
-## Worked example — "how do I register a name on test13?"
+## Worked example — "how do I register a name on topaz (test14)?"
 
 The model in action. Every concrete value comes from a live query; you explain the steps, the user
 runs the funded tx.
 
-1. **Confirm the chain.** `gno_status` (or RPC `/status`) → chain-id is `test-13`. Now reads are about
+1. **Confirm the chain.** `gno_status` (or RPC `/status`) → chain-id is `topaz-1`. Now reads are about
    the chain the user actually means.
 2. **Is enforcement even on?** `gno_eval gno.land/r/sys/names.IsEnabled()`. If `false`, namespace
    enforcement is off on this network — anyone can already deploy under any `r/<name>/*` and registering
@@ -159,7 +161,7 @@ runs the funded tx.
    from their own funded key (or via a gno-mcp session they authorize). Execution is theirs; you don't broadcast it.
 
 The point: whether `namereg/v1` exists, whether enforcement is on, the exact format and price — all of it
-came from querying test13, not from this file.
+came from querying topaz (test14), not from this file.
 
 ## See also
 
@@ -171,5 +173,5 @@ came from querying test13, not from this file.
 ## Source
 
 Distilled from `examples/gno.land/r/sys/*` + `gnovm/stdlibs/sys/params` in gnolang/gno, the gnolang/gno
-issue/PR roadmap, per-network genesis configs, and verified against live test13 (ABCI `vm/qfuncs`/`qeval`/`qrender`).
+issue/PR roadmap, per-network genesis configs, and verified against live topaz (test14) and test13 (ABCI `vm/qfuncs`/`qeval`/`qrender`).
 The design above is durable; concrete values are intentionally absent — query the live chain.

@@ -7,7 +7,7 @@ covers: [write.key-multi, write.key-selector, write.key-send, write.key-list, wr
 ---
 # Multiple named agent keys: generate a second key, fund it by transfer, transact as both, list, delete
 
-The multi-key write path on simnet (test9999 is testnet-tier, so named keys + gno_key_send apply).
+The multi-key write path on simnet (test-9999 is testnet-tier, so named keys + gno_key_send apply).
 A profile holds several named agent keys; the `key` arg selects which one signs. Run AFTER
 write-tools (02) is green — the keystore persists in the container, so a `default` key likely
 already exists; this scenario adds a second one.

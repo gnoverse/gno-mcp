@@ -130,7 +130,7 @@ func parseProfileAddArgs(args []string) (string, profileAddOpts, error) {
 	var o profileAddOpts
 	fs.StringVar(&o.FromGnoweb, "from-gnoweb", "", "gnoweb URL to autofill rpc/chain-id")
 	fs.StringVar(&o.RPC, "rpc", "", "RPC URL")
-	fs.StringVar(&o.ChainID, "chain-id", "", "chain id (dev/testNN are writable; any other id, e.g. gnoland1, is read-only)")
+	fs.StringVar(&o.ChainID, "chain-id", "", "chain id (dev and known testnets, e.g. topaz-1, are writable; any other id, e.g. gnoland1, is read-only)")
 	fs.StringVar(&o.Master, "master", "", "master address g1... (enables writes)")
 	fs.StringVar(&o.IndexerURL, "indexer-url", "", "tx indexer GraphQL URL (optional)")
 	if err := fs.Parse(args[1:]); err != nil {

@@ -28,6 +28,15 @@ type Profile struct {
 	FaucetServiceURL string `toml:"faucet-service-url"`
 	FaucetURL        string `toml:"faucet-url"`
 
+	// Sunset marks a retiring chain. Advisory only — it never gates
+	// capability: a sunset testnet stays fully writable (deploys, faucet,
+	// sessions) so work targeting it keeps working. The label surfaces in
+	// gno_profile_list, the profile-arg descriptions, and the server
+	// instructions to steer NEW work toward the current testnet. Set on
+	// built-in predecessors of the current testnet; users may set it in
+	// profiles.toml.
+	Sunset bool `toml:"sunset"`
+
 	// Write authorization settings.
 	MasterAddress     string `toml:"master-address"`      // bech32 master account address (g1...); presence enables write tools for this profile. No key material — public address only.
 	DefaultSpendLimit string `toml:"default-spend-limit"` // optional; clamped at use
@@ -40,14 +49,18 @@ type Profile struct {
 func (p Profile) IsLocal() bool { return p.ChainID == "dev" }
 
 // IsTestnet reports whether the profile targets a write-capable testnet (a
-// numbered "testNN" chain). Read-only chains (mainnet/betanet) are NOT testnets:
-// they have no agent key path and no faucet.
-func (p Profile) IsTestnet() bool { return ChainIDWritable(p.ChainID) && !p.IsLocal() }
+// chain on the testnet name list, e.g. test-13, topaz-1 — sunset or not).
+// Read-only chains (mainnet/betanet) are NOT testnets: they have no agent key
+// path and no faucet.
+func (p Profile) IsTestnet() bool {
+	return ChainIDWritable(p.ChainID) && !p.IsLocal()
+}
 
 // IsReadOnly reports whether the profile targets a non-write-capable chain
-// (anything other than dev or a numbered testnet, e.g. betanet "gnoland1").
+// (anything other than dev or a known testnet, e.g. betanet "gnoland1").
 // Read-only profiles are readable via the read tools but excluded from every
-// write tool's profile enum.
+// write tool's profile enum. Sunset does NOT make a profile read-only — it is
+// an advisory label.
 func (p Profile) IsReadOnly() bool { return !ChainIDWritable(p.ChainID) }
 
 // RealmViewURL returns the gnoweb URL where pkgPath is viewable, or "" when this
@@ -121,23 +134,37 @@ func Load(r io.Reader) (*Config, error) {
 	return cfg, nil
 }
 
-// Built-in network endpoints. testnet is a release-time constant: bump when the
-// canonical persistent testnet rolls. The chain reports its chain-id hyphenated
-// ("test-13") while its hosts use the unhyphenated form ("test13.testnets.gno.land").
+// Built-in network endpoints. testnet is a release-time constant: bump when
+// the canonical persistent testnet rolls (append the new codename to
+// testnetChainNames in validate.go and demote the previous chain to a sunset
+// builtin named after its codename). The chain reports its chain-id with a
+// version suffix ("topaz-1") while its hosts use the bare codename
+// ("topaz.testnets.gno.land").
 const (
 	builtinLocalRPC   = "http://127.0.0.1:26657"
 	builtinLocalChain = "dev"
 
-	builtinTestnetRPC     = "https://rpc.test13.testnets.gno.land:443"
-	builtinTestnetChain   = "test-13"
-	builtinTestnetGnoweb  = "https://test13.testnets.gno.land"
-	builtinTestnetIndexer = "https://indexer.test13.testnets.gno.land/graphql/query"
-	builtinTestnetFaucet  = "https://faucet-agent.test13.testnets.gno.land"
+	builtinTestnetRPC     = "https://rpc.topaz.testnets.gno.land:443"
+	builtinTestnetChain   = "topaz-1"
+	builtinTestnetGnoweb  = "https://topaz.testnets.gno.land"
+	builtinTestnetIndexer = "https://indexer.topaz.testnets.gno.land/graphql/query"
+	builtinTestnetFaucet  = "https://faucet-agent.topaz.testnets.gno.land"
+
+	// test13 is the sunset predecessor: still fully writable while its infra
+	// stays up (deploys, faucet, indexer all live) — the sunset label only
+	// steers new work toward the current testnet.
+	builtinTest13RPC     = "https://rpc.test13.testnets.gno.land:443"
+	builtinTest13Chain   = "test-13"
+	builtinTest13Gnoweb  = "https://test13.testnets.gno.land"
+	builtinTest13Indexer = "https://indexer.test13.testnets.gno.land/graphql/query"
+	builtinTest13Faucet  = "https://faucet-agent.test13.testnets.gno.land"
 )
 
-// BuiltinProfiles returns the zero-config default profiles. Both are read-only
-// (no master-address); the user opts into writes by setting one. Returned as a
-// fresh map each call so callers may mutate it.
+// BuiltinProfiles returns the zero-config default profiles: the current
+// testnet under the rolling name "testnet", its sunset predecessor under its
+// codename, and "local". All are read-only for sessions (no master-address);
+// the user opts into session writes by setting one. Returned as a fresh map
+// each call so callers may mutate it.
 func BuiltinProfiles() map[string]Profile {
 	return map[string]Profile{
 		"local": {
@@ -150,6 +177,14 @@ func BuiltinProfiles() map[string]Profile {
 			GnowebURL:        builtinTestnetGnoweb,
 			TxIndexerURL:     builtinTestnetIndexer,
 			FaucetServiceURL: builtinTestnetFaucet,
+		},
+		"test13": {
+			RPCURL:           builtinTest13RPC,
+			ChainID:          builtinTest13Chain,
+			GnowebURL:        builtinTest13Gnoweb,
+			TxIndexerURL:     builtinTest13Indexer,
+			FaucetServiceURL: builtinTest13Faucet,
+			Sunset:           true,
 		},
 	}
 }

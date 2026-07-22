@@ -49,25 +49,25 @@ func dynServer(t *testing.T) *Server {
 	t.Helper()
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"local":   {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
-		"testnet": {RPCURL: "https://rpc.test13.testnets.gno.land:443", ChainID: "test-13"},
+		"testnet": {RPCURL: "https://rpc.test42.testnets.gno.land:443", ChainID: "test-42"},
 	}}
 	return NewServer(cfg, "")
 }
 
 func TestAddDynamicProfile_addsAndIsVisible(t *testing.T) {
 	s := dynServer(t)
-	err := s.AddDynamicProfile("test13", profiles.Profile{RPCURL: "https://rpc.example", ChainID: "test-13"})
+	err := s.AddDynamicProfile("test42", profiles.Profile{RPCURL: "https://rpc.example", ChainID: "test-42"})
 	require.NoError(t, err)
-	p, ok := s.Config().Profiles["test13"]
+	p, ok := s.Config().Profiles["test42"]
 	require.True(t, ok, "added profile must be visible via Config()")
-	assert.Equal(t, "test-13", p.ChainID)
+	assert.Equal(t, "test-42", p.ChainID)
 }
 
 func TestAddDynamicProfile_snapshotsAreCopyOnWrite(t *testing.T) {
 	s := dynServer(t)
 	before := s.Config()
-	require.NoError(t, s.AddDynamicProfile("test13", profiles.Profile{RPCURL: "https://rpc.example", ChainID: "test-13"}))
-	_, inOld := before.Profiles["test13"]
+	require.NoError(t, s.AddDynamicProfile("test42", profiles.Profile{RPCURL: "https://rpc.example", ChainID: "test-42"}))
+	_, inOld := before.Profiles["test42"]
 	assert.False(t, inOld, "a previously captured Config snapshot must not gain the new profile (copy-on-write)")
 }
 
@@ -76,7 +76,7 @@ func TestAddDynamicProfile_rejectsInitProfiles(t *testing.T) {
 	err := s.AddDynamicProfile("testnet", profiles.Profile{RPCURL: "https://rpc.example", ChainID: "test5"})
 	require.Error(t, err, "init-time profiles must be immutable")
 	assert.ErrorIs(t, err, ErrProfileImmutable)
-	assert.Equal(t, "test-13", s.Config().Profiles["testnet"].ChainID, "init profile must be unchanged")
+	assert.Equal(t, "test-42", s.Config().Profiles["testnet"].ChainID, "init profile must be unchanged")
 }
 
 func TestAddDynamicProfile_rejectsReservedAndInvalidNames(t *testing.T) {
@@ -94,10 +94,10 @@ func TestAddDynamicProfile_rejectsReservedAndInvalidNames(t *testing.T) {
 
 func TestAddDynamicProfile_reAddOfDynamicNameReplaces(t *testing.T) {
 	s := dynServer(t)
-	require.NoError(t, s.AddDynamicProfile("test13", profiles.Profile{RPCURL: "https://rpc.one", ChainID: "test-13"}))
-	require.NoError(t, s.AddDynamicProfile("test13", profiles.Profile{RPCURL: "https://rpc.two", ChainID: "test-13"}),
+	require.NoError(t, s.AddDynamicProfile("test42", profiles.Profile{RPCURL: "https://rpc.one", ChainID: "test-42"}))
+	require.NoError(t, s.AddDynamicProfile("test42", profiles.Profile{RPCURL: "https://rpc.two", ChainID: "test-42"}),
 		"re-adding a dynamically added profile must be allowed (agent fixing its own mistake)")
-	assert.Equal(t, "https://rpc.two", s.Config().Profiles["test13"].RPCURL)
+	assert.Equal(t, "https://rpc.two", s.Config().Profiles["test42"].RPCURL)
 }
 
 func TestAddDynamicProfile_flipsRegistrationGates(t *testing.T) {
@@ -107,8 +107,8 @@ func TestAddDynamicProfile_flipsRegistrationGates(t *testing.T) {
 	assert.False(t, localOnly.AnyProfileTestnet())
 	assert.False(t, localOnly.AnyProfileHasIndexer())
 
-	require.NoError(t, localOnly.AddDynamicProfile("test13", profiles.Profile{
-		RPCURL: "https://rpc.example", ChainID: "test-13", TxIndexerURL: "https://idx.example",
+	require.NoError(t, localOnly.AddDynamicProfile("test42", profiles.Profile{
+		RPCURL: "https://rpc.example", ChainID: "test-42", TxIndexerURL: "https://idx.example",
 	}))
 	assert.True(t, localOnly.AnyProfileTestnet(), "adding a testnet profile must flip AnyProfileTestnet")
 	assert.True(t, localOnly.AnyProfileHasIndexer(), "adding an indexer-bearing profile must flip AnyProfileHasIndexer")
@@ -117,9 +117,9 @@ func TestAddDynamicProfile_flipsRegistrationGates(t *testing.T) {
 func TestAddDynamicProfile_profileSchemaGrowsButDefaultIsStable(t *testing.T) {
 	s := dynServer(t)
 	before := s.ProfileSchema()
-	require.NoError(t, s.AddDynamicProfile("test13", profiles.Profile{RPCURL: "https://rpc.example", ChainID: "test-13"}))
+	require.NoError(t, s.AddDynamicProfile("test42", profiles.Profile{RPCURL: "https://rpc.example", ChainID: "test-42"}))
 	after := s.ProfileSchema()
-	assert.Contains(t, after.Enum, "test13", "enum must grow with the dynamic profile")
+	assert.Contains(t, after.Enum, "test42", "enum must grow with the dynamic profile")
 	assert.Equal(t, before.Default, after.Default, "the smart default must not migrate to a dynamic profile")
 }
 
