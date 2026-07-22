@@ -2,21 +2,105 @@ package write
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
 )
 
+// proposeFake returns a Fake chain client reporting feeUgnot as the live
+// per-write gas fee.
+func proposeFake(feeUgnot int64) *chain.Fake {
+	f := chain.NewFake()
+	f.SetGasFee(feeUgnot)
+	return f
+}
+
+func TestSessionPropose_spendLimitBelowFeeErrors(t *testing.T) {
+	// The exact test13 shape: live fee 4000000ugnot, requested limit 1000000ugnot.
+	// Such a session can never broadcast (the ante counts the full fee against
+	// the spend limit), so propose must refuse with both numbers.
+	s := newBaseTestServer(t)
+	RegisterSessionPropose(s, noSessionMgr(t), constChainResolver(proposeFake(4_000_000)))
+
+	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
+		"profile":     "testnet5",
+		"allow_paths": []any{"gno.land/r/test/counter"},
+		"spend_limit": "1000000ugnot",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "1000000ugnot", "error should name the offending limit")
+	assert.Contains(t, err.Error(), "4000000", "error should name the per-write fee")
+}
+
+func TestSessionPropose_defaultSpendLimitDerivedFromFee(t *testing.T) {
+	// No spend_limit requested and no profile default: the proposed limit is
+	// sized from the live fee (10 writes' worth), and the answer spells out
+	// the per-write cost so the user knows what the limit buys.
+	s := newBaseTestServer(t)
+	mgr := noSessionMgr(t)
+	RegisterSessionPropose(s, mgr, constChainResolver(proposeFake(4_000_000)))
+
+	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
+		"profile":     "testnet5",
+		"allow_paths": []any{"gno.land/r/test/counter"},
+	})
+	require.NoError(t, err, "Call")
+	scope, ok := res.StructuredContent["scope"].(map[string]any)
+	require.True(t, ok, "scope in structured content")
+	assert.Equal(t, "40000000ugnot", scope["spend_limit"])
+	assert.Contains(t, res.Text, "4000000ugnot per light write")
+	assert.Contains(t, res.Text, "10 light write")
+	assert.Contains(t, res.Text, "cost proportionally more", "heavy-write caveat")
+	// The math must reach structured-output consumers too: clients that
+	// surface structuredContent never see the Text rendering.
+	assert.Equal(t, int64(4_000_000), res.StructuredContent["per_write_fee_ugnot"])
+	assert.Equal(t, int64(10), res.StructuredContent["writes_budget"])
+}
+
+func TestSessionPropose_gnokeyCommandUsesLiveFee(t *testing.T) {
+	// The pasted create command must carry a fee the chain will accept at its
+	// live gas price — the floor fee bounces with "insufficient fee" on a
+	// chain priced above genesis.
+	s := newBaseTestServer(t)
+	RegisterSessionPropose(s, noSessionMgr(t), constChainResolver(proposeFake(4_000_000)))
+
+	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
+		"profile":     "testnet5",
+		"allow_paths": []any{"gno.land/r/test/counter"},
+	})
+	require.NoError(t, err, "Call")
+	cmd, _ := res.StructuredContent["auth_command"].(string)
+	assert.Contains(t, cmd, "--gas-fee 4000000ugnot")
+}
+
+func TestSessionPropose_gasFeeQueryFailureErrors(t *testing.T) {
+	// Fee-unknown fails closed: proposing without the live fee could mint a
+	// dead-on-arrival session, so the tool reports the query failure instead.
+	s := newBaseTestServer(t)
+	fake := chain.NewFake()
+	fake.SetGasFeeErr(errors.New("rpc unreachable"))
+	RegisterSessionPropose(s, noSessionMgr(t), constChainResolver(fake))
+
+	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
+		"profile":     "testnet5",
+		"allow_paths": []any{"gno.land/r/test/counter"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gas fee")
+}
+
 func TestSessionPropose_emitsGnokeyCommand(t *testing.T) {
 	s := newBaseTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
@@ -33,7 +117,7 @@ func TestSessionPropose_emitsGnokeyCommand(t *testing.T) {
 func TestSessionPropose_masterAddressParam(t *testing.T) {
 	s := newReadOnlyTestServer(t) // testnet5 (test5), NO master-address
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	const userAddr = "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
 	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
@@ -52,7 +136,7 @@ func TestSessionPropose_masterAddressParam(t *testing.T) {
 // Master-less profile, no param → must ask for master_address (not stall).
 func TestSessionPropose_masterlessRequiresMasterAddress(t *testing.T) {
 	s := newReadOnlyTestServer(t)
-	RegisterSessionPropose(s, noSessionMgr(t))
+	RegisterSessionPropose(s, noSessionMgr(t), constChainResolver(chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
 		"allow_paths": []any{"gno.land/r/test/counter"},
@@ -64,7 +148,7 @@ func TestSessionPropose_masterlessRequiresMasterAddress(t *testing.T) {
 // A seed phrase pasted as master_address must be rejected WITHOUT echoing it.
 func TestSessionPropose_rejectsMnemonicShapedMaster(t *testing.T) {
 	s := newReadOnlyTestServer(t)
-	RegisterSessionPropose(s, noSessionMgr(t))
+	RegisterSessionPropose(s, noSessionMgr(t), constChainResolver(chain.NewFake()))
 	const seed = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":        "testnet5",
@@ -79,7 +163,7 @@ func TestSessionPropose_rejectsMnemonicShapedMaster(t *testing.T) {
 // A malformed (non-bech32) master_address is rejected.
 func TestSessionPropose_rejectsInvalidMasterAddress(t *testing.T) {
 	s := newReadOnlyTestServer(t)
-	RegisterSessionPropose(s, noSessionMgr(t))
+	RegisterSessionPropose(s, noSessionMgr(t), constChainResolver(chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":        "testnet5",
 		"allow_paths":    []any{"gno.land/r/test/counter"},
@@ -91,7 +175,7 @@ func TestSessionPropose_rejectsInvalidMasterAddress(t *testing.T) {
 func TestSessionPropose_emitsClampWarning_whenClamped(t *testing.T) {
 	s := newBaseTestServer(t) // testnet profile; cap = 100000000ugnot (100 gnot)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
@@ -112,7 +196,7 @@ func TestSessionPropose_emitsClampWarning_whenClamped(t *testing.T) {
 func TestSessionPropose_emptyAllowPathsErrors(t *testing.T) {
 	s := newBaseTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
@@ -124,7 +208,7 @@ func TestSessionPropose_emptyAllowPathsErrors(t *testing.T) {
 func TestSessionPropose_missingProfileErrors(t *testing.T) {
 	s := newBaseTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"allow_paths": []any{"gno.land/r/test/counter"},
@@ -135,7 +219,7 @@ func TestSessionPropose_missingProfileErrors(t *testing.T) {
 func TestSessionPropose_rejectsNonStringAllowPaths(t *testing.T) {
 	s := newBaseTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
@@ -147,7 +231,7 @@ func TestSessionPropose_rejectsNonStringAllowPaths(t *testing.T) {
 func TestSessionPropose_allowRunOnly(t *testing.T) {
 	s := newBaseTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":   "testnet5",
@@ -163,7 +247,7 @@ func TestSessionPropose_allowRunOnly(t *testing.T) {
 func TestSessionPropose_allowRunAndAllowPaths(t *testing.T) {
 	s := newBaseTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	res, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
@@ -178,7 +262,7 @@ func TestSessionPropose_allowRunAndAllowPaths(t *testing.T) {
 func TestSessionPropose_emptyAllowPathsAndNoRunErrors(t *testing.T) {
 	s := newBaseTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile": "testnet5",
@@ -189,7 +273,7 @@ func TestSessionPropose_emptyAllowPathsAndNoRunErrors(t *testing.T) {
 func TestSessionPropose_NoMaster(t *testing.T) {
 	s := newReadOnlyTestServer(t) // profile has no master-address
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
 		"allow_paths": []any{"gno.land/r/demo/foo"},
@@ -201,12 +285,13 @@ func TestSessionPropose_NoMaster(t *testing.T) {
 // The repair instructions must say config is loaded at startup: an agent that
 // edits profiles.toml and retries against the same process gets the same error
 // and has no way to know why.
-// The no-master repair no longer makes the user edit profiles.toml and restart;
-// it offers the master_address param. Guard that the old restart friction is gone.
+// The no-master repair offers the master_address param rather than directing
+// a profiles.toml edit and restart. Guard that no restart friction leaks into
+// the error.
 func TestSessionPropose_NoMaster_offersParamNotRestart(t *testing.T) {
 	s := newReadOnlyTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
 		"allow_paths": []any{"gno.land/r/demo/foo"},
@@ -221,7 +306,7 @@ func TestSessionPropose_NoMaster_offersParamNotRestart(t *testing.T) {
 func TestSessionPropose_NoMaster_offersParamNotCLIEdit(t *testing.T) {
 	s := newReadOnlyTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",
 		"allow_paths": []any{"gno.land/r/demo/foo"},
@@ -243,7 +328,7 @@ func TestSessionPropose_NoMaster_builtinName_suggestsTomlNotCLI(t *testing.T) {
 	require.NoError(t, err, "validate")
 	s := server.NewServer(cfg, "")
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	_, err = s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet",
@@ -258,7 +343,7 @@ func TestSessionPropose_NoMaster_builtinName_suggestsTomlNotCLI(t *testing.T) {
 func TestSessionPropose_addsPendingSession(t *testing.T) {
 	s := newBaseTestServer(t)
 	mgr := noSessionMgr(t)
-	RegisterSessionPropose(s, mgr)
+	RegisterSessionPropose(s, mgr, constChainResolver(chain.NewFake()))
 
 	_, err := s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
 		"profile":     "testnet5",

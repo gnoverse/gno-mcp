@@ -28,7 +28,7 @@ Writes are signed by one of two identities, selected per call via the `identity`
 
 Sessions are immutable after creation; scope expansion means a new session. Among multiple matching sessions, gnomcp picks the most recently created active one whose scope covers the call.
 
-**Scope policy** resolves proposal arguments through four layers (high to low): agent-explicit values → per-profile defaults (`default-spend-limit`, `default-expires-in`) → hardcoded defaults (`100000000ugnot`, sized so a default session covers ~500 calls at the 200000-ugnot per-tx GasFee floor; `1h`) → hard-limit clamps derived from chain-id locality:
+**Scope policy** resolves proposal arguments through four layers (high to low): agent-explicit values → per-profile defaults (`default-spend-limit`, `default-expires-in`) → fee-derived defaults (~10 writes at the chain's live per-write GasFee, silently capped at the spend clamp; `1h`) → hard-limit clamps derived from chain-id locality:
 
 | locality | max `spend_limit` | max `expires_in` | max `allow_paths` |
 |---|---|---|---|
@@ -37,7 +37,9 @@ Sessions are immutable after creation; scope expansion means a new session. Amon
 
 Values exceeding a clamp are clamped with a warning in the tool result. `bypass-hard-limits = true` disables the clamp layer for a profile. `allow_paths` has no default — the agent must supply it (or `allow_run=true`).
 
-**Spend tracking** deducts the full tx `GasFee` (not `GasUsed`) from the local spend balance, matching the chain's session accounting, and persists it.
+The proposal is fee-aware end to end: the chain's ante counts each write's **full offered GasFee** against the session spend limit, so `gno_session_propose` queries the live gas price first and hard-errors on any effective spend limit (agent-explicit, profile default, or post-clamp — bypass included) that cannot cover one light (floor-gas) write, naming the minimum to use. The guard and the writes-budget math are floor-priced upper bounds — a write that right-sizes above the floor costs proportionally more; the per-write client pre-check is the exact backstop. The emitted `gnokey` command carries the live `--gas-fee`, and the result states the per-write cost and how many writes the limit buys.
+
+**Spend tracking** deducts the full tx `GasFee` (not `GasUsed`) from the local spend balance, matching the chain's session accounting, and persists it. Broadcasts right-size that fee: every write (agent- and session-signed) dry-runs at a high estimate ceiling, reserves `GasWanted = measured × 1.5` (floored at `DefaultGasWanted`), and prices the fee for the gas actually reserved — so a light write's fee, and its session spend, scale with the write's own gas, not the heaviest tx's headroom. Every session-signed write additionally pre-checks its outflow (GasFee + declared msg spend) against the on-chain remaining limit client-side — the chain's own `auth.CheckSessionSpend` fed the ante's Phase 2a total — so an over-limit write fails before broadcast with actionable numbers instead of the chain's terse `session not allowed error`. Simulations offer the same live-priced fee as broadcasts, keeping simulate an honest predictor of the spend check.
 
 **Persistence and reconciliation.** Session keys live one file per session at `~/.local/share/gnomcp/sessions/<profile>/<session_addr>.key` (mode `0600`; same opt-in encryption as agent keys). On startup gnomcp hydrates sessions from disk and reconciles against the chain. A transient query failure never deactivates a session — the chain client returns a sentinel (`ErrSessionQueryUnsupported`) and local state stays authoritative until a definitive answer arrives.
 

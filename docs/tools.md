@@ -97,12 +97,13 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Args:** `profile` (required), `allow_paths?[]`, `allow_run?`, `spend_limit?`, `expires_in?`, `master_address?`
 - **Returns:** a paste-ready `gnokey maketx session create` command the user runs to authorize a chain-bound session.
 - Generates an ephemeral ed25519 keypair locally. The user's `gnokey` signs the session; gnomcp never sees the user's key. At least one of `allow_paths` (non-empty) or `allow_run=true` must be requested.
+- The chain counts each write's **full offered gas fee** against the session spend limit, so the proposal is fee-aware: gnomcp queries the live gas price first; a `spend_limit` (or profile default) below one write's fee is rejected with the minimum to use; when omitted, the limit defaults to ~10 writes at the live fee (clamped to the per-chain cap); the emitted command carries the live `--gas-fee`; and the result spells out the per-write cost math in the text AND as structured fields (`per_write_fee_ugnot`, `writes_budget`) so structured-output clients see it too. The math is priced at the floor gas limit — a light-write upper bound: writes heavy enough to right-size above the floor cost proportionally more, and every write is re-checked against the remaining limit before broadcast.
 - On a writable profile with no configured `master-address`, pass `master_address` — the user's PUBLIC g1… address — so the session can act as them, with no `profiles.toml` edit. It is public data, never a private key or seed phrase; seed-phrase-shaped input is rejected without being echoed.
 
 ### `gno_session_revoke`
 
 - **Args:** `profile` (required), `session_address` (required)
-- **Returns:** a paste-ready `gnokey maketx session revoke` command the user runs to revoke a managed session. Use `gno_auth_status` to list session addresses.
+- **Returns:** a paste-ready `gnokey maketx session revoke` command the user runs to revoke a managed session. Use `gno_auth_status` to list session addresses. The command carries the live `--gas-fee`; if the gas-price query fails, it falls back to the floor with a note rather than blocking revocation.
 
 ### `gno_auth_status`
 

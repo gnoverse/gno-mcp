@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
@@ -39,7 +40,8 @@ func TestSmoke_docCounter(t *testing.T) {
 }
 
 // TestSmoke_sessionPropose_returnsValidCommand is already offline: it exercises
-// the session-propose tool's command-generation logic without hitting a network.
+// the session-propose tool's command-generation logic without hitting a network
+// (the live gas-fee query is satisfied by a chain.Fake).
 func TestSmoke_sessionPropose_returnsValidCommand(t *testing.T) {
 	cfg := &profiles.Config{
 		Profiles: map[string]profiles.Profile{
@@ -55,7 +57,7 @@ func TestSmoke_sessionPropose_returnsValidCommand(t *testing.T) {
 
 	s := server.NewServer(cfg, "")
 	sessionMgr := session.NewManager(t.TempDir(), "")
-	writetools.RegisterSessionPropose(s, sessionMgr)
+	writetools.RegisterSessionPropose(s, sessionMgr, func(string) chain.Client { return chain.NewFake() })
 
 	tool, ok := s.Registry().Get("gno_session_propose")
 	require.True(t, ok, "gno_session_propose not registered")

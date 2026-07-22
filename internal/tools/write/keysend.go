@@ -148,6 +148,9 @@ func keySendHandler(ctx context.Context, args map[string]any, s *server.Server, 
 	gkCmd := chain.GnokeyCmd{
 		Sub: "send", To: toAddr, Send: fmt.Sprintf("%dugnot", amount),
 		RPC: profile.RPCURL, ChainID: profile.ChainID, Signer: fromAddr,
+		// GasWanted stays zero → the echoed command falls back to
+		// DefaultGasWanted, which is load-bearing: chain.Real.Send is fixed at
+		// the floor gas limit (a bank send never right-sizes).
 		GasFeeUgnot: res.GasFeeUgnot,
 	}.String()
 	return attachGnokeyCmd(server.Result{

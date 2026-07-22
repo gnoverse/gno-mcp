@@ -12,7 +12,8 @@ import (
 // key lives in gnomcp's keystore (~/.gnomcp/keys/), not gnokey's, so the
 // command won't sign as-is; it is for understanding and display. The -gas-fee
 // mirrors the fee gnomcp offered (GasFeeUgnot; the chain's live price, floored
-// at DefaultGasFeeUgnot), and -gas-wanted is DefaultGasWanted.
+// at DefaultGasFeeUgnot), and -gas-wanted mirrors the gas limit gnomcp offered
+// (GasWanted; right-sized from the dry-run, default DefaultGasWanted).
 //
 // The string names no skill or MCP detail beyond the gnokey CLI itself, so it
 // is meaningful to any consumer of a write result, with or without the gno
@@ -35,6 +36,11 @@ type GnokeyCmd struct {
 	// GasFeeUgnot is the -gas-fee the echoed command shows; it should match the
 	// fee gnomcp offered (the chain's live price). Zero falls back to the floor.
 	GasFeeUgnot int64
+
+	// GasWanted is the -gas-wanted the echoed command shows; it should match the
+	// gas limit gnomcp offered (right-sized from the dry-run). Zero falls back to
+	// DefaultGasWanted.
+	GasWanted int64
 }
 
 // String renders the equivalent gnokey command on a single line.
@@ -69,9 +75,13 @@ func (g GnokeyCmd) String() string {
 	if gasFee == 0 {
 		gasFee = DefaultGasFeeUgnot
 	}
+	gasWanted := g.GasWanted
+	if gasWanted == 0 {
+		gasWanted = DefaultGasWanted
+	}
 	parts = append(parts,
 		"-gas-fee", fmt.Sprintf("%dugnot", gasFee),
-		"-gas-wanted", fmt.Sprintf("%d", DefaultGasWanted),
+		"-gas-wanted", fmt.Sprintf("%d", gasWanted),
 		"-remote", g.RPC,
 		"-chainid", g.ChainID,
 	)

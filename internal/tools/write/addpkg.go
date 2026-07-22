@@ -234,7 +234,7 @@ func addpkgHandler(
 		Sub: "addpkg", PkgPath: deployPath,
 		MaxDeposit: fmt.Sprintf("%dugnot", chain.DefaultMaxDepositUgnot),
 		RPC:        p.RPCURL, ChainID: p.ChainID, Signer: addr, Simulate: simulate,
-		GasFeeUgnot: res.GasFeeUgnot,
+		GasFeeUgnot: res.GasFeeUgnot, GasWanted: res.GasWanted,
 	}.String()
 	sc := map[string]any{
 		"identity":       "agent",

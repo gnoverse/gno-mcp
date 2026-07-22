@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
 )
 
 // RegisterSessionRevoke registers the gno_session_revoke tool.
 // sessionMgr is queried to look up gnomcp-managed sessions; only sessions
-// tracked by the manager can be revoked through this tool.
-func RegisterSessionRevoke(s *server.Server, sessionMgr *session.Manager) {
+// tracked by the manager can be revoked through this tool. resolver supplies
+// the profile's chain client so the emitted command carries the live
+// --gas-fee; a fee-query failure falls back to the floor rather than
+// blocking revocation.
+func RegisterSessionRevoke(s *server.Server, sessionMgr *session.Manager, resolver chain.Resolver) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_session_revoke",
 		Description: "Emits the gnokey command the user must run to revoke a gnomcp-managed " +
@@ -31,7 +35,7 @@ func RegisterSessionRevoke(s *server.Server, sessionMgr *session.Manager) {
 			OpenWorld:   false,
 		},
 		Handler: func(ctx context.Context, args map[string]any) (server.Result, error) {
-			return sessionRevokeHandler(ctx, args, s, sessionMgr)
+			return sessionRevokeHandler(ctx, args, s, sessionMgr, resolver)
 		},
 	})
 }
@@ -41,6 +45,7 @@ func sessionRevokeHandler(
 	args map[string]any,
 	s *server.Server,
 	sessionMgr *session.Manager,
+	resolver chain.Resolver,
 ) (server.Result, error) {
 	profileName, profile, err := requireProfile(args, s)
 	if err != nil {
@@ -82,13 +87,26 @@ func sessionRevokeHandler(
 		}
 	}
 
-	cmd := session.FormatGnokeyRevokeCommand(&profile, meta.SessionPubkey)
+	// Unlike propose, a fee-query failure must not block revocation — it
+	// kills a live credential. Fall back to the floor fee and say so.
+	var feeUgnot int64
+	var feeNote string
+	if c := resolver(profileName); c != nil {
+		if fee, ferr := c.GasFeeUgnot(ctx); ferr == nil {
+			feeUgnot = fee
+		} else {
+			feeNote = "NOTE: could not query the live gas price; --gas-fee shows the floor — if the chain rejects the command with an insufficient-fee error, raise --gas-fee and rerun.\n\n"
+		}
+	}
+
+	cmd := session.FormatGnokeyRevokeCommand(&profile, meta.SessionPubkey, feeUgnot)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Session revoke command for profile %q.\n\n", profileName)
 	fmt.Fprintf(&b, "Session address: %s\n", sessionAddr)
 	fmt.Fprintf(&b, "\nTo revoke, run this in a terminal where your master key is available:\n\n")
 	fmt.Fprintf(&b, "```\n%s\n```\n\n", cmd)
+	b.WriteString(feeNote)
 	fmt.Fprintf(&b,
 		"After running the command, the session key will be invalidated on chain.\n",
 	)

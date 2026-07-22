@@ -15,6 +15,10 @@ func testProfile(chainID string) *profiles.Profile {
 	return &profiles.Profile{ChainID: chainID}
 }
 
+// testFee is a per-write GasFee small enough that the existing scope fixtures
+// stay above the spend-limit-must-cover-a-write guard.
+const testFee int64 = 100
+
 // ---- Layer 1: agent-explicit values win
 
 func TestResolveScope_agentExplicitWins(t *testing.T) {
@@ -24,7 +28,7 @@ func TestResolveScope_agentExplicitWins(t *testing.T) {
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 	}
 	p := testProfile("test5")
-	scope, warns, err := ResolveScope(args, p)
+	scope, warns, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.Empty(t, warns)
 	assert.Equal(t, "500ugnot", scope.SpendLimit)
@@ -41,21 +45,115 @@ func TestResolveScope_profileDefaultsApply(t *testing.T) {
 		DefaultExpiresIn:  "2h",
 	}
 	args := ScopeArgs{AllowPaths: []string{"gno.land/r/myorg/blog"}}
-	scope, _, err := ResolveScope(args, p)
+	scope, _, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.Equal(t, "200000ugnot", scope.SpendLimit)
 	assert.Equal(t, 2*time.Hour, scope.ExpiresIn)
 }
 
-// ---- Layer 3: hardcoded fallback when profile and agent both omit values
+// ---- Layer 3: fee-derived fallback when profile and agent both omit values
 
-func TestResolveScope_hardcodedFallback(t *testing.T) {
+func TestResolveScope_feeDerivedDefault(t *testing.T) {
+	// No agent value, no profile default: the spend limit derives from the
+	// live per-write fee (10 writes' worth), so a default session is never
+	// dead on arrival on a chain with a high gas price.
 	p := testProfile("test5")
 	args := ScopeArgs{AllowPaths: []string{"gno.land/r/myorg/blog"}}
-	scope, _, err := ResolveScope(args, p)
+	scope, warns, err := ResolveScope(args, p, 4_000_000)
 	require.NoError(t, err)
-	assert.Equal(t, "100000000ugnot", scope.SpendLimit)
+	assert.Empty(t, warns)
+	assert.Equal(t, "40000000ugnot", scope.SpendLimit)
 	assert.Equal(t, time.Hour, scope.ExpiresIn)
+}
+
+func TestResolveScope_feeDerivedDefaultCappedByHardLimit(t *testing.T) {
+	// 10×fee exceeds the testnet cap of 100000000ugnot: the derived default
+	// caps silently — no "requested ... exceeds cap" warning for a value the
+	// agent never requested.
+	p := testProfile("test5")
+	args := ScopeArgs{AllowPaths: []string{"gno.land/r/myorg/blog"}}
+	scope, warns, err := ResolveScope(args, p, 15_000_000)
+	require.NoError(t, err)
+	assert.Empty(t, warns)
+	assert.Equal(t, "100000000ugnot", scope.SpendLimit)
+}
+
+// ---- Guard: the effective spend limit must cover one write's GasFee
+
+func TestResolveScope_explicitSpendLimitBelowFeeErrors(t *testing.T) {
+	p := testProfile("test5")
+	args := ScopeArgs{
+		SpendLimit: "1000000ugnot",
+		AllowPaths: []string{"gno.land/r/myorg/blog"},
+	}
+	_, _, err := ResolveScope(args, p, 4_000_000)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "1000000ugnot", "error should name the offending limit")
+	assert.Contains(t, err.Error(), "4000000", "error should name the per-write fee")
+}
+
+func TestResolveScope_profileDefaultBelowFeeErrors(t *testing.T) {
+	p := &profiles.Profile{DefaultSpendLimit: "200000ugnot"}
+	args := ScopeArgs{AllowPaths: []string{"gno.land/r/myorg/blog"}}
+	_, _, err := ResolveScope(args, p, 4_000_000)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "200000ugnot")
+	assert.Contains(t, err.Error(), "4000000")
+}
+
+func TestResolveScope_bypassStillGuardsFee(t *testing.T) {
+	// BypassHardLimits skips policy clamps, not the DOA guard: a session that
+	// cannot pay a single write's fee is useless on any profile.
+	p := &profiles.Profile{BypassHardLimits: true}
+	args := ScopeArgs{
+		SpendLimit: "999ugnot",
+		AllowPaths: []string{"gno.land/r/myorg/blog"},
+	}
+	_, _, err := ResolveScope(args, p, 4_000_000)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "999ugnot")
+}
+
+func TestResolveScope_nonUgnotSpendLimitErrors(t *testing.T) {
+	// Gas fees are billed in ugnot; a spend limit in another denom can never
+	// cover them, so the session would be rejected by the chain's ante on its
+	// first write. Only the BypassHardLimits path can reach the guard with a
+	// non-ugnot denom (clamping errors on it first otherwise).
+	p := &profiles.Profile{BypassHardLimits: true}
+	args := ScopeArgs{
+		SpendLimit: "5000000foo",
+		AllowPaths: []string{"gno.land/r/myorg/blog"},
+	}
+	_, _, err := ResolveScope(args, p, 100)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ugnot")
+}
+
+// ---- WritesAtFee: the "how many writes does this limit buy" math
+
+func TestScope_WritesAtFee(t *testing.T) {
+	cases := map[string]struct {
+		limit  string
+		fee    int64
+		want   int64
+		wantOK bool
+	}{
+		"exact multiple":  {limit: "40000000ugnot", fee: 4_000_000, want: 10, wantOK: true},
+		"rounds down":     {limit: "9000000ugnot", fee: 4_000_000, want: 2, wantOK: true},
+		"below fee":       {limit: "1000000ugnot", fee: 4_000_000, want: 0, wantOK: true},
+		"zero fee":        {limit: "1000000ugnot", fee: 0, wantOK: false},
+		"non-ugnot denom": {limit: "1000000foo", fee: 100, wantOK: false},
+		"malformed limit": {limit: "junk", fee: 100, wantOK: false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, ok := Scope{SpendLimit: tc.limit}.WritesAtFee(tc.fee)
+			require.Equal(t, tc.wantOK, ok)
+			if tc.wantOK {
+				assert.Equal(t, tc.want, got)
+			}
+		})
+	}
 }
 
 // ---- Layer 4: hard-limit clamps
@@ -67,7 +165,7 @@ func TestResolveScope_clampsSpendLimit(t *testing.T) {
 		SpendLimit: "500000000ugnot",
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 	}
-	scope, warns, err := ResolveScope(args, p)
+	scope, warns, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.Equal(t, "100000000ugnot", scope.SpendLimit, "SpendLimit should be clamped")
 	require.NotEmpty(t, warns, "expected a warning for clamped spend_limit")
@@ -82,7 +180,7 @@ func TestResolveScope_clampsExpiresIn(t *testing.T) {
 		ExpiresIn:  "720h",
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 	}
-	scope, warns, err := ResolveScope(args, p)
+	scope, warns, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.Equal(t, 7*24*time.Hour, scope.ExpiresIn, "ExpiresIn should be clamped")
 	assert.Equal(t, 7*24*time.Hour, scope.SpendPeriod, "SpendPeriod should be clamped")
@@ -101,7 +199,7 @@ func TestResolveScope_clampsAllowPathsCount(t *testing.T) {
 		SpendLimit: "100ugnot",
 		AllowPaths: paths,
 	}
-	scope, warns, err := ResolveScope(args, p)
+	scope, warns, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.Len(t, scope.AllowPaths, 10, "AllowPaths count should be clamped to 10")
 	require.NotEmpty(t, warns, "expected a warning for clamped allow_paths")
@@ -119,7 +217,7 @@ func TestResolveScope_bypassSkipsClamps(t *testing.T) {
 		ExpiresIn:  "720h",
 		AllowPaths: []string{"gno.land/r/a", "gno.land/r/b", "gno.land/r/c", "gno.land/r/d"},
 	}
-	scope, warns, err := ResolveScope(args, p)
+	scope, warns, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.Empty(t, warns, "expected no warnings with bypass")
 	assert.Equal(t, "999999ugnot", scope.SpendLimit)
@@ -132,7 +230,7 @@ func TestResolveScope_bypassSkipsClamps(t *testing.T) {
 func TestResolveScope_emptyAllowPathsAndNoRunError(t *testing.T) {
 	p := testProfile("test5")
 	args := ScopeArgs{}
-	_, _, err := ResolveScope(args, p)
+	_, _, err := ResolveScope(args, p, testFee)
 	require.Error(t, err, "expected error for empty allow_paths + allow_run=false")
 	assert.True(t, strings.Contains(err.Error(), "allow_paths") && strings.Contains(err.Error(), "allow_run"),
 		"error should mention allow_paths and allow_run: %v", err)
@@ -143,7 +241,7 @@ func TestResolveScope_emptyAllowPathsAndNoRunError(t *testing.T) {
 func TestResolveScope_allowRunOnlyOK(t *testing.T) {
 	p := testProfile("test5")
 	args := ScopeArgs{AllowRun: true}
-	scope, _, err := ResolveScope(args, p)
+	scope, _, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.True(t, scope.AllowRun, "scope.AllowRun should be true")
 	assert.Empty(t, scope.AllowPaths)
@@ -157,7 +255,7 @@ func TestResolveScope_allowPathsPlusAllowRun(t *testing.T) {
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 		AllowRun:   true,
 	}
-	scope, _, err := ResolveScope(args, p)
+	scope, _, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.True(t, scope.AllowRun, "scope.AllowRun should be true")
 	assert.Len(t, scope.AllowPaths, 1)
@@ -171,7 +269,7 @@ func TestResolveScope_allowPathsOnlyWorks(t *testing.T) {
 		AllowPaths: []string{"gno.land/r/myorg/blog"},
 		AllowRun:   false,
 	}
-	scope, _, err := ResolveScope(args, p)
+	scope, _, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.False(t, scope.AllowRun, "scope.AllowRun should be false")
 	assert.Len(t, scope.AllowPaths, 1)
@@ -189,7 +287,7 @@ func TestResolveScope_rejectsInjectionInAllowPaths(t *testing.T) {
 		"gno.land/r/foo && echo pwned",
 		"gno.land/r/foo ",
 	} {
-		_, _, err := ResolveScope(ScopeArgs{AllowPaths: []string{bad}}, p)
+		_, _, err := ResolveScope(ScopeArgs{AllowPaths: []string{bad}}, p, testFee)
 		require.Error(t, err, "expected rejection of allow_paths %q", bad)
 	}
 }
@@ -201,7 +299,7 @@ func TestResolveScope_rejectsNonRealmAllowPath(t *testing.T) {
 		"not-a-path",
 		"gno.land/r/Foo", // uppercase is not a valid realm name
 	} {
-		_, _, err := ResolveScope(ScopeArgs{AllowPaths: []string{bad}}, p)
+		_, _, err := ResolveScope(ScopeArgs{AllowPaths: []string{bad}}, p, testFee)
 		require.Error(t, err, "expected rejection of non-realm allow_paths %q", bad)
 	}
 }
@@ -217,7 +315,7 @@ func TestResolveScope_rejectsMalformedSpendLimit(t *testing.T) {
 		_, _, err := ResolveScope(ScopeArgs{
 			SpendLimit: "100ugnot; rm -rf /",
 			AllowPaths: []string{"gno.land/r/myorg/blog"},
-		}, prof)
+		}, prof, testFee)
 		require.Error(t, err, "expected rejection of malformed spend_limit (bypass=%v)", prof.BypassHardLimits)
 	}
 }
@@ -232,7 +330,7 @@ func TestResolveScope_nonDevChainIDGetsTestnetLimits(t *testing.T) {
 		paths = append(paths, fmt.Sprintf("gno.land/r/myorg/p%d", i))
 	}
 	args := ScopeArgs{AllowPaths: paths}
-	scope, warns, err := ResolveScope(args, p)
+	scope, warns, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.Len(t, scope.AllowPaths, 10, "AllowPaths count should use testnet fallback cap of 10")
 	assert.NotEmpty(t, warns, "expected a warning for clamped allow_paths")

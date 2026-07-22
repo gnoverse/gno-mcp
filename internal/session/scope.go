@@ -35,10 +35,18 @@ type ScopeArgs struct {
 const (
 	defaultSpendLimit = "100000ugnot"
 	defaultExpiresIn  = time.Hour
+
+	// spendLimitWriteBudget sizes the fee-derived spend-limit default: enough
+	// for this many writes at the chain's current per-write GasFee.
+	spendLimitWriteBudget = 10
 )
 
-// ResolveScope applies the 4-layer scope policy.
-func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, error) {
+// ResolveScope applies the 4-layer scope policy. feeUgnot is the chain's
+// current per-write GasFee (chain.Client.GasFeeUgnot): it derives the spend
+// limit when both the agent and the profile omit one, and gates every
+// effective spend limit at "can afford at least one write". feeUgnot<=0 means
+// the caller has no fee knowledge: legacy defaults apply and the gate is off.
+func ResolveScope(args ScopeArgs, profile *profiles.Profile, feeUgnot int64) (Scope, []string, error) {
 	if len(args.AllowPaths) == 0 && !args.AllowRun {
 		return Scope{}, nil, errors.New(
 			"session: at least one of allow_paths (non-empty, e.g. " +
@@ -58,6 +66,9 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 	}
 
 	spendLimit := profileSpendLimit
+	if profile.DefaultSpendLimit == "" && feeUgnot > 0 {
+		spendLimit = derivedSpendLimit(feeUgnot, profile)
+	}
 	if args.SpendLimit != "" {
 		spendLimit = args.SpendLimit
 	}
@@ -86,6 +97,9 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 	}
 
 	if profile.BypassHardLimits {
+		if err := spendLimitCoversFee(scope.SpendLimit, feeUgnot); err != nil {
+			return Scope{}, nil, err
+		}
 		return scope, nil, nil
 	}
 
@@ -123,7 +137,71 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile) (Scope, []string, e
 		scope.AllowPaths = scope.AllowPaths[:limits.MaxAllowPathsCount]
 	}
 
+	if err := spendLimitCoversFee(scope.SpendLimit, feeUgnot); err != nil {
+		return Scope{}, nil, err
+	}
+
 	return scope, warnings, nil
+}
+
+// WritesAtFee reports how many writes the scope's spend limit affords at the
+// given per-write GasFee (the chain bills the full offered fee against the
+// session spend limit on every write). ok=false when the math is undefined:
+// fee unknown (<=0), a non-ugnot limit, or an unparseable limit.
+func (s Scope) WritesAtFee(feeUgnot int64) (int64, bool) {
+	if feeUgnot <= 0 {
+		return 0, false
+	}
+	mag, denom, err := parseCoins(s.SpendLimit)
+	if err != nil || denom != "ugnot" {
+		return 0, false
+	}
+	return mag / feeUgnot, true
+}
+
+// derivedSpendLimit is the spend-limit default when neither the agent nor the
+// profile supplies one: spendLimitWriteBudget writes at the current per-write
+// fee, capped silently at the profile's hard limit (no clamp warning — the
+// agent never requested this value).
+func derivedSpendLimit(feeUgnot int64, profile *profiles.Profile) string {
+	mag := feeUgnot * spendLimitWriteBudget
+	if !profile.BypassHardLimits {
+		if maxSpend := profile.HardLimits().MaxSpendLimit; maxSpend != "" {
+			if maxMag, maxDenom, err := parseCoins(maxSpend); err == nil && maxDenom == "ugnot" && mag > maxMag {
+				mag = maxMag
+			}
+		}
+	}
+	return fmt.Sprintf("%dugnot", mag)
+}
+
+// spendLimitCoversFee gates the effective spend limit at "can afford at least
+// one write": the chain's ante counts the full offered GasFee against the
+// session spend limit before execution (tm2 auth ante Phase 2a), so a limit
+// below the fee makes every session-signed broadcast fail with "session not
+// allowed" — while simulate, which offers the floor fee, still passes.
+// feeUgnot<=0 means the caller has no fee knowledge; the gate is off.
+func spendLimitCoversFee(spendLimit string, feeUgnot int64) error {
+	if feeUgnot <= 0 {
+		return nil
+	}
+	mag, denom, err := parseCoins(spendLimit)
+	if err != nil {
+		return fmt.Errorf("session: spend_limit %q: %w", spendLimit, err)
+	}
+	if denom != "ugnot" {
+		return fmt.Errorf(
+			"session: spend_limit %q is not in ugnot — gas fees are billed in ugnot, so this session could never pay a write's fee (currently %dugnot per write)",
+			spendLimit, feeUgnot,
+		)
+	}
+	if mag < feeUgnot {
+		return fmt.Errorf(
+			"session: spend_limit %s cannot cover a single write at the current gas price (per-write fee %dugnot) — the chain counts the full gas fee against the session spend limit, so every broadcast would fail with \"session not allowed\"; raise spend_limit to at least %dugnot (the fee of a light write — writes heavy enough to size above the floor gas limit cost proportionally more)",
+			spendLimit, feeUgnot, feeUgnot,
+		)
+	}
+	return nil
 }
 
 // allowPathUnsafe matches any character that must never appear in an allow_paths

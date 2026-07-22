@@ -36,13 +36,18 @@ var ErrSimulateUnsupported = errors.New("chain: simulate not supported by curren
 var ErrSessionQueryUnsupported = errors.New("chain: session query not supported")
 
 // CallResult is the outcome of a vm/MsgCall broadcast (or simulation).
-// GasFeeUgnot is the ugnot GasFee offered on the tx (the chain bills the full
-// offered fee, not GasUsed); the floor for simulations, which pay no fee.
+// GasWanted is the right-sized gas limit the broadcast reserved (measured by
+// a dry-run, margin-scaled, floored at DefaultGasWanted). GasFeeUgnot is the
+// ugnot GasFee offered on the tx, priced for GasWanted (the chain bills the
+// full offered fee, not GasUsed). Simulations report the same GasWanted and
+// fee the broadcast would offer, so a simulation is an honest predictor of
+// the tx's cost — including the ante's session spend pre-check.
 type CallResult struct {
 	TxHash      string
 	Height      int64
 	Result      string
 	GasUsed     int64
+	GasWanted   int64
 	GasFeeUgnot int64
 	Simulated   bool
 }
@@ -53,6 +58,7 @@ type RunResult struct {
 	Height      int64
 	Output      string
 	GasUsed     int64
+	GasWanted   int64
 	GasFeeUgnot int64
 	Simulated   bool
 }
@@ -62,6 +68,7 @@ type AddPackageResult struct {
 	TxHash      string
 	Height      int64
 	GasUsed     int64
+	GasWanted   int64
 	GasFeeUgnot int64
 	Simulated   bool
 }

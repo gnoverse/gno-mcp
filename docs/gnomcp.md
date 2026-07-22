@@ -143,7 +143,7 @@ rpc-url              = "https://rpc.test99.testnets.gno.land:443"
 chain-id             = "test99"
 master-address       = "g1..."       # enables session writes — the agent acting as this user (bech32)
 tx-indexer-url       = "..."         # optional; enables gno_list/gno_history/gno_activity
-default-spend-limit  = "100000ugnot" # optional; per-session default
+default-spend-limit  = "50000000ugnot" # optional; per-session default — must cover at least one write's gas fee at the chain's live gas price, or every propose fails
 default-expires-in   = "1h"          # optional; Go duration string
 faucet-url           = "..."         # optional; faucet page gno_faucet_fund links the user to
 faucet-service-url   = "..."         # optional; automatic faucet service gno_faucet_fund calls
@@ -169,7 +169,7 @@ Writes are signed by one of two identities, chosen per call via the `identity` a
 
 > [!WARNING]
 > The session path is functional end-to-end but **WIP** and will be reworked. Use with
-> caution: authorize with tight `allow_paths`, a low `spend_limit`, and a short
+> caution: authorize with tight `allow_paths`, a low `spend_limit` (at least one write's live gas fee — propose rejects less), and a short
 > `expires_in` — and revoke (`gno_session_revoke`) when you're done.
 
 ```text

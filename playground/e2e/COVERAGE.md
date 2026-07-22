@@ -165,6 +165,7 @@ or chain is unreachable or rate-limits.
 | external.faucet-live | gno_faucet_fund tier-2 against the LIVE test13 agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
 | external.testnet-key-cycle | built-in `testnet` profile end to end on the live network: generate agent key → faucet fund → balance | 13 | covered |
 | external.cla-sign | agent signs the live test13 CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | covered |
+| external.session-spend | session flow against LIVE test13 gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, and the chain's spend_used tracks the right-sized fee | 15 | covered |
 
 ## Known harness constraints (not feature gaps)
 

@@ -7,14 +7,18 @@ import (
 
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 
+	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
 )
 
 // RegisterSessionPropose registers the gno_session_propose tool.
 // sessionMgr holds pending session state; it is shared with the write
-// tools so they can pick up activated sessions on the next call.
-func RegisterSessionPropose(s *server.Server, sessionMgr *session.Manager) {
+// tools so they can pick up activated sessions on the next call. resolver
+// supplies the profile's chain client: propose queries the live per-write
+// gas fee to size the default spend limit and refuse limits no write could
+// ever fit under.
+func RegisterSessionPropose(s *server.Server, sessionMgr *session.Manager, resolver chain.Resolver) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_session_propose",
 		Description: "Proposes a new chain-bounded session for the given profile by generating " +
@@ -24,11 +28,13 @@ func RegisterSessionPropose(s *server.Server, sessionMgr *session.Manager) {
 			"(allow_run) ONLY — gno_addpkg/deploy is not session-authorizable and always signs with " +
 			"the agent key, so deploying under the user's own address means the user runs gnokey. " +
 			"Returns the proposed scope, the bech32 session " +
-			"address, and a copy-paste-ready gnokey command. Does NOT broadcast anything — the " +
-			"user's gnokey signs the MsgCreateSession from their own machine. Required: profile, " +
-			"plus at least one of allow_paths (non-empty array of realm paths) or allow_run=true. " +
-			"Optional: spend_limit (string like \"1000000ugnot\"), expires_in (Go duration string " +
-			"like \"24h\").",
+			"address, a copy-paste-ready gnokey command, and the per-write cost math (the chain " +
+			"counts the full gas fee of every write against the spend limit). Does NOT broadcast " +
+			"anything — the user's gnokey signs the MsgCreateSession from their own machine. " +
+			"Required: profile, plus at least one of allow_paths (non-empty array of realm paths) " +
+			"or allow_run=true. Optional: spend_limit (string like \"50000000ugnot\"; must cover " +
+			"at least one write's gas fee at the chain's live gas price, else the proposal is " +
+			"rejected with the minimum to use), expires_in (Go duration string like \"24h\").",
 		InputSchema: sessionProposeInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWritePrep,
@@ -39,7 +45,7 @@ func RegisterSessionPropose(s *server.Server, sessionMgr *session.Manager) {
 			OpenWorld:   false,
 		},
 		Handler: func(ctx context.Context, args map[string]any) (server.Result, error) {
-			return sessionProposeHandler(ctx, args, s, sessionMgr)
+			return sessionProposeHandler(ctx, args, s, sessionMgr, resolver)
 		},
 	})
 }
@@ -49,6 +55,7 @@ func sessionProposeHandler(
 	args map[string]any,
 	s *server.Server,
 	sessionMgr *session.Manager,
+	resolver chain.Resolver,
 ) (server.Result, error) {
 	profileName, profile, err := requireProfile(args, s)
 	if err != nil {
@@ -105,13 +112,26 @@ func sessionProposeHandler(
 		}
 	}
 
+	// The live per-write fee shapes the whole proposal: the chain's ante
+	// counts the full offered GasFee against the session spend limit, so a
+	// limit below it can never broadcast. Fail closed when the fee is
+	// unknown — proposing blind could mint a dead-on-arrival session.
+	c := resolver(profileName)
+	if c == nil {
+		return server.Result{}, fmt.Errorf("gno_session_propose: no chain client for profile %q", profileName)
+	}
+	feeUgnot, err := c.GasFeeUgnot(ctx)
+	if err != nil {
+		return server.Result{}, fmt.Errorf("gno_session_propose: query live gas fee: %w", err)
+	}
+
 	scopeArgs := session.ScopeArgs{
 		AllowPaths: allowPaths,
 		AllowRun:   allowRun,
 		SpendLimit: spendLimit,
 		ExpiresIn:  expiresIn,
 	}
-	scope, warnings, err := session.ResolveScope(scopeArgs, &profile)
+	scope, warnings, err := session.ResolveScope(scopeArgs, &profile, feeUgnot)
 	if err != nil {
 		return server.Result{}, fmt.Errorf("gno_session_propose: resolve scope: %w", err)
 	}
@@ -125,7 +145,7 @@ func sessionProposeHandler(
 		return server.Result{}, fmt.Errorf("gno_session_propose: persist pending session: %w", err)
 	}
 
-	cmd := session.FormatGnokeyCreateCommand(&profile, kp.PubkeyBech32(), scope)
+	cmd := session.FormatGnokeyCreateCommand(&profile, kp.PubkeyBech32(), scope, feeUgnot)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Session proposed for profile %q.\n\n", profileName)
@@ -139,6 +159,12 @@ func sessionProposeHandler(
 		fmt.Fprintf(&b, "  - expires_in: %s\n", scope.ExpiresIn)
 	}
 	fmt.Fprintf(&b, "  - session_address: %s\n", kp.Address())
+	if writes, ok := scope.WritesAtFee(feeUgnot); ok {
+		fmt.Fprintf(&b,
+			"\nSpend math: each write consumes its full offered gas fee — currently %dugnot per light write at this chain's live gas price — from the spend limit, so %s covers ~%d light write(s). Writes heavy enough to size above the floor gas limit cost proportionally more; every write is re-checked against the remaining limit before broadcast.\n",
+			feeUgnot, scope.SpendLimit, writes,
+		)
+	}
 	if len(warnings) > 0 {
 		b.WriteString("\n")
 		for _, w := range warnings {
@@ -152,22 +178,30 @@ func sessionProposeHandler(
 			"session on chain and use it to sign.\n",
 	)
 
-	return server.Result{
-		Text: b.String(),
-		StructuredContent: map[string]any{
-			"state":           "pending",
-			"profile":         profileName,
-			"session_address": kp.Address(),
-			"session_pubkey":  kp.PubkeyBech32(),
-			"scope": map[string]any{
-				"allow_paths": scope.AllowPaths,
-				"allow_run":   scope.AllowRun,
-				"spend_limit": scope.SpendLimit,
-				"expires_in":  scope.ExpiresIn.String(),
-			},
-			"auth_command":   cmd,
-			"clamp_warnings": warnings,
+	sc := map[string]any{
+		"state":           "pending",
+		"profile":         profileName,
+		"session_address": kp.Address(),
+		"session_pubkey":  kp.PubkeyBech32(),
+		"scope": map[string]any{
+			"allow_paths": scope.AllowPaths,
+			"allow_run":   scope.AllowRun,
+			"spend_limit": scope.SpendLimit,
+			"expires_in":  scope.ExpiresIn.String(),
 		},
+		"auth_command":   cmd,
+		"clamp_warnings": warnings,
+		// The spend math must live here as well as in the text: clients that
+		// surface structuredContent never see the Text rendering.
+		"per_write_fee_ugnot": feeUgnot,
+	}
+	if writes, ok := scope.WritesAtFee(feeUgnot); ok {
+		sc["writes_budget"] = writes
+	}
+
+	return server.Result{
+		Text:              b.String(),
+		StructuredContent: sc,
 	}, nil
 }
 
@@ -201,7 +235,7 @@ func sessionProposeInputSchema(s *server.Server) map[string]any {
 		},
 		"spend_limit": map[string]any{
 			"type":        "string",
-			"description": "Maximum spend for this session (e.g. \"1000000ugnot\"). Optional; profile default used if omitted; clamped to the per-chain hard limit.",
+			"description": "Maximum spend for this session (e.g. \"50000000ugnot\"). Every write consumes its full gas fee from this limit, so it must cover at least one write at the chain's live gas price — a lower value is rejected with the minimum to use. Optional; when omitted, sized to ~10 writes at the live fee (or the profile default); clamped to the per-chain hard limit.",
 		},
 		"expires_in": map[string]any{
 			"type":        "string",

@@ -20,8 +20,8 @@ func TestGnokeyCommand_callBroadcast(t *testing.T) {
 		"-pkgpath gno.land/r/demo/counter",
 		"-func Bump",
 		"-args 1",
-		"-gas-fee 200000ugnot",  // the floor fallback (DefaultGasFeeUgnot)
-		"-gas-wanted 200000000", // DefaultGasWanted
+		"-gas-fee 10000ugnot",  // the floor fallback (DefaultGasFeeUgnot)
+		"-gas-wanted 10000000", // DefaultGasWanted
 		"-remote http://localhost:26657",
 		"-chainid dev",
 		"-broadcast g1alice",
@@ -45,8 +45,24 @@ func TestGnokeyCommand_usesOfferedFee(t *testing.T) {
 	if !strings.Contains(got, "-gas-fee 80000ugnot") {
 		t.Errorf("expected the offered fee in -gas-fee\ngot: %s", got)
 	}
-	if strings.Contains(got, "-gas-fee 200000ugnot") {
+	if strings.Contains(got, "-gas-fee 10000ugnot") {
 		t.Errorf("must not fall back to the floor when a fee is set\ngot: %s", got)
+	}
+}
+
+// A set GasWanted is echoed verbatim, so a right-sized heavy tx's displayed
+// command shows the gas limit gnomcp actually offered (e.g. a CLA Sign), not the
+// stale default that would out-of-gas if run.
+func TestGnokeyCommand_usesOfferedGasWanted(t *testing.T) {
+	got := GnokeyCmd{
+		Sub: "call", PkgPath: "gno.land/r/sys/cla", Func: "Sign",
+		RPC: "rpc", ChainID: "dev", Signer: "g1alice", GasWanted: 22_500_000,
+	}.String()
+	if !strings.Contains(got, "-gas-wanted 22500000") {
+		t.Errorf("expected the offered gas-wanted\ngot: %s", got)
+	}
+	if strings.Contains(got, "-gas-wanted 10000000") {
+		t.Errorf("must not fall back to the default when gas-wanted is set\ngot: %s", got)
 	}
 }
 

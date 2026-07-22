@@ -177,7 +177,7 @@ func runHandler(
 	gkCmd := chain.GnokeyCmd{
 		Sub: "run", RPC: profile.RPCURL, ChainID: profile.ChainID,
 		Signer: signerAddr, Master: master, Simulate: simulate,
-		GasFeeUgnot: rr.GasFeeUgnot,
+		GasFeeUgnot: rr.GasFeeUgnot, GasWanted: rr.GasWanted,
 	}.String()
 	return attachGnokeyCmd(
 		decorateWriteResult(buildRunResult(rr, profileName), identity, signerAddr, master, profile.IsLocal()),

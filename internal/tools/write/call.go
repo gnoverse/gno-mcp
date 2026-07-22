@@ -213,7 +213,7 @@ func callHandler(
 		Sub: "call", PkgPath: realm, Func: fn, Args: fnArgs, Send: send,
 		RPC: profile.RPCURL, ChainID: profile.ChainID,
 		Signer: signerAddr, Master: master, Simulate: simulate,
-		GasFeeUgnot: cr.GasFeeUgnot,
+		GasFeeUgnot: cr.GasFeeUgnot, GasWanted: cr.GasWanted,
 	}.String()
 	return attachGnokeyCmd(
 		decorateWriteResult(buildCallResult(cr, realm), identity, signerAddr, master, profile.IsLocal()),
