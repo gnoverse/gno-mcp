@@ -157,6 +157,9 @@ a:focus-visible, button:focus-visible {
 .site-nav a:hover { color: var(--fg); }
 @media (max-width: 860px) { .site-nav { display: none; } }
 .gh-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--mono);
   font-size: .75rem;
   font-weight: 700;
@@ -168,6 +171,7 @@ a:focus-visible, button:focus-visible {
   transition: border-color .15s ease, background .15s ease;
 }
 .gh-link:hover { border-color: var(--fg); }
+.gh-link svg { width: 14px; height: 14px; fill: currentColor; }
 
 /* ---- Eyebrows & headings */
 .eyebrow {
@@ -710,6 +714,10 @@ section + section { border-top: 1px solid var(--border); }
   text-decoration: none;
 }
 .site-footer a:hover { color: var(--frame-fg); text-decoration: underline; text-underline-offset: 3px; }
+.foot-social { display: flex; gap: 18px; }
+.foot-social a { display: inline-flex; color: var(--frame-muted); transition: color .15s ease; }
+.foot-social a:hover { color: var(--frame-fg); }
+.foot-social svg { width: 18px; height: 18px; fill: currentColor; }
 .site-footer .legal {
   font-family: var(--mono);
   font-size: .6875rem;
