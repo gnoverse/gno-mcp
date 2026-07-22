@@ -19,7 +19,7 @@ Everything beyond the [README](../README.md) quickstart: full install steps for 
 
 gnomcp is two parts, and every client needs both: the **binary** (the MCP server — [release archives](https://github.com/gnoverse/gno-mcp/releases/latest) for linux/darwin × amd64/arm64) and the **plugin** (the skills + agents, installed through your client's own plugin manager).
 
-The one-line installer downloads the binary (checksum-verified, into `~/.local/bin`) and sets up every client it finds — Claude Code and Gemini CLI are fully automatic; for Codex and OpenCode it prints the steps to run.
+The one-line installer downloads the binary (checksum-verified, into `~/.local/bin`) and sets up every client it finds — Claude Code and Gemini CLI are fully automatic; Codex gets the MCP server registered automatically plus printed plugin steps; for OpenCode it prints the steps to run.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh
@@ -58,7 +58,20 @@ Restart Claude Code, then check: `claude mcp list` shows `gnomcp … ✔ Connect
 
 ### Codex CLI
 
-Install the plugin via Codex's plugin flow pointing at `.codex-plugin/plugin.json` in this repo, then register the binary (`gnomcp`, no arguments) as a stdio MCP server in your Codex config.
+The installer registers the MCP server for you. By hand, with the binary at `~/.local/bin/gnomcp`:
+
+```bash
+codex mcp add gnomcp -- ~/.local/bin/gnomcp
+```
+
+For the `gno` skill, install the plugin:
+
+```bash
+codex plugin marketplace add gnoverse/gno-mcp
+codex plugin install gnomcp@gnoverse   # newer Codex builds: codex plugin add
+```
+
+The plugin also carries its own MCP registration ([.codex-plugin/mcp.json](../.codex-plugin/mcp.json), which expects `gnomcp` on PATH), so either path gets you the tools.
 
 ### OpenCode
 
@@ -67,6 +80,8 @@ Add the plugin to your `opencode.json` and restart OpenCode — details in [.ope
 ```json
 { "plugin": ["gnomcp@git+https://github.com/gnoverse/gno-mcp.git"] }
 ```
+
+The plugin registers the `gno` skill and, when the binary is on PATH or in `~/.local/bin`, the gnomcp MCP server. For other install locations add an `"mcp"` entry yourself (see INSTALL.md).
 
 ### Gemini CLI
 

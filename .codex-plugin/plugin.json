@@ -20,6 +20,7 @@
     "skills"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.codex-plugin/mcp.json",
   "interface": {
     "displayName": "Gno MCP",
     "shortDescription": "Write, audit, and ship Gno smart contracts with on-chain tools",
