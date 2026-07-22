@@ -285,8 +285,9 @@ func TestSessionPropose_NoMaster(t *testing.T) {
 // The repair instructions must say config is loaded at startup: an agent that
 // edits profiles.toml and retries against the same process gets the same error
 // and has no way to know why.
-// The no-master repair no longer makes the user edit profiles.toml and restart;
-// it offers the master_address param. Guard that the old restart friction is gone.
+// The no-master repair offers the master_address param rather than directing
+// a profiles.toml edit and restart. Guard that no restart friction leaks into
+// the error.
 func TestSessionPropose_NoMaster_offersParamNotRestart(t *testing.T) {
 	s := newReadOnlyTestServer(t)
 	mgr := noSessionMgr(t)
