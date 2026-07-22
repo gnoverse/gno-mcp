@@ -20,7 +20,7 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/keystore"
 )
 
-const testChainID = "test9999"
+const testChainID = "test-9999"
 
 // bootForTestAddr boots a simnet node on a kernel-assigned port and returns a
 // chain client and the raw RPC address. Both bootForTest and the faucet test

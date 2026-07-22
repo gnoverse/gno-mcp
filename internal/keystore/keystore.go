@@ -140,7 +140,7 @@ func (k *Keystore) SignerForProfile(profileName, keyName string, p profiles.Prof
 	if err := requireValidProfileName(profileName); err != nil {
 		return nil, err
 	}
-	if !profiles.ChainIDWritable(p.ChainID) {
+	if p.IsReadOnly() {
 		return nil, fmt.Errorf("keystore: chain-id %q is read-only — read-only chains have no agent key", p.ChainID)
 	}
 	if p.IsLocal() {
@@ -188,7 +188,7 @@ func (k *Keystore) ListKeys(profileName string, p profiles.Profile) ([]KeyInfo, 
 	if err := requireValidProfileName(profileName); err != nil {
 		return nil, err
 	}
-	if !profiles.ChainIDWritable(p.ChainID) {
+	if p.IsReadOnly() {
 		return nil, fmt.Errorf("keystore: chain-id %q is read-only — read-only chains have no agent key", p.ChainID)
 	}
 	if p.IsLocal() {
@@ -242,7 +242,7 @@ func (k *Keystore) GenerateForProfile(profileName, keyName string, p profiles.Pr
 	if err := requireValidProfileName(profileName); err != nil {
 		return "", err
 	}
-	if !profiles.ChainIDWritable(p.ChainID) {
+	if p.IsReadOnly() {
 		return "", fmt.Errorf("keystore: chain-id %q is read-only — read-only chains have no agent key", p.ChainID)
 	}
 	if !p.IsTestnet() {

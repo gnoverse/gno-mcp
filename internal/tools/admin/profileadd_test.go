@@ -61,25 +61,25 @@ func TestProfileAdd_explicitForm(t *testing.T) {
 	s := newAdminServer(t)
 	calls := 0
 	added := 0
-	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-13", &calls), func() error { added++; return nil })
+	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-42", &calls), func() error { added++; return nil })
 
 	res, err := callAdd(t, s, map[string]any{
-		"name": "test13", "rpc_url": "https://rpc.example", "chain_id": "test-13",
+		"name": "test42", "rpc_url": "https://rpc.example", "chain_id": "test-42",
 	})
 	require.NoError(t, err)
 
-	p, ok := s.Config().Profiles["test13"]
+	p, ok := s.Config().Profiles["test42"]
 	require.True(t, ok, "profile must be registered")
-	assert.Equal(t, "test-13", p.ChainID)
+	assert.Equal(t, "test-42", p.ChainID)
 	assert.Equal(t, 1, calls, "verifier must run exactly once")
 	assert.Equal(t, 1, added, "onAdded must run exactly once")
 
 	require.NotNil(t, res.StructuredContent)
-	assert.Equal(t, "test13", res.StructuredContent["name"])
-	assert.Equal(t, "test-13", res.StructuredContent["chain_id"])
+	assert.Equal(t, "test42", res.StructuredContent["name"])
+	assert.Equal(t, "test-42", res.StructuredContent["chain_id"])
 	assert.Equal(t, "explicit", res.StructuredContent["source"])
 	assert.Equal(t, false, res.StructuredContent["persisted"])
-	assert.Contains(t, res.StructuredContent["persist_command"], "gnomcp profile add test13 --rpc https://rpc.example --chain-id test-13")
+	assert.Contains(t, res.StructuredContent["persist_command"], "gnomcp profile add test42 --rpc https://rpc.example --chain-id test-42")
 	assert.Contains(t, res.Text, "restart", "text must say the profile is in-memory until restart")
 }
 
@@ -89,28 +89,28 @@ func TestProfileAdd_explicitForm(t *testing.T) {
 // round-trip assuming the profile is unavailable.
 func TestProfileAdd_resultNudgesImmediateUse(t *testing.T) {
 	s := newAdminServer(t)
-	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-13", nil), func() error { return nil })
+	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-42", nil), func() error { return nil })
 
 	res, err := callAdd(t, s, map[string]any{
-		"name": "test13", "rpc_url": "https://rpc.example", "chain_id": "test-13",
+		"name": "test42", "rpc_url": "https://rpc.example", "chain_id": "test-42",
 	})
 	require.NoError(t, err)
-	assert.Contains(t, res.Text, "profile=test13", "must show how to use it now")
+	assert.Contains(t, res.Text, "profile=test42", "must show how to use it now")
 	assert.Contains(t, res.Text, "re-fetch", "must point at the tool-list refresh for a stale enum")
 }
 
 func TestProfileAdd_explicitForm_optionalURLs(t *testing.T) {
 	s := newAdminServer(t)
-	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-13", nil), func() error { return nil })
+	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-42", nil), func() error { return nil })
 
 	res, err := callAdd(t, s, map[string]any{
-		"name": "test13", "rpc_url": "https://rpc.example", "chain_id": "test-13",
+		"name": "test42", "rpc_url": "https://rpc.example", "chain_id": "test-42",
 		"tx_indexer_url":     "https://idx.example/graphql",
 		"faucet_service_url": "http://127.0.0.1:8590",
 		"faucet_url":         "https://faucet.example",
 	})
 	require.NoError(t, err)
-	p := s.Config().Profiles["test13"]
+	p := s.Config().Profiles["test42"]
 	assert.Equal(t, "https://idx.example/graphql", p.TxIndexerURL)
 	assert.Equal(t, "http://127.0.0.1:8590", p.FaucetServiceURL)
 	assert.Equal(t, "https://faucet.example", p.FaucetURL)
@@ -118,30 +118,30 @@ func TestProfileAdd_explicitForm_optionalURLs(t *testing.T) {
 }
 
 func TestProfileAdd_gnowebForm(t *testing.T) {
-	gw := gnowebServer(t, "https://rpc.test13.testnets.gno.land", "test-13")
+	gw := gnowebServer(t, "https://rpc.test42.testnets.gno.land", "test-42")
 	defer gw.Close()
 
 	s := newAdminServer(t)
-	RegisterProfileAdd(s, gw.Client(), okVerifier("test-13", nil), func() error { return nil })
+	RegisterProfileAdd(s, gw.Client(), okVerifier("test-42", nil), func() error { return nil })
 
 	res, err := callAdd(t, s, map[string]any{"name": "eleven", "gnoweb_url": gw.URL})
 	require.NoError(t, err)
 	p, ok := s.Config().Profiles["eleven"]
 	require.True(t, ok)
-	assert.Equal(t, "test-13", p.ChainID)
-	assert.Equal(t, "https://rpc.test13.testnets.gno.land", p.RPCURL)
+	assert.Equal(t, "test-42", p.ChainID)
+	assert.Equal(t, "https://rpc.test42.testnets.gno.land", p.RPCURL)
 	assert.Equal(t, "gnoweb", res.StructuredContent["source"])
 }
 
 func TestProfileAdd_reAddDynamicNameReplaces(t *testing.T) {
 	s := newAdminServer(t)
-	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-13", nil), func() error { return nil })
+	RegisterProfileAdd(s, http.DefaultClient, okVerifier("test-42", nil), func() error { return nil })
 
-	_, err := callAdd(t, s, map[string]any{"name": "test13", "rpc_url": "https://rpc.one", "chain_id": "test-13"})
+	_, err := callAdd(t, s, map[string]any{"name": "test42", "rpc_url": "https://rpc.one", "chain_id": "test-42"})
 	require.NoError(t, err)
-	_, err = callAdd(t, s, map[string]any{"name": "test13", "rpc_url": "https://rpc.two", "chain_id": "test-13"})
+	_, err = callAdd(t, s, map[string]any{"name": "test42", "rpc_url": "https://rpc.two", "chain_id": "test-42"})
 	require.NoError(t, err, "re-adding a dynamically added profile must be allowed")
-	assert.Equal(t, "https://rpc.two", s.Config().Profiles["test13"].RPCURL)
+	assert.Equal(t, "https://rpc.two", s.Config().Profiles["test42"].RPCURL)
 }
 
 // ---- argument-form validation
@@ -308,18 +308,18 @@ func TestProfileAdd_gnowebWithoutMetaTags(t *testing.T) {
 
 // gnowebRPCUnusable is the loopback guard: a non-loopback gnoweb page
 // advertising a loopback RPC is a misconfigured deployment (observed live on
-// gnoweb.test-13.gnoland.network advertising 127.0.0.1) — and dialing the
+// gnoweb.test-42.gnoland.network advertising 127.0.0.1) — and dialing the
 // agent's own localhost on a remote page's say-so is not acceptable.
 func TestGnowebRPCUnusable(t *testing.T) {
 	cases := []struct {
 		gnoweb, rpc string
 		want        bool
 	}{
-		{"https://gnoweb.test-13.gnoland.network/", "http://127.0.0.1:26657", true},
-		{"https://gnoweb.test-13.gnoland.network/", "http://localhost:26657", true},
-		{"https://gnoweb.test-13.gnoland.network/", "http://[::1]:26657", true},
-		{"https://gnoweb.test-13.gnoland.network/", "http://0.0.0.0:26657", true},
-		{"https://gnoweb.test-13.gnoland.network/", "https://rpc.test-13-aeddi-1.gnoland.network", false},
+		{"https://gnoweb.test-42.gnoland.network/", "http://127.0.0.1:26657", true},
+		{"https://gnoweb.test-42.gnoland.network/", "http://localhost:26657", true},
+		{"https://gnoweb.test-42.gnoland.network/", "http://[::1]:26657", true},
+		{"https://gnoweb.test-42.gnoland.network/", "http://0.0.0.0:26657", true},
+		{"https://gnoweb.test-42.gnoland.network/", "https://rpc.test-42-aeddi-1.gnoland.network", false},
 		{"http://127.0.0.1:8888/", "http://127.0.0.1:26657", false}, // local gnodev: loopback gnoweb may advertise loopback rpc
 		{"http://localhost:8888/", "http://127.0.0.1:26657", false},
 	}

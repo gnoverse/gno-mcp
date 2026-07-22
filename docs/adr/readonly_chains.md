@@ -12,12 +12,12 @@ That allowlist did double duty — it gated *write capability* and it *admitted*
 
 **Chain-id decides capability, not admission.** The single allowlist splits in two:
 
-- `ChainIDWritable(id)` — `^(dev|test-?\d+)$`. Write-capable: agent key path, faucet, sessions, `master-address`, and presence in every write tool's `profile` enum.
+- `ChainIDWritable(id)` — `dev`, or an id starting with a known testnet name (the release-time `testnetChainNames` list: `test`, `topaz`; bare or hyphenated — `test5`, `test-13`, `topaz-1`). Codenamed testnets cannot be recognized by a `test<N>` pattern, so the gate is a name list, not a regex. Write-capable: agent key path, faucet, sessions, `master-address`, and presence in every write tool's `profile` enum.
 - `ChainIDValid(id)` — a format-safety gate, `^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$`, ≤64 chars. Any chain-id passing it may enter config. It still refuses whitespace and shell metacharacters, because the chain-id is interpolated into the `gnomcp profile add` / `gnokey` commands the user pastes into a terminal.
 
 A format-safe but non-writable chain-id (betanet `gnoland1`, `staging`, mainnet) is admitted **read-only**: the read tools list it; every write tool excludes it from its `profile` enum; the keystore refuses to derive an agent key for it (defense in depth); no faucet; and `master-address` on a read-only chain is a config error. **No code path signs for a read-only chain.**
 
-**Three-way classification.** `Profile` is now `IsLocal` / `IsTestnet` (a write-capable `testNN`) / `IsReadOnly`, with `Kind()` returning `local | testnet | read-only`.
+**Three-way classification.** `Profile` is now `IsLocal` / `IsTestnet` (a write-capable testnet) / `IsReadOnly`, with `Kind()` returning `local | testnet | read-only`.
 
 **URL-driven resolution.** A gnoweb URL is authoritative for *which* chain. The audit method, the `gno-auditor` agent, and the MCP server instructions require resolving the chain from the URL (`gno_profile_add` with `gnoweb_url=…`) before reading, and reading on-chain source only — never substituting repo/local source for a named deployed realm.
 

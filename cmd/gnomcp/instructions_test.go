@@ -48,13 +48,13 @@ func TestServerInstructions_urlNamesTheChain(t *testing.T) {
 // listed in the initialize-time instructions. The base guidance is kept.
 func TestBuildServerInstructions_listsConfiguredProfiles(t *testing.T) {
 	got := buildServerInstructions(map[string]profiles.Profile{
-		"testnet": {RPCURL: "http://testnet.gnomcp.sim:26687", ChainID: "test9999"},
+		"testnet": {RPCURL: "http://testnet.gnomcp.sim:26687", ChainID: "test-9999"},
 		"local":   {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
 		"mychain": {RPCURL: "https://rpc.example", ChainID: "test5", MasterAddress: "g1abc"},
 	})
 	assert.Contains(t, got, "DISCOVER", "base guidance must still be present")
 	for _, want := range []string{
-		"testnet", "test9999", "http://testnet.gnomcp.sim:26687",
+		"testnet", "test-9999", "http://testnet.gnomcp.sim:26687",
 		"local", "dev", "http://127.0.0.1:26657",
 		"mychain", "test5",
 	} {
@@ -73,11 +73,24 @@ func TestBuildServerInstructions_flagsReadOnlyProfile(t *testing.T) {
 	assert.Contains(t, got, "read tools only")
 }
 
+// A sunset profile is a retiring but still writable chain: the listing must
+// say "sunset" and make clear writes still work, so the agent both steers new
+// work to the current testnet AND deploys to the old one without friction.
+func TestBuildServerInstructions_flagsSunsetProfile(t *testing.T) {
+	got := buildServerInstructions(map[string]profiles.Profile{
+		"test13":  {RPCURL: "https://rpc.old.example", ChainID: "test-13", Sunset: true},
+		"testnet": {RPCURL: "https://rpc.new.example", ChainID: "topaz-1"},
+	})
+	assert.Contains(t, got, "sunset")
+	assert.Contains(t, got, "still fully writable")
+	assert.Contains(t, got, "current testnet")
+}
+
 // The agent needs to know where realms are viewable, so a profile's gnoweb URL
 // is surfaced — that's what it tells the user instead of guessing gno.land.
 func TestBuildServerInstructions_showsGnowebURL(t *testing.T) {
 	got := buildServerInstructions(map[string]profiles.Profile{
-		"testnet": {RPCURL: "http://x:26687", ChainID: "test9999", GnowebURL: "http://localhost:8688"},
+		"testnet": {RPCURL: "http://x:26687", ChainID: "test-9999", GnowebURL: "http://localhost:8688"},
 	})
 	assert.Contains(t, got, "http://localhost:8688")
 }

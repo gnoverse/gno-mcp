@@ -30,7 +30,7 @@ printf '\n' | docker exec -i ${E2E_CONTAINER:-gnomcp-e2e} \
     --allow-paths vm/exec:gno.land/r/test/counter \
     --spend-limit 100000000ugnot --expires-at <unix-ts from output> \
     --gas-fee 10000000ugnot --gas-wanted 10000000 \
-    --remote http://testnet.gnomcp.sim:26687 --chainid test9999 \
+    --remote http://testnet.gnomcp.sim:26687 --chainid test-9999 \
     --insecure-password-stdin --broadcast \
     e2e-master
 ```

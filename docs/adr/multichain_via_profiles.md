@@ -1,10 +1,10 @@
 # Multi-Chain via Profile Arg
 
-**Status: implemented. The chain-id allowlist is superseded *for reads* by [readonly_chains.md](readonly_chains.md): non-`(dev|test-?\d+)` chains are admitted read-only; writes stay confined to dev/testnet.**
+**Status: implemented. The chain-id allowlist is superseded *for reads* by [readonly_chains.md](readonly_chains.md): chains outside the writable set (dev + the testnet name list) are admitted read-only; writes stay confined to dev/testnet.**
 
 ## Context
 
-A gno developer works across multiple chains: a local devnet (`gnodev`), the current public testnet (`test-13` at time of writing; successor testnets reset on a regular cadence), and occasionally other test deployments. The MCP server must support all of these without forcing the user to install or configure separate MCP instances per chain.
+A gno developer works across multiple chains: a local devnet (`gnodev`), the current public testnet (`topaz-1` at time of writing; successor testnets reset on a regular cadence), and occasionally other test deployments. The MCP server must support all of these without forcing the user to install or configure separate MCP instances per chain.
 
 The threat model treats mainnet as out of scope entirely: an LLM-driven signer must not be able to reach a chain holding real funds, by construction rather than by ceremony.
 
@@ -14,23 +14,24 @@ gnomcp runs as a single binary with a single instance, loading multiple chain pr
 
 > **Superseded for read tools.** Read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_packages`, `gno_account`, `gno_status`) now declare `profile` as a **free-form string**, not an enum (still validated against the loaded set — an unknown name errors cleanly with no chain client). Two reasons the read enum stopped earning its place: (1) once read-only chains became reachable ([readonly_chains.md](readonly_chains.md)), the enum's mainnet-protection rationale (see the rejected free-form alternative below) no longer applies to reads; (2) the enum actively blocked a runtime-added profile — a client caches the tool schema, so a profile added via `gno_profile_add` was rejected against the *stale* cached enum until the schema was refetched, which is not a reliable client action. A wrong read profile errors at call time, so the enum bought no safety reads still needed. **Write tools keep the filtered enum**: there it gates on chain writability, and no read-only chain may be named in a write call.
 
-**Built-in zero-config profiles.** `testnet` (the current public testnet) and `local` (`dev` chain at `http://127.0.0.1:26657`) ship built in. Reads work with no config file; writes work via the agent identity (see the session-authorization ADR).
+**Built-in zero-config profiles.** `testnet` (the current public testnet), its sunset predecessor under its codename (e.g. `test13` — marked `sunset = true`: an advisory label steering new work to the current testnet; the chain stays fully writable while its infra runs), and `local` (`dev` chain at `http://127.0.0.1:26657`) ship built in. Reads work with no config file; writes work via the agent identity (see the session-authorization ADR).
 
-**Chain-id allowlist.** Config validation rejects any profile whose `chain-id` does not match `^(dev|test-?\d+)$`. Betanet, staging, and mainnet ids cannot enter the config; there is no override flag. Locality derives from the chain-id (`dev` = local, `test*` = testnet) — there is no separate `chain-type` field.
+**Chain-id allowlist.** Originally: config validation rejected any profile whose `chain-id` did not match `^(dev|test-?\d+)$`. Betanet, staging, and mainnet ids cannot enter the config; there is no override flag. Locality derives from the chain-id (`dev` = local, recognized testnet name = testnet) — there is no separate `chain-type` field.
 
-> **Superseded in part by [readonly_chains.md](readonly_chains.md).** The allowlist is now a *capability* gate, not an *admission* gate: non-`(dev|test-?\d+)` chain-ids are admitted **read-only** (no agent key, faucet, session, or `master-address`), so deployed source on mainnet/betanet can be audited. A format check on `chain-id` remains, and writes stay confined to dev/testnet.
+> **Superseded in part by [readonly_chains.md](readonly_chains.md).** The allowlist is now a *capability* gate, not an *admission* gate: chain-ids outside the writable set are admitted **read-only** (no agent key, faucet, session, or `master-address`), so deployed source on mainnet/betanet can be audited. A format check on `chain-id` remains, and writes stay confined to dev/testnet. Codenamed testnets (`topaz-1`) also ended the `test<N>` regex: the writable set is now `dev` plus a release-time testnet name list (`test`, `topaz`, … — see readonly_chains.md).
 
 **Profile fields** (`profiles.toml`):
 
 ```toml
 [<profile_name>]
 rpc-url             = "<url>"
-chain-id            = "<id>"          # must match ^(dev|test-?\d+)$
+chain-id            = "<id>"          # writable: dev or a known testnet name (test*, topaz-*); anything else read-only
 master-address      = "g1..."         # optional; enables session writes (bech32 address only)
 tx-indexer-url      = "<url>"         # optional; gates gno_list/gno_history/gno_activity
 default-spend-limit = "<coins>"       # optional; per-session default, clamped to hard limits
 default-expires-in  = "<duration>"    # optional; clamped to hard limits
 bypass-hard-limits  = true | false    # default false; disables the clamp layer
+sunset              = true | false    # default false; advisory: marks a retiring chain — still fully writable, labeled so new work targets the current testnet
 faucet-url          = "<url>"         # optional; faucet page gno_faucet_fund links to
 faucet-service-url  = "<url>"         # optional; automatic faucet service gno_faucet_fund calls
 ```

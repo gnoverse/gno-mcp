@@ -55,13 +55,13 @@ func keyArg(args map[string]any) (string, error) {
 // any writable chain (local/testnet). The master account comes from the
 // profile's master-address, or from a master_address the user supplies at
 // propose time when the profile has none. Read-only chains can't write at all.
-func profileSessionEligible(p profiles.Profile) bool { return profiles.ChainIDWritable(p.ChainID) }
+func profileSessionEligible(p profiles.Profile) bool { return !p.IsReadOnly() }
 
 // profileWritableByAgent reports whether the agent has or can have its own
 // signing key for p: local (test1 key) and testnet (generated key) chains.
 // Read-only chains (mainnet/betanet) have no agent key path, so they are
 // excluded from every write tool's profile enum.
-func profileWritableByAgent(p profiles.Profile) bool { return profiles.ChainIDWritable(p.ChainID) }
+func profileWritableByAgent(p profiles.Profile) bool { return !p.IsReadOnly() }
 
 // addProfileArgFiltered populates props["profile"] with an enum filtered by keep.
 // desc is the human-readable description for the arg.
@@ -73,6 +73,9 @@ func addProfileArgFiltered(s *server.Server, props map[string]any, required *[]s
 		if keep(cfg.Profiles[name]) {
 			enum = append(enum, name)
 		}
+	}
+	if len(enum) > 0 {
+		desc += " Profiles: " + server.ProfileChainList(cfg, enum) + "."
 	}
 	arg := map[string]any{"type": "string", "enum": enum, "description": desc}
 	if ps.Default != "" && keep(cfg.Profiles[ps.Default]) {

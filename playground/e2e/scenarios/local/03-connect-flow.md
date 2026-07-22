@@ -8,7 +8,7 @@ covers: [admin.profile-add-discovery, admin.profile-add-verify, admin.persist-hi
 # B3 connect flow: discover a chain from its gnoweb URL via gno_profile_add
 
 simnet's gnoweb (http://testnet.gnomcp.sim:8688) advertises gnoconnect meta-tags
-(rpc http://testnet.gnomcp.sim:26687, chainid test9999). The pre-configured `testnet`
+(rpc http://testnet.gnomcp.sim:26687, chainid test-9999). The pre-configured `testnet`
 profile points at the same chain — the AUT is asked to connect "a friend's chain" under
 a NEW name, exercising discovery, live chain-id verification, and a read through the
 new profile. Connect + read are ONE step deliberately: dynamic profiles are in-memory
@@ -21,7 +21,7 @@ gnoweb_url (not curl-and-hand-parse), and the read carrying profile=friendchain.
 ### Instruct
 A friend runs their own gno chain — all I have is their gnoweb page: http://testnet.gnomcp.sim:8688 — get me connected to it under the profile name friendchain, and tell me what gno.land/r/test/counter shows over there.
 ### Expect
-- correctness: a profile named friendchain is created (chain-id test9999 reported) AND the counter render value is reported and matches ground truth.
+- correctness: a profile named friendchain is created (chain-id test-9999 reported) AND the counter render value is reported and matches ground truth.
 - tool-selection: gno_profile_add called WITH gnoweb_url (discovery) — curling the page and hand-parsing meta-tags into rpc_url is capability-ignored (this step's point).
 - tool-selection: the render/read call carries profile=friendchain (not the default testnet profile, even though it is the same chain).
 ### Verify

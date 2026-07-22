@@ -56,6 +56,29 @@ func Test_profileWritableByAgent_testnet(t *testing.T) {
 	assert.True(t, profileWritableByAgent(p), "profileWritableByAgent should be true for testnet profiles")
 }
 
+// The profile arg's description carries the live name->chain-id map, so an
+// agent told "deploy on <chain name>" can resolve the profile without an
+// extra lookup.
+func Test_addAgentProfileArg_descriptionMapsNamesToChainIDs(t *testing.T) {
+	s := newMixedTestServer(t)
+	props := map[string]any{}
+	var required []string
+	addAgentProfileArg(s, props, &required)
+
+	arg := props["profile"].(map[string]any)
+	desc := arg["description"].(string)
+	assert.Contains(t, desc, "local (chain dev)", "local mapping missing")
+	assert.Contains(t, desc, "testnet5 (chain test5)", "testnet mapping missing")
+}
+
+// A sunset testnet stays in every write enum: the label is advisory (steer new
+// work to the current testnet) — deploys to a retiring chain must still work.
+func Test_sunsetProfileStaysInWritePaths(t *testing.T) {
+	p := profiles.Profile{RPCURL: "http://127.0.0.1:26657", ChainID: "test5", Sunset: true}
+	assert.True(t, profileWritableByAgent(p), "sunset profile must stay agent-writable")
+	assert.True(t, profileSessionEligible(p), "sunset profile must stay session-eligible")
+}
+
 // The session profile enum lists writable chains (local + testnet) — a profile
 // without a master-address is session-eligible too, taking the master from
 // master_address at propose time.

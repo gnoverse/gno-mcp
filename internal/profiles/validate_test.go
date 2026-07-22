@@ -128,6 +128,21 @@ bypass-hard-limits = true
 	require.NoError(t, err)
 }
 
+// Sunset is advisory: a retiring testnet stays writable, so a master-address
+// on it is a valid configuration (session writes keep working there).
+func TestValidate_acceptsMasterAddressOnSunsetProfile(t *testing.T) {
+	cfg, err := Load(strings.NewReader(`
+[oldnet]
+rpc-url = "https://rpc.old.example:443"
+chain-id = "test-13"
+sunset = true
+master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
+`))
+	require.NoError(t, err)
+	_, err = cfg.Validate()
+	require.NoError(t, err, "master-address on a sunset (still writable) profile must validate")
+}
+
 func TestValidate_rejectsMalformedMasterAddress(t *testing.T) {
 	cfg, err := Load(strings.NewReader(`
 [local]
@@ -166,12 +181,14 @@ chain-id = "dev"
 	require.NoError(t, err, "read-only profile without master-address should validate")
 }
 
-// ChainIDWritable separates write-capable chains (local dev, numbered testnets)
+// ChainIDWritable separates write-capable chains (local dev, known testnets)
 // from everything else. Only these get an agent key path and writable tools.
+// Testnet names match bare and hyphenated forms alike (test5, test-13, topaz-1).
 func TestChainIDWritable(t *testing.T) {
 	cases := map[string]bool{
-		"dev": true, "test5": true, "test-13": true,
+		"dev": true, "test5": true, "test-13": true, "topaz-1": true, "topaz1": true,
 		"gnoland1": false, "staging": false, "mychain": false, "portal-loop": false,
+		"devnet": false,
 	}
 	for id, want := range cases {
 		assert.Equal(t, want, ChainIDWritable(id), "ChainIDWritable(%q)", id)

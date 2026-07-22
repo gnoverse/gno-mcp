@@ -43,7 +43,7 @@ var version = "dev"
 // per-tool descriptions can't express (tool descriptions cover one tool each).
 const serverInstructions = "gnomcp exposes Gno chain operations over MCP. The indexer and faucet tools register only when a profile provides them (tx-indexer-url / a testnet); the rest are always available. Typical flows:\n" +
 	"- IDENTITY: private keys and mnemonics never enter the conversation — that is the design. The agent key signs agent writes; writing AS the user goes through an authorization session the user approves with their own gnokey (gno_session_propose). If a task looks like it needs the user's key, check gno_auth_status and gno_session_propose first; never ask the user to share, paste, or import key material.\n" +
-	"- DISCOVER: when the user names an app or realm without its full path, enumerate the chain — gno_packages (path prefix or @namespace), or gno_list where an indexer is configured — instead of guessing package paths or asking the user for something the chain can answer.\n" +
+	"- DISCOVER: when the user names an app or realm without its full path, enumerate the chain — gno_packages (path prefix or @namespace), or gno_list where an indexer is configured — instead of guessing package paths or asking the user for something the chain can answer. When the user names a CHAIN or network (\"on topaz\", \"on test13\"), gno_profile_list maps profile names to chain-ids and endpoints — the startup list below can be stale after runtime adds.\n" +
 	"- READ: gno_read (default = structural outline; symbols=[...] for specific declarations; full=true for raw source) plus gno_render / gno_eval (rendered output / on-chain values). The outline is navigation, not evidence — audit-grade review reads whole files.\n" +
 	"- WRITE on testnet: gno_key_generate (once) -> gno_faucet_fund (fund the agent key) -> gno_call / gno_run / gno_addpkg. An unfunded write returns insufficient_funds pointing at gno_faucet_fund. A deploy rejected with cla_unsigned needs the chain's CLA signed once per key: gno_cla_info reports the agreement URL and hash — show the URL to the user and get their confirmation first, then gno_cla_sign with that hash.\n" +
 	"- MULTIPLE KEYS (testnet): a profile can hold several named agent keys (key arg on the write tools, default \"default\"; cap GNOMCP_AGENT_MAX_KEYS). gno_key_list shows them, gno_key_delete removes one (replace = delete then generate). To exercise a realm involving multiple addresses, fund one key, then gno_key_send to move ugnot to your own secondary keys and sign calls as each with the key arg. key applies to identity=agent only.\n" +
@@ -78,7 +78,10 @@ func buildServerInstructions(profs map[string]profiles.Profile) string {
 		if p.MasterAddress != "" {
 			b.WriteString(" — write-as-user enabled (master-address set)")
 		}
-		if p.IsReadOnly() {
+		switch {
+		case p.Sunset:
+			b.WriteString(" — sunset: retiring chain, still fully writable; prefer the current testnet for new work")
+		case p.IsReadOnly():
 			b.WriteString(" — read-only (read tools only; no agent key, faucet, or writes)")
 		}
 		b.WriteByte('\n')

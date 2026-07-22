@@ -27,9 +27,9 @@ import (
 // to bind.
 const claPkgPath = "gno.land/r/sys/cla"
 
-// Config carries the node half of simnet. ChainID must match the gnomcp
-// profile allowlist (^test-?\d+$ pattern); RPCListen ":0" lets the kernel
-// pick a free port, which is required for concurrent test runs.
+// Config carries the node half of simnet. ChainID must be on gnomcp's
+// writable testnet list (profiles.IsTestnetChainID); RPCListen ":0" lets the
+// kernel pick a free port, which is required for concurrent test runs.
 type Config struct {
 	RealmsDir string // tree mirroring pkg paths (gno.land/r/test/...), each leaf has gnomod.toml
 	ChainID   string

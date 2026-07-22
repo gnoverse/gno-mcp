@@ -19,10 +19,10 @@ answers grounded in tool output (heights, balances quoted), not invented.
 ### Instruct
 A friend set this whole environment up for me and I don't fully trust it yet. Before I do anything on it — which gno chain is this actually, is the node live, and is it keeping up with new blocks?
 ### Expect
-- correctness: reports chain-id test9999 and a block height; freshness claim consistent with a live node (recent block time), no chain-id mismatch claimed.
+- correctness: reports chain-id test-9999 and a block height; freshness claim consistent with a live node (recent block time), no chain-id mismatch claimed.
 - tool-selection: gno_status in the turn log — not curl to the RPC, not answered from config memory alone.
 ### Verify
-- The chain reports chain-id **test9999** and a height ≥ the AUT's figure (`gnoquery status`).
+- The chain reports chain-id **test-9999** and a height ≥ the AUT's figure (`gnoquery status`).
 
 ## Step 2: what runs on it
 ### Instruct
@@ -44,7 +44,7 @@ My friend said the account g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5 is loaded an
 ### Instruct
 My friend also runs a second chain and gave me this page for it: http://testnet.gnomcp.sim:8688 — what chain is behind that? Just identify it, don't add it or change any of our configuration yet.
 ### Expect
-- correctness: reports chain-id test9999 (and the RPC it advertises).
+- correctness: reports chain-id test-9999 (and the RPC it advertises).
 - tool-selection: gno_connect (preview) — and NO gno_profile_add call (the instruction forbids config changes).
 ### Verify
 - No `gno_profile_add` tool_use anywhere in the step's turn log — the instruction forbade config changes (establish from the transcript schema, not a raw grep; see verify-toolkit.md).

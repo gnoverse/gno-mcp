@@ -18,7 +18,7 @@ simnet -web-listen 0.0.0.0:8688 ${SIMNET_CLA_ARGS:-} ${SIMNET_GRANT:+-grant $SIM
 
 for _ in $(seq 1 50); do
   if curl -sf http://127.0.0.1:26687/status > /dev/null 2>&1; then
-    echo "[playground:sim] simnet up — node :26687, faucet :8590, gnoweb :8688, chain test9999 (logs: /tmp/simnet.log)"
+    echo "[playground:sim] simnet up — node :26687, faucet :8590, gnoweb :8688, chain test-9999 (logs: /tmp/simnet.log)"
     exec /usr/local/bin/entrypoint.sh "$@"
   fi
   sleep 0.2
