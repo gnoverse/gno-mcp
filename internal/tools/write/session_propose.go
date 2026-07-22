@@ -178,22 +178,30 @@ func sessionProposeHandler(
 			"session on chain and use it to sign.\n",
 	)
 
-	return server.Result{
-		Text: b.String(),
-		StructuredContent: map[string]any{
-			"state":           "pending",
-			"profile":         profileName,
-			"session_address": kp.Address(),
-			"session_pubkey":  kp.PubkeyBech32(),
-			"scope": map[string]any{
-				"allow_paths": scope.AllowPaths,
-				"allow_run":   scope.AllowRun,
-				"spend_limit": scope.SpendLimit,
-				"expires_in":  scope.ExpiresIn.String(),
-			},
-			"auth_command":   cmd,
-			"clamp_warnings": warnings,
+	sc := map[string]any{
+		"state":           "pending",
+		"profile":         profileName,
+		"session_address": kp.Address(),
+		"session_pubkey":  kp.PubkeyBech32(),
+		"scope": map[string]any{
+			"allow_paths": scope.AllowPaths,
+			"allow_run":   scope.AllowRun,
+			"spend_limit": scope.SpendLimit,
+			"expires_in":  scope.ExpiresIn.String(),
 		},
+		"auth_command":   cmd,
+		"clamp_warnings": warnings,
+		// The spend math must live here as well as in the text: clients that
+		// surface structuredContent never see the Text rendering.
+		"per_write_fee_ugnot": feeUgnot,
+	}
+	if writes, ok := scope.WritesAtFee(feeUgnot); ok {
+		sc["writes_budget"] = writes
+	}
+
+	return server.Result{
+		Text:              b.String(),
+		StructuredContent: sc,
 	}, nil
 }
 

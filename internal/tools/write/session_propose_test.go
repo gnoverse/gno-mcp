@@ -58,6 +58,11 @@ func TestSessionPropose_defaultSpendLimitDerivedFromFee(t *testing.T) {
 	assert.Equal(t, "40000000ugnot", scope["spend_limit"])
 	assert.Contains(t, res.Text, "4000000ugnot per write")
 	assert.Contains(t, res.Text, "10 write")
+	// The math must reach structured-output consumers too: clients that
+	// surface structuredContent never see the Text (observed live — the AUT
+	// recomputed the budget from the auth_command's --gas-fee).
+	assert.Equal(t, int64(4_000_000), res.StructuredContent["per_write_fee_ugnot"])
+	assert.Equal(t, int64(10), res.StructuredContent["writes_budget"])
 }
 
 func TestSessionPropose_gnokeyCommandUsesLiveFee(t *testing.T) {
