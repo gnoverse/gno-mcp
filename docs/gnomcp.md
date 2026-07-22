@@ -169,7 +169,7 @@ Writes are signed by one of two identities, chosen per call via the `identity` a
 
 > [!WARNING]
 > The session path is functional end-to-end but **WIP** and will be reworked. Use with
-> caution: authorize with tight `allow_paths`, a low `spend_limit`, and a short
+> caution: authorize with tight `allow_paths`, a low `spend_limit` (at least one write's live gas fee — propose rejects less), and a short
 > `expires_in` — and revoke (`gno_session_revoke`) when you're done.
 
 ```text

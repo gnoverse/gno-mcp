@@ -189,8 +189,9 @@ func TestSimnet_claFlow_10gnot(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("FLOW 10 GNOT drip @ min fee — Sign+deploy+bump done, %d ugnot (%.2f GNOT) left of %d",
 		remaining, float64(remaining)/1_000_000, grant)
-	// Three txs at the minimum fee (0.2 GNOT each) plus the deploy's storage
-	// deposit cost well under 2 GNOT total: most of the 10 GNOT grant survives,
-	// where the old 10 GNOT fee drained it on tx one.
+	// Three txs at the floor fee (0.02 GNOT each) plus the deploy's storage
+	// deposit cost well under 2 GNOT total: most of the 10 GNOT grant survives —
+	// the guard this pins, since a fee sized off a flat ceiling drains the
+	// grant in a handful of txs.
 	require.Greater(t, remaining, int64(8_000_000), "the whole flow should cost under 2 GNOT")
 }
