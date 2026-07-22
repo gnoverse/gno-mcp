@@ -1,6 +1,6 @@
 {
   "name": "gnomcp",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "type": "module",
   "main": ".opencode/plugins/gnomcp.js"
 }
