@@ -60,8 +60,7 @@ func TestSessionPropose_defaultSpendLimitDerivedFromFee(t *testing.T) {
 	assert.Contains(t, res.Text, "10 light write")
 	assert.Contains(t, res.Text, "cost proportionally more", "heavy-write caveat")
 	// The math must reach structured-output consumers too: clients that
-	// surface structuredContent never see the Text (observed live — the AUT
-	// recomputed the budget from the auth_command's --gas-fee).
+	// surface structuredContent never see the Text rendering.
 	assert.Equal(t, int64(4_000_000), res.StructuredContent["per_write_fee_ugnot"])
 	assert.Equal(t, int64(10), res.StructuredContent["writes_budget"])
 }

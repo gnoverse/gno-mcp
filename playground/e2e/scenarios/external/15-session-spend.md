@@ -10,9 +10,9 @@ covers: [external.session-spend, session.propose, session.authorize, write.signe
 
 Driver context: the AUT runs `l2-gnomcp` (built-in `testnet` profile → live test-13,
 chain gas price 10ugnot/1000gas at last authoring). This scenario pins the
-fee/spend decoupling on a real network: a **1000000ugnot** spend limit — the exact
-value that used to die with `session not allowed error` when fees were priced off a
-flat 200M gas ceiling — must now fund several session-signed writes.
+fee/spend decoupling on a real network: a **1000000ugnot** spend limit — far too
+small for a fee priced off a flat 200M gas ceiling, ample for fees priced off the
+gas a light write actually reserves — must fund several session-signed writes.
 
 Preflight (driver, before turn 1):
 - Create a throwaway master key in a scratch gnokey home (`gnokey add`), fund it via

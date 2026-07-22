@@ -481,11 +481,12 @@ func isSessionNotFoundErr(err error) bool {
 }
 
 // DefaultGasWanted is the broadcast gas limit for a light write — the floor
-// gasWantedFor never sizes below, so typical txs stay byte-for-byte unchanged.
+// gasWantedFor never sizes below, so typical txs share one stable limit.
 // Heavy txs are measured by a dry-run at gasEstimateCeiling and broadcast
 // right-sized above this; the fee is priced off the gas actually reserved,
-// never off a one-size-fits-all ceiling (which coupled every write's fee —
-// and every session's spend — to the heaviest tx's headroom).
+// never off a one-size-fits-all ceiling — a ceiling-sized fee would couple
+// every write's cost, and every session's spend, to the heaviest tx's
+// headroom.
 const DefaultGasWanted int64 = 10_000_000
 
 // minGasPriceDivisor is gnomcp's assumed minGasPrice floor as gas-per-ugnot:

@@ -41,8 +41,8 @@ const (
 )
 
 // gasWantedFor sizes a broadcast's GasWanted from the gas a dry-run measured:
-// measured × margin, floored at DefaultGasWanted (a light tx keeps the historical
-// limit and stays byte-for-byte unchanged) and capped at gasEstimateCeiling.
+// measured × margin, floored at DefaultGasWanted (light txs share one stable
+// limit) and capped at gasEstimateCeiling.
 func gasWantedFor(measured int64) int64 {
 	want := measured * gasWantedMarginNum / gasWantedMarginDen
 	if want < DefaultGasWanted {

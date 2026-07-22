@@ -7,8 +7,8 @@ import (
 )
 
 // TestGasWantedFor pins the sizing of a broadcast's GasWanted from the gas a
-// dry-run measured: measured + margin, floored at DefaultGasWanted (so a light
-// tx is byte-for-byte unchanged) and capped at the estimate ceiling.
+// dry-run measured: measured + margin, floored at DefaultGasWanted (so light
+// txs share one stable limit) and capped at the estimate ceiling.
 func TestGasWantedFor(t *testing.T) {
 	tests := []struct {
 		name     string
