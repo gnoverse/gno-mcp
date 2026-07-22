@@ -1,0 +1,25 @@
+# Netlify config for the gnomcp promo page (site/).
+# No build step: plain HTML/CSS/JS plus two woff2 fonts.
+# The ignore script skips deploys when nothing under site/ changed,
+# so regular Go commits never trigger a site build.
+
+[build]
+  publish = "site"
+  ignore = 'if [ "$CACHED_COMMIT_REF" = "$COMMIT_REF" ]; then exit 1; else git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- site/ netlify.toml; fi'
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    # Same-origin only; img-src data: covers the inline SVG favicon.
+    Content-Security-Policy = "default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

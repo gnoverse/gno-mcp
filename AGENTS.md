@@ -34,6 +34,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 | `playground/` | agent-e2e harness (driver QAs the containerized AUT) — **load the `playground-driver` skill before working here** (`playground/AGENTS.md`); `test/README.md` maps the test layers |
 | `docs/adr/` | decision records, reconciled to shipped state (status line at top, no `prxxxx_` prefixes) |
 | `skills/` | user-facing skills (product, not contributor guidance): `gno` (reference library + router) + thin side skills (`gno-audit`, `gno-debug`, `gno-onboard`) that only compose `gno/references/` |
+| `site/` | promo landing page (plain HTML/CSS/JS + woff2 fonts, no build step); deployed by Netlify's git integration via root `netlify.toml`, whose `ignore` script skips deploys unless `site/` changed |
 
 ## Conventions
 
