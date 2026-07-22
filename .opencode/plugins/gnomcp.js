@@ -13,12 +13,23 @@
  * description-match) when needed.
  */
 
-import { existsSync } from 'fs';
+import { accessSync, constants, statSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// A directory or non-executable named gnomcp must not shadow a real binary
+// further down the candidate list.
+const isExecutableFile = (candidate) => {
+  try {
+    accessSync(candidate, constants.X_OK);
+    return statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+};
 
 const findGnomcpBinary = () => {
   const candidates = (process.env.PATH || '')
@@ -26,7 +37,7 @@ const findGnomcpBinary = () => {
     .filter(Boolean)
     .map((dir) => path.join(dir, 'gnomcp'));
   candidates.push(path.join(os.homedir(), '.local', 'bin', 'gnomcp'));
-  return candidates.find((candidate) => existsSync(candidate));
+  return candidates.find(isExecutableFile);
 };
 
 export const GnomcpPlugin = async () => {
