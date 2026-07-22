@@ -82,19 +82,20 @@ info "Downloading ${asset} (${VERSION})..."
 fetch "${base}/${asset}" "${tmp}/${asset}"
 fetch "${base}/checksums.txt" "${tmp}/checksums.txt"
 
-if command -v sha256sum >/dev/null 2>&1; then
-  got="$(sha256sum "${tmp}/${asset}" | cut -d' ' -f1)"
-elif command -v shasum >/dev/null 2>&1; then
-  got="$(shasum -a 256 "${tmp}/${asset}" | cut -d' ' -f1)"
-else
-  got=""
-  warn "no sha256sum/shasum found — skipping checksum verification"
-fi
-if [ -n "$got" ]; then
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1"
+  else return 1
+  fi
+}
+if sums="$(sha256_of "${tmp}/${asset}")"; then
+  got="${sums%% *}"
   want="$(grep " ${asset}\$" "${tmp}/checksums.txt" | cut -d' ' -f1)"
   [ -n "$want" ] || die "no checksum for ${asset} in checksums.txt"
   [ "$got" = "$want" ] || die "checksum mismatch for ${asset} (got ${got}, want ${want})"
   info "Checksum OK."
+else
+  warn "could not compute sha256 (no sha256sum/shasum, or the tool failed) — skipping checksum verification"
 fi
 
 # goreleaser archives carry the binary at archive root
@@ -130,13 +131,21 @@ wire_gemini() {
 }
 
 wire_codex() {
-  info "Codex: install the plugin via Codex's plugin flow (manifest: .codex-plugin/plugin.json in"
-  info "  https://github.com/${REPO}), then register ${GNOMCP} as an MCP server in your Codex config."
+  info "Wiring Codex CLI (MCP server)..."
+  codex mcp remove gnomcp >/dev/null 2>&1 || true
+  codex mcp add gnomcp -- "${GNOMCP}" || return 1
+  info "Codex CLI: MCP server registered. For the gno skill, install the plugin:"
+  info "  codex plugin marketplace add ${REPO}"
+  info "  then 'codex plugin install gnomcp@gnoverse' (newer builds: 'codex plugin add')."
 }
 
 wire_opencode() {
-  info "OpenCode: add \"gnomcp@git+https://github.com/${REPO}.git\" to the \"plugin\" array in"
-  info "  your opencode.json, then restart OpenCode. Details: .opencode/INSTALL.md in the repo."
+  info "OpenCode: add the plugin to your opencode.json, then restart OpenCode:"
+  info "  \"plugin\": [\"gnomcp@git+https://github.com/${REPO}.git\"]"
+  info "  The plugin registers the gno skill and, with gnomcp on PATH or in ~/.local/bin,"
+  info "  the MCP server. For other install locations add it yourself:"
+  info "  \"mcp\": { \"gnomcp\": { \"type\": \"local\", \"command\": [\"${GNOMCP}\"], \"enabled\": true } }"
+  info "  Details: .opencode/INSTALL.md in the repo."
 }
 
 if [ -z "$HARNESSES" ]; then
@@ -152,7 +161,7 @@ for h in $HARNESSES; do
   case "$h" in
     claude)   wire_claude   || { warn "Claude Code wiring failed — the binary is installed at ${GNOMCP}"; rc=1; } ;;
     gemini)   wire_gemini   || { warn "Gemini CLI wiring failed — the binary is installed at ${GNOMCP}"; rc=1; } ;;
-    codex)    wire_codex ;;
+    codex)    wire_codex    || { warn "Codex CLI wiring failed — the binary is installed at ${GNOMCP}"; rc=1; } ;;
     opencode) wire_opencode ;;
     none)     ;;
   esac

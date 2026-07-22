@@ -22,7 +22,7 @@
 
 ## Install
 
-One command installs everything — the server **binary** and the **plugin** (skills + agents). It downloads the binary into `~/.local/bin` (verifying the checksum) and wires up the clients it can: Claude Code and Gemini CLI automatically, Codex and OpenCode with printed steps.
+One command installs everything — the server **binary** and the **plugin** (skills + agents). It downloads the binary into `~/.local/bin` (verifying the checksum) and wires up the clients it can: Claude Code, Gemini CLI, and Codex automatically, OpenCode with printed steps.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh
