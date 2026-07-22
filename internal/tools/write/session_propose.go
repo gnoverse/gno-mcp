@@ -161,7 +161,7 @@ func sessionProposeHandler(
 	fmt.Fprintf(&b, "  - session_address: %s\n", kp.Address())
 	if writes, ok := scope.WritesAtFee(feeUgnot); ok {
 		fmt.Fprintf(&b,
-			"\nSpend math: each write consumes the full offered gas fee — currently %dugnot per write at this chain's live gas price — from the spend limit, so %s covers ~%d write(s).\n",
+			"\nSpend math: each write consumes its full offered gas fee — currently %dugnot per light write at this chain's live gas price — from the spend limit, so %s covers ~%d light write(s). Writes heavy enough to size above the floor gas limit cost proportionally more; every write is re-checked against the remaining limit before broadcast.\n",
 			feeUgnot, scope.SpendLimit, writes,
 		)
 	}

@@ -56,8 +56,9 @@ func TestSessionPropose_defaultSpendLimitDerivedFromFee(t *testing.T) {
 	scope, ok := res.StructuredContent["scope"].(map[string]any)
 	require.True(t, ok, "scope in structured content")
 	assert.Equal(t, "40000000ugnot", scope["spend_limit"])
-	assert.Contains(t, res.Text, "4000000ugnot per write")
-	assert.Contains(t, res.Text, "10 write")
+	assert.Contains(t, res.Text, "4000000ugnot per light write")
+	assert.Contains(t, res.Text, "10 light write")
+	assert.Contains(t, res.Text, "cost proportionally more", "heavy-write caveat")
 	// The math must reach structured-output consumers too: clients that
 	// surface structuredContent never see the Text (observed live — the AUT
 	// recomputed the budget from the auth_command's --gas-fee).

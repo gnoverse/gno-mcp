@@ -55,23 +55,26 @@ The effective per-unit price the chain sees is `GasFee / GasWanted`. A tx is adm
 ratio clears the chain's minimum (next section). So the two knobs interact only through their ratio:
 raise `GasWanted` and you must raise `GasFee` to keep the ratio above the floor.
 
-**The floor.** The minimum acceptable fee is `GasWanted × minGasPrice`. On gno testnets the price is
-**1 ugnot per 1000 gas**, so for `GasWanted = 200_000_000` the floor is **200,000 ugnot (0.2 GNOT)** —
-and that is exactly what gnomcp offers (`DefaultGasFeeUgnot = DefaultGasWanted / 1000`). A realm
-call burns ~1–2M gas, a deploy ~5M — all far under the 200M ceiling, so one fixed `(200M, 200_000ugnot)`
-pair covers every ordinary write at the cheapest price the chain will accept.
+**The floor.** The minimum acceptable fee is `GasWanted × minGasPrice`. The genesis price is
+**1 ugnot per 1000 gas** (test13 runs 10/1000), so for `GasWanted = 10_000_000` the genesis floor is
+**10,000 ugnot (0.01 GNOT)**. gnomcp does not offer a fixed pair: every write **dry-runs first at a
+1B-gas measuring ceiling**, then broadcasts at `GasWanted = measured × 1.5` floored at
+`DefaultGasWanted = 10_000_000` (a realm call burns ~1–2M gas, a deploy ~5M — light writes stay on
+the floor; a heavy write sizes itself), and offers a fee priced for that GasWanted at the **live
+chain gas price × 2** (congestion insurance), floored at `DefaultGasFeeUgnot = 10_000ugnot`.
 
-> **The footgun that bit this project:** the old default offered a **10 GNOT** fee on every tx —
-> ~1000× the floor — and since the chain takes the full offered fee, every write silently cost 10
-> GNOT of real balance for ~0.005 GNOT of actual gas. (gnolang/gno #3805 states this from the
-> maintainers: *"`--gas-fee` is the total for the whole tx, deducted in full; overpaying is real
-> money lost."*) Fix: offer the floor, never more.
+> **The footgun:** the chain takes the **full offered fee**, not the gas used — an oversized
+> `--gas-fee` is real money silently lost on every tx, and under a session it drains the spend
+> limit at the same rate. (gnolang/gno #3805, from the maintainers: *"`--gas-fee` is the total for
+> the whole tx, deducted in full; overpaying is real money lost."*) Price the fee for the gas the
+> tx actually reserves — a small live-price margin is fine, a flat ceiling-sized fee is not.
 
 ### Where the price actually lives
 
 `minGasPrice` is **node config** (`min_gas_prices`, grammar `"<amount><denom>/<gas>gas"`, e.g.
 `1ugnot/1000gas`), not a constant in the binary — so a different target chain can set a different
-price, and the 200,000-ugnot floor moves with it. gnomcp mirrors the ratio as `minGasPriceDivisor`
+price, and the floor moves with it (gnomcp queries the live price per write rather than assuming
+the config). gnomcp mirrors the genesis ratio as `minGasPriceDivisor`
 and its comment flags that it must change for a chain with a different `min_gas_prices`. Two price
 gates exist: this static config floor (checked in CheckTx) and an adaptive EIP-1559-style block price
 (skipped when zero, the common testnet case) — on test13 the static floor is the operative one.
@@ -126,7 +129,9 @@ This is how you size `GasWanted` honestly instead of guessing.
   (CLA/namespace) fails at **zero gas** instead of stranding a freshly-funded key.
 
 Best practice (gnokey or gnomcp): **simulate → read `GasUsed` → set `GasWanted` a margin above it →
-set `GasFee = GasWanted × min price`, no higher.**
+price `GasFee` for that `GasWanted` at the live gas price** (a small margin over the minimum — gnomcp
+uses ×2 — insures against a price rise before inclusion; the chain bills the full offered fee, so
+keep margins small). This is exactly what gnomcp's write pipeline does automatically.
 
 ## Flag reference
 
@@ -134,8 +139,8 @@ set `GasFee = GasWanted × min price`, no higher.**
 
 | Flag | Purpose | gnomcp stance |
 |---|---|---|
-| `--gas-wanted` | execution ceiling (gas units); required, no default | pinned `200_000_000` |
-| `--gas-fee` | flat total fee offered (e.g. `10000ugnot`); required | pinned to the floor `200_000ugnot` |
+| `--gas-wanted` | execution ceiling (gas units); required, no default | measured × 1.5, floored at `10_000_000` |
+| `--gas-fee` | flat total fee offered (e.g. `10000ugnot`); required | live price × 2 for the offered gas-wanted, floored at `10_000ugnot` |
 | `--send` | coins attached to the msg (→ realm as `OriginSend`), separate from the fee | user-supplied (`send` arg) |
 | `--max-deposit` | cap on storage deposit locked (empty → 600 GNOT param) | pinned `10_000_000` on addpkg only |
 | `--memo` | free text in the signed tx (≤ 64 KB; costs gas by size) | not set |
@@ -159,7 +164,7 @@ two stores** — they don't see each other's keys.
 
 | Footgun | Right way | Source |
 |---|---|---|
-| Overpaying `--gas-fee` (full fee is taken) | Offer the floor: `GasWanted × min price`, never more | #3805, #5086 |
+| Overpaying `--gas-fee` (full fee is taken) | Price the fee for the actual `GasWanted` at the live price (small margin only) — never a flat ceiling-sized fee | #3805, #5086 |
 | `--gas-fee 1gnot` → "insufficient funds" | Use ugnot: `--gas-fee 10000ugnot` (denominations don't mix in the fee field) | #329 |
 | `--gas-wanted 4000000000` → "invalid gas-wanted" | Keep under block-max-gas (~3B) | #329 |
 | Empty `--send ""` to a payable realm → "payment must not be less than …" | A required deposit must ride in `--send`; empty sends nothing | #329 |
@@ -189,13 +194,15 @@ fallback — see `sysrealms.md`); and **showing** a user the equivalent command 
 
 Any gnomcp write maps mechanically to the `gnokey maketx` command it stands in for — useful to teach
 a user what just happened or to hand them a reproducible line. The pieces all come from the tool call
-plus the profile (rpc, chain-id) and the pinned gas defaults:
+plus the profile (rpc, chain-id) and the gas the write actually offered (measured gas-wanted, live
+fee — every gnomcp write result echoes the real values):
 
 ```
 # gno_call{realm:"gno.land/r/demo/foo", func:"Bump", args:["1"], send:"", key:"alice"}
+# (light call on test13: gas-wanted floors at 10M, fee = 10M × 10ugnot/1000gas × 2)
 gnokey maketx call \
   -pkgpath gno.land/r/demo/foo -func Bump -args 1 \
-  -gas-wanted 200000000 -gas-fee 200000ugnot \
+  -gas-wanted 10000000 -gas-fee 200000ugnot \
   -remote https://rpc.test13.testnets.gno.land:443 -chainid test-13 \
   -broadcast alice
 ```

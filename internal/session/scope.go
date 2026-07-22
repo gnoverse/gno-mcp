@@ -197,7 +197,7 @@ func spendLimitCoversFee(spendLimit string, feeUgnot int64) error {
 	}
 	if mag < feeUgnot {
 		return fmt.Errorf(
-			"session: spend_limit %s cannot cover a single write at the current gas price (per-write fee %dugnot) — the chain counts the full gas fee against the session spend limit, so every broadcast would fail with \"session not allowed\"; raise spend_limit to at least %dugnot",
+			"session: spend_limit %s cannot cover a single write at the current gas price (per-write fee %dugnot) — the chain counts the full gas fee against the session spend limit, so every broadcast would fail with \"session not allowed\"; raise spend_limit to at least %dugnot (the fee of a light write — writes heavy enough to size above the floor gas limit cost proportionally more)",
 			spendLimit, feeUgnot, feeUgnot,
 		)
 	}
