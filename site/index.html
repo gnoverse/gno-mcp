@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="gnomcp connects gno.land to any MCP client - MCP server + agent skill with safety built in.">
+<meta name="description" content="gnomcp puts your AI agent on gno.land: audit contracts before you trust them, get chain questions answered in plain language, and ship real apps from a conversation.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#070e1a">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%230a0a0a%22/%3E%3Ctext x=%2232%22 y=%2246%22 font-size=%2238%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%238ec5b2%22 text-anchor=%22middle%22%3E%E2%9D%AF%3C/text%3E%3C/svg%3E">
@@ -16,8 +16,8 @@
   <div class="container">
     <a class="wordmark" href="#top"><span class="prompt-glyph" aria-hidden="true">❯</span>gnomcp</a>
     <nav class="site-nav" aria-label="Sections">
-      <a href="#pieces">Overview</a>
-      <a href="#workflows">Workflows</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#in-practice">In practice</a>
       <a href="#tools">Tools</a>
       <a href="#security">Security</a>
       <a href="#install">Install</a>
@@ -32,8 +32,8 @@
       <div class="hero-inner">
         <div class="hero-copy">
           <span class="hero-chip">MCP server <b>+</b> agent skill · gno.land</span>
-          <h1>Put your agent on <em>gno.land</em></h1>
-          <p class="hero-sub">gnomcp connects <a href="https://gno.land">gno.land</a> to anything that speaks MCP. Once it's installed you talk to your agent in plain language, and it reads realms, checks accounts, deploys code, and sends transactions on testnet chains.</p>
+          <h1>Read, audit, and build on <em>gno.land</em> with your AI agent</h1>
+          <p class="hero-sub">gnomcp puts your agent on <a href="https://gno.land">gno.land</a>, where every contract is published as readable source. Ask whether a contract is safe, have a vote explained, or turn an idea into a live app.</p>
           <div class="install-line">
             <code id="install-cmd"><span class="dollar">$ </span>curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh</code>
             <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh">Copy</button>
@@ -41,7 +41,7 @@
           <p class="install-note">Pipes a script into your shell. <a href="https://github.com/gnoverse/gno-mcp/blob/main/scripts/install.sh">Read it first ↗</a></p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#install"><span>Get started</span></a>
-            <a class="btn btn-ghost" href="https://github.com/gnoverse/gno-mcp/blob/main/docs/tools.md"><span>Tool catalog ↗</span></a>
+            <a class="btn btn-ghost" href="#tools"><span>Tool catalog</span></a>
           </div>
           <div class="client-row">
             <span class="lead">Works with</span>
@@ -82,18 +82,18 @@
       </div>
 
       <div class="hero-stats">
-        <div class="stat"><span class="stat-n">25</span><span class="stat-l">Tools</span></div>
-        <div class="stat"><span class="stat-n">2</span><span class="stat-l">Chains preconfigured</span></div>
+        <div class="stat"><span class="stat-n">26</span><span class="stat-l">Tools</span></div>
+        <div class="stat"><span class="stat-n">2</span><span class="stat-l">Chains to start on</span></div>
         <div class="stat"><span class="stat-n">1</span><span class="stat-l">Command to install</span></div>
         <div class="stat"><span class="stat-n"><b>0</b></span><span class="stat-l">Of your keys needed</span></div>
       </div>
     </div>
   </div>
 
-  <section id="pieces">
+  <section id="how-it-works">
     <div class="container">
       <div class="section-head reveal">
-        <span class="eyebrow">What it is</span>
+        <span class="eyebrow">How it works</span>
         <h2>One server, one skill</h2>
         <p>Everything on gno.land is readable Go-like source with transparent state, so an agent can read a realm the way it reads any codebase. What was missing was a safe way to let it act. gnomcp adds that part.</p>
       </div>
@@ -112,33 +112,33 @@
     </div>
   </section>
 
-  <section id="workflows">
+  <section id="in-practice">
     <div class="container">
       <div class="section-head reveal">
-        <span class="eyebrow">What you can do</span>
-        <h2>Talk to it in plain language</h2>
-        <p>No tool names to memorize. Describe what you want, and the answers come back grounded in real chain queries, not guesses.</p>
+        <span class="eyebrow">In practice</span>
+        <h2>From a question to a live app</h2>
+        <p>You talk, the agent does the chain work and shows its receipts: quoted code, real transactions, links anyone can check.</p>
       </div>
       <div class="flows reveal">
         <div class="flow">
-          <div class="flow-head"><h3>Explore a chain</h3><span class="skill-tag">built-in</span></div>
-          <blockquote>Which chain is this, is the node live, and what realms exist under gno.land/r/gnoland? Show me what the blog renders.</blockquote>
-          <p>Ask what realms exist, what they render, and what an account holds. Live reads work on any chain, right after install.</p>
-        </div>
-        <div class="flow">
-          <div class="flow-head"><h3>Build &amp; deploy a realm</h3><span class="skill-tag">gno-build</span></div>
-          <blockquote>Deploy a check-in board: anyone can check in, it records their address, and reading it back lists everyone so far. Then check in yourself.</blockquote>
-          <p>The agent writes the realm, tests it locally, does a security pass, funds a key from the faucet, deploys, and calls it to prove it works.</p>
-        </div>
-        <div class="flow">
-          <div class="flow-head"><h3>Audit before you trust</h3><span class="skill-tag">gno-audit</span></div>
+          <h3>Check a contract before you trust it</h3>
           <blockquote>Give me a formal security audit of gno.land/r/gnoland/wugnot before I deposit into it.</blockquote>
-          <p>Read-only, and it works on mainnet too. Findings come back with quoted source and severity, plus an honest note on what it didn't check.</p>
+          <p>The agent audits the code that actually runs, line by line, and reports findings with the lines quoted. On bytecode chains you audit whatever the deployer claims the source is; here the source is the contract itself.</p>
         </div>
         <div class="flow">
-          <div class="flow-head"><h3>Debug a failed transaction</h3><span class="skill-tag">gno-debug</span></div>
-          <blockquote>My transaction failed with insufficient_funds. What happened?</blockquote>
-          <p>Classifies the error, reproduces it cheaply without broadcasting, applies the fix, and re-runs to prove it. It tells you which identity signed each attempt.</p>
+          <h3>Get the chain explained</h3>
+          <blockquote>What is being voted in gno.land/r/gov/dao right now, and what changes if it passes?</blockquote>
+          <p>Governance, balances, realm pages, history: ask in your own words and the answer comes from live chain queries, not from a thread on social media.</p>
+        </div>
+        <div class="flow">
+          <h3>Turn an idea into a live app</h3>
+          <blockquote>Deploy a check-in board: anyone can check in, it records their address, and reading it back lists everyone so far. Then check in yourself.</blockquote>
+          <p>The agent writes the code, tests it, deploys it, and proves it works with a real call. You get a link anyone can open and code anyone can verify. When a transaction fails, it debugs the same way: reproduce, fix, prove.</p>
+        </div>
+        <div class="flow">
+          <h3>Delegate, with a hard cap</h3>
+          <blockquote>From now on act as my account: budget 5 GNOT, only gno.land/r/demo/profile, for two weeks.</blockquote>
+          <p>The chain itself enforces the budget, the paths, and the expiry. No clever prompt can spend past them.</p>
         </div>
       </div>
 
@@ -147,6 +147,7 @@
           <span class="eyebrow">Sessions</span>
           <h3>Act as yourself, safely</h3>
           <p>Want writes under your own address? The agent proposes a scoped session and hands you a <code>gnokey</code> command to sign on your own machine. It never touches your keys. Once approved it writes as you, within the limits you set, and revoking takes one command.</p>
+          <p class="sessions-note"><span class="wip-chip">Pre-release</span><span>Sessions are the newest part of gnomcp and still evolving. Keep scopes tight and spend limits low.</span></p>
         </div>
         <div class="session-steps" role="group" aria-label="Session authorization flow">
           <div class="session-step"><span class="s-n">01</span><span class="s-t"><b>Agent proposes:</b> scoped paths, spend limit, expiry</span></div>
@@ -162,7 +163,7 @@
     <div class="container">
       <div class="section-head reveal">
         <span class="eyebrow">The surface</span>
-        <h2>25 tools, grouped by what they touch</h2>
+        <h2>26 tools, grouped by what they touch</h2>
       </div>
       <div class="tool-rows reveal">
         <div class="tool-row">
@@ -182,7 +183,7 @@
         </div>
         <div class="tool-row">
           <h3>Connect &amp; configure</h3>
-          <p>Discover a chain from its gnoweb URL and add it as an in-session profile.</p>
+          <p>List the configured chains, discover a new one from its gnoweb URL, and add it as an in-session profile.</p>
           <span class="needs">A gnoweb URL</span>
         </div>
         <div class="tool-row">
@@ -191,8 +192,8 @@
           <span class="needs">Your signature for sessions</span>
         </div>
       </div>
-      <div class="tool-strip reveal" role="group" aria-label="All 25 tools">
-        <code>gno_render</code><code>gno_read</code><code>gno_eval</code><code>gno_packages</code><code>gno_account</code><code>gno_status</code><code>gno_connect</code><code>gno_profile_add</code><code>gno_list</code><code>gno_history</code><code>gno_activity</code><code>gno_session_propose</code><code>gno_session_revoke</code><code>gno_auth_status</code><code>gno_call</code><code>gno_run</code><code>gno_addpkg</code><code>gno_cla_info</code><code>gno_cla_sign</code><code>gno_key_address</code><code>gno_key_list</code><code>gno_key_generate</code><code>gno_key_delete</code><code>gno_key_send</code><code>gno_faucet_fund</code>
+      <div class="tool-strip reveal" role="group" aria-label="All 26 tools">
+        <code>gno_render</code><code>gno_read</code><code>gno_eval</code><code>gno_packages</code><code>gno_account</code><code>gno_status</code><code>gno_profile_list</code><code>gno_connect</code><code>gno_profile_add</code><code>gno_list</code><code>gno_history</code><code>gno_activity</code><code>gno_session_propose</code><code>gno_session_revoke</code><code>gno_auth_status</code><code>gno_call</code><code>gno_run</code><code>gno_addpkg</code><code>gno_cla_info</code><code>gno_cla_sign</code><code>gno_key_address</code><code>gno_key_list</code><code>gno_key_generate</code><code>gno_key_delete</code><code>gno_key_send</code><code>gno_faucet_fund</code>
       </div>
       <p class="tool-strip-note reveal">Full catalog with arguments and return shapes → <a href="https://github.com/gnoverse/gno-mcp/blob/main/docs/tools.md">docs/tools.md</a></p>
     </div>
@@ -207,7 +208,7 @@
       </div>
       <div class="inv-grid reveal">
         <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Your keys stay in gnokey</h3><p>The agent signs with its own key. Acting as you goes through an authorization you sign yourself.</p></div></div>
-        <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>No signing on real-funds chains</h3><p>The mainnet write path does not exist in the code. Mainnet and betanet stay read-only.</p></div></div>
+        <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>No signing on real-funds chains</h3><p>A write path for real-funds chains does not exist in the code. Writes stay on dev and testnet chains.</p></div></div>
         <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Chain output is data, not instructions</h3><p>Everything read from the chain is wrapped as untrusted content, so a malicious realm can't steer the agent.</p></div></div>
         <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Bounded reads</h3><p>Output is budgeted and summarized, never silently truncated.</p></div></div>
         <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Every write is logged</h3><p>An append-only trail records the tool, the profile, the result, and which account signed.</p></div></div>
@@ -225,7 +226,7 @@
       <div class="section-head reveal">
         <span class="eyebrow">Get started</span>
         <h2>Install it, then just ask</h2>
-        <p>One command installs the server binary and the agent skills. It verifies the checksum and wires up the clients it can.</p>
+        <p>One command installs the server binary and the agent skill. It verifies the checksum and wires up the clients it can.</p>
       </div>
       <div class="steps reveal">
         <div class="step">
@@ -237,12 +238,12 @@
         <div class="step">
           <span class="step-n">02</span>
           <h3>Restart your agent</h3>
-          <p>So it loads gnomcp. You get two profiles out of the box: the public gno.land testnet and a local gnodev node.</p>
+          <p>So it loads gnomcp. From the next prompt on, your agent can reach the chain.</p>
         </div>
         <div class="step">
           <span class="step-n">03</span>
           <h3>Ask</h3>
-          <p>New to gno.land? Ask your agent to teach you instead. It will walk you through a hands-on tour. Otherwise just describe what you want on chain.</p>
+          <p>New to gno.land? Ask your agent to teach you. It will walk you through a hands-on tour. Otherwise just describe what you want on chain.</p>
         </div>
       </div>
       <div class="start-actions reveal">
