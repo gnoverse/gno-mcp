@@ -522,15 +522,7 @@ section + section { border-top: 1px solid var(--border); }
   gap: 16px;
   align-content: start;
 }
-.flow-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .flow h3 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.02em; }
-.flow .skill-tag {
-  font-family: var(--mono);
-  font-size: .6875rem;
-  font-weight: 700;
-  color: var(--label);
-  white-space: nowrap;
-}
 .flow blockquote {
   margin: 0;
   font-family: var(--mono);
@@ -544,37 +536,6 @@ section + section { border-top: 1px solid var(--border); }
 }
 .flow blockquote::before { content: "you › "; color: var(--label); font-weight: 700; }
 .flow p { margin: 0; color: var(--fg-muted); font-size: .9375rem; }
-
-/* ---- Use cases */
-.usecases { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 860px) { .usecases { grid-template-columns: 1fr; } }
-.usecase {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: clamp(24px, 3vw, 36px);
-  display: grid;
-  gap: 12px;
-  align-content: start;
-}
-.usecase h3 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.02em; }
-.usecase p { margin: 0; color: var(--fg-muted); font-size: .9375rem; }
-.uc-tag {
-  justify-self: start;
-  font-family: var(--mono);
-  font-size: .625rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .15em;
-  color: var(--accent-ink);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  padding: 4px 10px;
-}
-.uc-tag-wip {
-  color: var(--on-accent);
-  background: var(--amber);
-  border-color: var(--amber);
-}
 
 /* ---- Sessions panel */
 .sessions-panel {
@@ -683,8 +644,9 @@ section + section { border-top: 1px solid var(--border); }
   border-radius: var(--radius-md);
   padding: 18px 20px;
 }
-.wip-note .wip-chip {
+.wip-chip {
   flex: none;
+  white-space: nowrap;
   font-family: var(--mono);
   font-size: .625rem;
   font-weight: 700;
