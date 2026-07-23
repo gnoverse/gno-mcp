@@ -1,5 +1,17 @@
+  /* Simple Analytics pre-load queue: the SA script drains window.sa_event.q on
+     load. Fire-and-forget - analytics must never break the page. */
+  var saEvent = function (name) {
+    try {
+      var sa = window.sa_event = window.sa_event || function () {
+        (window.sa_event.q = window.sa_event.q || []).push(arguments);
+      };
+      sa(name);
+    } catch (e) { /* ignore */ }
+  };
+
   document.querySelectorAll(".copy-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
+      saEvent("install_copied");
       var flash = function (msg) {
         var prev = btn.textContent;
         btn.textContent = msg;
