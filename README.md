@@ -11,6 +11,10 @@
 - **MCP server** — the tools to read and write gno.land from your agent, with safety built in.
 - **`gno` skill** — the knowledge layer for coding agents: interrealm semantics, security taxonomy, idiomatic patterns, `Render()` conventions, stdlib surface.
 
+![gnomcp demo](docs/demo/demo.gif)
+
+> A plain-English prompt → the agent authors a realm, signs off on the CLA when prompted, and deploys to the public test13 testnet → gnoweb renders it live.
+
 > [!WARNING]
 > **Work in progress — unaudited and pre-release.**
 >
