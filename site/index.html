@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="gnomcp connects gno.land to any MCP client - MCP server + agent skill with safety built in.">
+<meta name="description" content="gnomcp puts your AI agent on gno.land: audit contracts before you trust them, get chain questions answered in plain language, and ship real apps from a conversation.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#070e1a">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%230a0a0a%22/%3E%3Ctext x=%2232%22 y=%2246%22 font-size=%2238%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%238ec5b2%22 text-anchor=%22middle%22%3E%E2%9D%AF%3C/text%3E%3C/svg%3E">
@@ -16,6 +16,7 @@
   <div class="container">
     <a class="wordmark" href="#top"><span class="prompt-glyph" aria-hidden="true">❯</span>gnomcp</a>
     <nav class="site-nav" aria-label="Sections">
+      <a href="#use-cases">Use cases</a>
       <a href="#pieces">Overview</a>
       <a href="#workflows">Workflows</a>
       <a href="#tools">Tools</a>
@@ -32,8 +33,8 @@
       <div class="hero-inner">
         <div class="hero-copy">
           <span class="hero-chip">MCP server <b>+</b> agent skill · gno.land</span>
-          <h1>Put your agent on <em>gno.land</em></h1>
-          <p class="hero-sub">gnomcp connects <a href="https://gno.land">gno.land</a> to anything that speaks MCP. Once it's installed you talk to your agent in plain language, and it reads realms, checks accounts, deploys code, and sends transactions on testnet chains.</p>
+          <h1>Your AI can <em>read the contract</em> before you trust it</h1>
+          <p class="hero-sub">gnomcp puts your AI agent on <a href="https://gno.land">gno.land</a>, where every contract is published as readable source. Ask what a contract does, whether it is safe, or have it build you one. Answers come from the chain itself, not from guesses.</p>
           <div class="install-line">
             <code id="install-cmd"><span class="dollar">$ </span>curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh</code>
             <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh">Copy</button>
@@ -89,6 +90,38 @@
       </div>
     </div>
   </div>
+
+  <section id="use-cases">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Use cases</span>
+        <h2>What you'd actually use it for</h2>
+        <p>Four things you can do today, in plain language. Each one is grounded in a live part of gno.land, and each says exactly where it runs.</p>
+      </div>
+      <div class="usecases reveal">
+        <div class="usecase">
+          <span class="uc-tag">Mainnet · today</span>
+          <h3>Check a contract before you trust it</h3>
+          <p>Someone sends you a contract and asks you to deposit. Ask your agent whether it is safe: it reads the published source on chain, line by line, and reports what it found with the code quoted. On bytecode chains an AI cannot do this. On gno.land every contract is readable.</p>
+        </div>
+        <div class="usecase">
+          <span class="uc-tag">Mainnet reads · today</span>
+          <h3>Get the vote explained in plain language</h3>
+          <p>gno.land is governed by on-chain proposals with real history behind them. Ask what is being voted and why it matters, and the answer comes from the proposal itself, not from a thread on social media.</p>
+        </div>
+        <div class="usecase">
+          <span class="uc-tag">Testnet · today</span>
+          <h3>Turn an idea into a live app</h3>
+          <p>Describe a community board, a blog, or a token in one sentence. The agent writes the code, tests it, deploys it, and proves it works with a real call. You get a link anyone can open and code anyone can verify.</p>
+        </div>
+        <div class="usecase">
+          <span class="uc-tag uc-tag-wip">Pre-release</span>
+          <h3>Delegate, with a hard cap</h3>
+          <p>Give the agent a budget: a few dollars, one app, two weeks. The chain enforces the cap, so no clever prompt can spend past it, and revoking takes one command.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <section id="pieces">
     <div class="container">
@@ -147,6 +180,7 @@
           <span class="eyebrow">Sessions</span>
           <h3>Act as yourself, safely</h3>
           <p>Want writes under your own address? The agent proposes a scoped session and hands you a <code>gnokey</code> command to sign on your own machine. It never touches your keys. Once approved it writes as you, within the limits you set, and revoking takes one command.</p>
+          <p class="sessions-note"><span class="wip-chip">Pre-release</span><span>Sessions are the newest part of gnomcp and the write path will be reworked. Keep scopes tight and spend limits low.</span></p>
         </div>
         <div class="session-steps" role="group" aria-label="Session authorization flow">
           <div class="session-step"><span class="s-n">01</span><span class="s-t"><b>Agent proposes:</b> scoped paths, spend limit, expiry</span></div>
