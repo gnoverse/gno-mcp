@@ -221,6 +221,27 @@ func TestGraphQL_nonOKStatus(t *testing.T) {
 	assert.True(t, strings.Contains(err.Error(), "503"), "error should mention status code, got: %v", err)
 }
 
+// TestGraphQL_nonGraphQLEndpoint pins the error for a URL that points at the
+// wrong API on the right host: the tx-indexer serves JSON-RPC at / and GraphQL
+// at /graphql/query. A JSON-RPC error envelope has neither "data" nor "errors",
+// which previously surfaced as an opaque "unexpected end of JSON input".
+func TestGraphQL_nonGraphQLEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      nil,
+			"error":   map[string]any{"code": -32700, "message": "Parse error"},
+		})
+	}))
+	defer srv.Close()
+
+	c := NewGraphQL(srv.URL)
+	_, err := c.History(context.Background(), "gno.land/r/foo")
+	require.Error(t, err, "expected error for non-GraphQL endpoint")
+	assert.Contains(t, err.Error(), "graphql/query", "error should hint at the GraphQL path, got: %v", err)
+}
+
 func TestGraphQL_graphqlError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
