@@ -13,7 +13,7 @@ test-integration:
 
 lint:
 	go vet ./...
-	gofmt -l . | tee /dev/stderr | (! read)
+	gofmt -l . | tee /dev/stderr | (! read -r first)
 
 fmt:
 	gofmt -w .
