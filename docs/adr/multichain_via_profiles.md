@@ -27,7 +27,7 @@ gnomcp runs as a single binary with a single instance, loading multiple chain pr
 rpc-url             = "<url>"
 chain-id            = "<id>"          # writable: dev or a known testnet name (test*, topaz-*); anything else read-only
 master-address      = "g1..."         # optional; enables session writes (bech32 address only)
-tx-indexer-url      = "<url>"         # optional; gates gno_list/gno_history/gno_activity
+tx-indexer-url      = "<url>"         # optional; gates gno_history/gno_activity (gno_list pending indexer support)
 default-spend-limit = "<coins>"       # optional; per-session default, clamped to hard limits
 default-expires-in  = "<duration>"    # optional; clamped to hard limits
 bypass-hard-limits  = true | false    # default false; disables the clamp layer

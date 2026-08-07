@@ -73,6 +73,7 @@ These three tools are only registered when at least one profile has a `tx-indexe
 
 - **Args:** `namespace?`, `tag?`, `category?`, `profile?`
 - **Returns:** filtered list of realms from the tx-indexer catalog, wrapped in an `<untrusted_content>` envelope (entries echo realm-supplied paths and descriptions).
+- The tx-indexer schema does not expose a realms query yet, so every call currently returns an error — the contract above describes the tool once that indexer support lands. Use `gno_packages` to enumerate realms in the meantime.
 
 ### `gno_history`
 
@@ -83,6 +84,7 @@ These three tools are only registered when at least one profile has a `tx-indexe
 
 - **Args:** `realm` (required), `since?`, `until?`, `profile?`
 - **Returns:** MsgCall and MsgRun events for a realm, with optional RFC3339 time bounds, wrapped in an `<untrusted_content>` envelope.
+- Time bounds are pending indexer support: the current tx-indexer schema exposes no block time on transactions, so passing `since`/`until` returns an error; without bounds the call returns the full MsgCall/MsgRun log.
 
 ## Write tools — agent identity or session
 

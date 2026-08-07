@@ -150,6 +150,17 @@ Profiles are written to `~/.config/gnomcp/profiles.toml`. A project-local `./pro
 
 A profile entry in a config file is a whole-profile replacement — an overlay redefining a built-in must re-supply `rpc-url` and `chain-id`, not just `master-address`.
 
+To permanently customize a built-in profile — say, point `testnet` at your own indexer — write the whole profile under the same name in `~/.config/gnomcp/profiles.toml` by hand (`gnomcp profile add` refuses the built-in names): copy every current built-in value (`gno_profile_list` prints each profile's full endpoint set), then change the field you care about. Nothing merges field-by-field: omitting an optional field drops it (an override without `faucet-service-url` loses the faucet for that profile), and omitting a required one fails at startup (`missing required rpc-url`).
+
+```toml
+[testnet]
+rpc-url            = "..."   # copy the current built-in values from gno_profile_list…
+chain-id           = "..."
+gnoweb-url         = "..."
+faucet-service-url = "..."
+tx-indexer-url     = "https://my-indexer.example.com/graphql/query"  # …then change the field you're customizing
+```
+
 ### Profile fields (profiles.toml)
 
 ```toml
@@ -157,13 +168,15 @@ A profile entry in a config file is a whole-profile replacement — an overlay r
 rpc-url              = "https://rpc.test99.testnets.gno.land:443"
 chain-id             = "test99"
 master-address       = "g1..."       # enables session writes — the agent acting as this user (bech32)
-tx-indexer-url       = "..."         # optional; enables gno_history/gno_activity (gno_list pending indexer support). Full GraphQL endpoint including path, e.g. https://indexer.example.com/graphql/query — tx-indexer serves JSON-RPC at / on the same host
+tx-indexer-url       = "..."         # optional; enables gno_history/gno_activity (gno_list pending indexer support) — full GraphQL endpoint including path, see below
 default-spend-limit  = "50000000ugnot" # optional; per-session default — must cover at least one write's gas fee at the chain's live gas price, or every propose fails
 default-expires-in   = "1h"          # optional; Go duration string
 faucet-url           = "..."         # optional; faucet page gno_faucet_fund links the user to
 faucet-service-url   = "..."         # optional; automatic faucet service gno_faucet_fund calls
 sunset               = false         # optional; advisory: marks a retiring chain — still fully writable, labeled so new work targets the current testnet
 ```
+
+`tx-indexer-url` must be the full GraphQL endpoint including its path (e.g. `https://indexer.example.com/graphql/query`): tx-indexer serves JSON-RPC at `/` and GraphQL at `/graphql/query` on the same host, and gnomcp appends nothing — a URL pointing at the wrong API fails at call time with an error naming the fix.
 
 ## Write authorization
 

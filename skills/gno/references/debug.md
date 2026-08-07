@@ -37,13 +37,14 @@ Structured codes (left column, exact) come from gnomcp; quoted strings come from
 | `panic: …` in the result | realm-side logic panic | reproduce via `simulate=true` (crossing/write functions cannot be `gno_eval`'d) → `gno_read` with `symbols=[the failing function]` (verbatim body + a `// deps:` list naming what to fetch next) → fix or report upstream |
 | `"out of gas"` (chain) | gas wanted below actual cost | `simulate=true` first and read `gas_used` from the structured result |
 | `chain_unreachable` / timeouts / stale answers | node down, or profile points at the wrong chain | `gno_status` — live height plus the **chain-id mismatch flag** |
-| package/path not found wording from the VM | wrong or undeployed package path | `gno_packages` (prefix or `@namespace`) — or `gno_list` when an indexer profile exists |
+| package/path not found wording from the VM | wrong or undeployed package path | `gno_packages` (prefix or `@namespace`) |
 | `simulate_unsupported` | the connected chain client cannot dry-run this op | drop `simulate` and decide explicitly whether to broadcast |
 
 ## Postmortem (indexer profiles only)
 
 `gno_history` (every deploy + tx for a realm, chronological) and `gno_activity` (MsgCall/MsgRun
-with time bounds) reconstruct what actually hit a realm — use them when "it worked yesterday".
+only; time bounds pending indexer support) reconstruct what actually hit a realm — use them when
+"it worked yesterday".
 
 ## No-MCP fallbacks
 
