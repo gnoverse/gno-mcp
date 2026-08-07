@@ -6,12 +6,23 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Collapse a run's bumps into one pull request per ecosystem, so the set is
+    # reviewed and proven against a single CI run instead of one PR at a time.
+    # No update-types filter: majors ride along and are called out in the PR body.
+    groups:
+      actions:
+        patterns:
+          - "*"
   # Surface dependency updates (and the security advisories that motivated the
   # toolchain/go-sdk/x-net bumps) early.
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
     ignore:
       # gno is tracked at a master pseudo-version, which Dependabot orders below
       # any v1.x release tag — so it perpetually proposes a "bump" to the latest
