@@ -110,6 +110,13 @@ func (c *GraphQL) do(ctx context.Context, query string, vars map[string]any, out
 	if len(env.Errors) > 0 {
 		return fmt.Errorf("graphql error: %s", env.Errors[0].Message)
 	}
+	// A body with neither "data" nor "errors" is not a GraphQL envelope at all —
+	// most likely the profile's indexer URL points at the wrong API on the right
+	// host (tx-indexer serves JSON-RPC at / and GraphQL at /graphql/query).
+	// Name the likely cause instead of surfacing a bare unmarshal error.
+	if len(env.Data) == 0 {
+		return fmt.Errorf("indexer response has no \"data\" field: %s does not look like a GraphQL endpoint — tx-indexer serves GraphQL at /graphql/query, check the profile's indexer URL includes that path", c.url)
+	}
 	if err := json.Unmarshal(env.Data, out); err != nil {
 		return fmt.Errorf("unmarshal data: %w", err)
 	}

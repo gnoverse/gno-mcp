@@ -157,7 +157,7 @@ A profile entry in a config file is a whole-profile replacement — an overlay r
 rpc-url              = "https://rpc.test99.testnets.gno.land:443"
 chain-id             = "test99"
 master-address       = "g1..."       # enables session writes — the agent acting as this user (bech32)
-tx-indexer-url       = "..."         # optional; enables gno_list/gno_history/gno_activity
+tx-indexer-url       = "..."         # optional; enables gno_history/gno_activity (gno_list pending indexer support). Full GraphQL endpoint including path, e.g. https://indexer.example.com/graphql/query — tx-indexer serves JSON-RPC at / on the same host
 default-spend-limit  = "50000000ugnot" # optional; per-session default — must cover at least one write's gas fee at the chain's live gas price, or every propose fails
 default-expires-in   = "1h"          # optional; Go duration string
 faucet-url           = "..."         # optional; faucet page gno_faucet_fund links the user to
