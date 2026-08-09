@@ -47,9 +47,9 @@ func preflightTx(master crypto.Address, feeUgnot, sendUgnot int64) *std.Tx {
 }
 
 func TestCheckSessionSpendForTx_feeAboveRemainingErrors(t *testing.T) {
-	// The test13 shape: 1000000ugnot limit, 4000000ugnot offered fee. The
-	// chain would reject with a bare "session not allowed error"; the
-	// pre-flight must fail first with the numbers and a recovery hint.
+	// A limit that cannot cover the offered fee: 1000000ugnot limit against a
+	// 4000000ugnot fee. The chain would reject with a bare "session not allowed
+	// error"; the pre-flight must fail first with the numbers and a recovery hint.
 	master := crypto.Address{1}
 	err := checkSessionSpendForTx(preflightSession(1_000_000, 0, 0, 0), preflightTx(master, 4_000_000, 0), master, 1000)
 	require.Error(t, err)

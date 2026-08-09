@@ -44,7 +44,8 @@ their answers, not on the initial label.
 
 ## Step 3 — Hands-on (see before do; one new concept per step; checkpoint after each)
 
-1. **Observe:** `gno_render` a live realm (e.g. `gno.land/r/gnoland/home`), then
+1. **Observe:** `gno_render` a live realm (`gno.land/r/gnoland/blog` is deployed on both
+   public testnets; confirm with `gno_packages` rather than trusting this path), then
    `gno_read` it (the default outline shows every file's API surface) — "this is a contract,
    and you can read all of it". If the client elides resource previews, hand over the gnoweb
    URL instead.
@@ -55,9 +56,10 @@ their answers, not on the initial label.
    profile has no faucet configured, say so, give the manual-funding address, and either
    switch to a local gnodev (`test1` is pre-funded, the whole flow works in seconds) or
    continue in describe-only mode.
-4. **First write:** the smallest possible `gno_call` against a test realm (e.g.
-   `gno.land/r/demo/counter` — verify it exists with `gno_read` first) — `simulate=true`,
-   show the gas, then broadcast. Always say which identity signed.
+4. **First write:** the smallest possible `gno_call` against a test realm — pick one from
+   `gno_packages` on the connected chain and verify it with `gno_read` first, since realm
+   paths do not survive a testnet roll. Then `simulate=true`, show the gas, and broadcast.
+   Always say which identity signed.
 5. **Close:** match their goal — if it was deploying, close the loop with a `gno_addpkg`
    `simulate=true` of a ~10-line counter realm before pointing at docs; writing a realm →
    the gno skill's `build.md`/`patterns.md`; "what is gnokey / why does a tx cost what it

@@ -21,11 +21,12 @@ fallbacks below — never block on the MCP.
 | Read one whole file verbatim (audit-grade) | `gno_read` with `file` + `full=true` (gets the larger budget) | local `.gno` files, gnoweb source view |
 | Read a whole package raw (realm **or** pure) | `gno_read` with `full=true` — small packages only; big ones overflow the budget, use the per-file path | same |
 | Discover packages under a namespace/path | `gno_packages` (prefix `gno.land/r/x/` or `@namespace`) | gnoweb, `gno` CLI |
+| Browse the realm catalog by namespace/tag/category | `gno_list` (indexer-gated; typed listing, not content — read with `gno_render`/`gno_read`) | gnoweb |
 | See rendered `Render()` output | `gno_render` | gnoweb |
 | Read on-chain state / evaluate an expression | `gno_eval` | — |
 | Check an address's balance / sequence (nonce) | `gno_account` (`exists:false` = never funded, not an error) | gnoweb |
 | Verify which chain a profile points at / node freshness | `gno_status` (flags chain-id mismatch) | — |
-| Map a chain the user names ("on topaz", "on test13") to a profile / see all configured chains | `gno_profile_list` (name, chain-id, endpoints, current vs sunset; config only, no dial) | — |
+| Map a chain the user names ("on sapphire", "on topaz") to a profile / see all configured chains | `gno_profile_list` (name, chain-id, endpoints, current vs sunset; config only, no dial) | — |
 
 Both `/r/` realms and `/p/` pure packages are readable — don't assume realm-only.
 

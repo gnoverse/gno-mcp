@@ -44,8 +44,8 @@ func createSessionOnChain(t *testing.T, remoteAddr string, kp *session.Keypair, 
 }
 
 // TestIntegration_sessionSpendPreflight pins the client-side spend pre-check
-// against a REAL on-chain session — the exact failure shape from test-13: a
-// grant whose spend limit cannot cover one write's live gas fee. Both
+// against a REAL on-chain session: a grant whose spend limit cannot cover one
+// write's live gas fee. Both
 // simulate and broadcast must be refused client-side with the numbers and
 // recovery hint, never the chain's bare "session not allowed error".
 func TestIntegration_sessionSpendPreflight(t *testing.T) {

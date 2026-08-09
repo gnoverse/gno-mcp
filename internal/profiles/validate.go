@@ -23,7 +23,13 @@ var (
 	// (test5, test-13, topaz-1). Anything else (betanet "gnoland1", "staging",
 	// ...) is admitted read-only, not writable — it has no agent key path and
 	// is excluded from every write tool's profile enum.
-	testnetChainNames = []string{"test", "topaz"}
+	//
+	// This is a writability gate, not a liveness one: a name stays as long as
+	// any profile — builtin or user-authored — may legally name that chain, so
+	// a codename is dropped in the same change that deletes its builtin. The
+	// bare "test" prefix never leaves: it covers the numbered testnets and the
+	// e2e simnet's "test-9999".
+	testnetChainNames = []string{"test", "topaz", "sapphire"}
 
 	// chainIDFormatRE is the format-safety gate applied to every chain-id,
 	// writable or read-only: the chain-id is interpolated into the `gnomcp

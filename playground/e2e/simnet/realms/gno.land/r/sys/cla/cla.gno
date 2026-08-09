@@ -1,7 +1,9 @@
 // Package cla mirrors gno.land/r/sys/cla as deployed on the live gno.land
-// networks (test13 et al.), so the simnet exercises the same keeper-facing
-// CLA deploy gate (Sign / HasValidSignature) the keeper enforces in
-// gno.land/pkg/sdk/vm/keeper.go:checkCLASignature.
+// networks, so the simnet exercises the same keeper-facing CLA deploy gate
+// (Sign / HasValidSignature) the keeper enforces in
+// gno.land/pkg/sdk/vm/keeper.go:checkCLASignature. Seeding it here is the only
+// way that gate gets exercised: the live testnets currently run with CLA
+// enforcement disabled.
 //
 // Sign and HasValidSignature are copied verbatim from the upstream realm at the
 // gno commit pinned in this repo's go.mod. The upstream admin.gno (which sets

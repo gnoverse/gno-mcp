@@ -42,7 +42,7 @@ sim: | .env
 	$(DOCKER_BUILD) --target sim -t $(PLAYGROUND_IMG):sim ..
 	$(DOCKER_RUN) -p $(GNOWEB_PORT):8688 --add-host testnet.gnomcp.sim:127.0.0.1 $(PLAYGROUND_IMG):sim
 
-# Like sim, but with the test13 CLA deploy gate seeded — a local twin of the
+# Like sim, but with the CLA deploy gate seeded and enforced — a local twin of the
 # deploy-gates scenario (a deploy must sign r/sys/cla first). Faucet drip defaults
 # to 10 GNOT (SIM_CLA_DRIP, in ugnot); at the minimum gas fee that clears the whole
 # Sign+deploy+bump flow. Override to stress a different grant: SIM_CLA_DRIP=50000000.

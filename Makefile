@@ -58,7 +58,7 @@ playground-full:
 playground-sim:
 	$(MAKE) -C playground sim
 
-# Like playground-sim, but with the test13 CLA deploy gate seeded (local twin of
+# Like playground-sim, but with the CLA deploy gate seeded and enforced (local twin of
 # the deploy-gates scenario). Defaults to a 10 GNOT faucet drip, which clears the
 # flow at the minimum gas fee. Override with SIM_CLA_DRIP to stress a other grant.
 playground-sim-cla:

@@ -183,10 +183,11 @@ chain-id = "dev"
 
 // ChainIDWritable separates write-capable chains (local dev, known testnets)
 // from everything else. Only these get an agent key path and writable tools.
-// Testnet names match bare and hyphenated forms alike (test5, test-13, topaz-1).
+// Testnet names match bare and hyphenated forms alike (test5, topaz-1, sapphire-1).
 func TestChainIDWritable(t *testing.T) {
 	cases := map[string]bool{
 		"dev": true, "test5": true, "test-13": true, "topaz-1": true, "topaz1": true,
+		"sapphire-1": true, "sapphire": true,
 		"gnoland1": false, "staging": false, "mychain": false, "portal-loop": false,
 		"devnet": false,
 	}

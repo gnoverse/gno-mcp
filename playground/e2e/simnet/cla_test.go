@@ -165,13 +165,13 @@ func TestSimnet_claEconomics(t *testing.T) {
 		start-afterDeploy, float64(start-afterDeploy)/1_000_000, grant/1_000_000)
 }
 
-// TestSimnet_claFlow_10gnot proves the fee fix removed the test13 funds wall: with
-// DefaultGasFeeUgnot at the chain minimum, a 10 GNOT drip — the original test13
-// drip that used to fail at cla.Sign's storage deposit ("lockStorageDeposit ...
-// insufficient coins") — now clears the entire Sign+deploy+bump flow with most
-// of the grant left. The faucet drip never needed raising; the fee did.
+// TestSimnet_claFlow_10gnot proves the fee fix removed the funds wall: with
+// DefaultGasFeeUgnot at the chain minimum, a 10 GNOT drip — the standard faucet
+// grant, which used to fail at cla.Sign's storage deposit ("lockStorageDeposit
+// ... insufficient coins") — now clears the entire Sign+deploy+bump flow with
+// most of the grant left. The faucet drip never needed raising; the fee did.
 func TestSimnet_claFlow_10gnot(t *testing.T) {
-	const grant = 10_000_000 // 10 GNOT — the original test13 drip
+	const grant = 10_000_000 // 10 GNOT — the standard faucet grant
 	c, faucetAddr := bootCLA(t, grant)
 	ctx := context.Background()
 

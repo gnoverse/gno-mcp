@@ -11,11 +11,11 @@ It ships as a release binary (`agentfaucet_<os>_<arch>.tar.gz`) and a multi-arch
 docker run --rm -p 8590:8590 \
   -e GNOMCP_FAUCET_MNEMONIC="<funding key mnemonic>" \
   ghcr.io/gnoverse/agentfaucet:latest \
-  -rpc-url https://rpc.test13.testnets.gno.land:443 -chain-id test-13 -listen 0.0.0.0:8590
+  -rpc-url https://rpc.sapphire.testnets.gno.land:443 -chain-id sapphire-1 -listen 0.0.0.0:8590
 
 # Binary
 GNOMCP_FAUCET_MNEMONIC="<funding key mnemonic>" \
-  agentfaucet -rpc-url https://rpc.test13.testnets.gno.land:443 -chain-id test-13
+  agentfaucet -rpc-url https://rpc.sapphire.testnets.gno.land:443 -chain-id sapphire-1
 ```
 
 The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC`, never a flag default — a non-empty flag default is printed by `-help` and on any flag error, which would leak the key to stderr/logs (and argv is visible to `ps` and shell history). Only `test<N>` / `test-<N>` chain-ids are accepted; `dev` and everything else are refused. The default `-listen` is `127.0.0.1:8590` for host safety, so in a container you must pass `-listen 0.0.0.0:8590`.
@@ -25,7 +25,7 @@ The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC`, never a flag default
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `-rpc-url` | *(required)* | gno node RPC URL |
-| `-chain-id` | *(required)* | chain-id of the target testnet (e.g. `test-13`); no naming scheme is imposed — fund requests must present this exact `chain_id` |
+| `-chain-id` | *(required)* | chain-id of the target testnet (e.g. `sapphire-1`); no naming scheme is imposed — fund requests must present this exact `chain_id` |
 | `-mnemonic` | `$GNOMCP_FAUCET_MNEMONIC` | BIP-39 mnemonic for the funding key — prefer the env var |
 | `-listen` | `127.0.0.1:8590` | address to listen on |
 | `-metrics-addr` | *(empty — off)* | enable the Prometheus `/metrics` listener on this address (e.g. `127.0.0.1:8591`); a separate listener, so metrics stay off the public fund port. Opt-in: empty disables |
@@ -65,12 +65,12 @@ The funding endpoint:
 ```
 POST /fund
 Content-Type: application/json
-{ "address": "g1...", "chain_id": "test-13" }
+{ "address": "g1...", "chain_id": "sapphire-1" }
 ```
 
 ```bash
 curl -sX POST http://127.0.0.1:8590/fund \
-  -d '{"address":"g1...","chain_id":"test-13"}'
+  -d '{"address":"g1...","chain_id":"sapphire-1"}'
 ```
 
 | Status | When | Body |
@@ -114,7 +114,7 @@ Labels are deliberately low-cardinality (a bounded `outcome` enum, HTTP method/s
 Logs are structured JSON on stdout (one `http_request` line per request):
 
 ```json
-{"time":"…","level":"INFO","msg":"http_request","method":"POST","route":"POST /fund","status":200,"latency_ms":12,"client_ip":"…","outcome":"success","address":"g1…","chain_id":"test-13"}
+{"time":"…","level":"INFO","msg":"http_request","method":"POST","route":"POST /fund","status":200,"latency_ms":12,"client_ip":"…","outcome":"success","address":"g1…","chain_id":"sapphire-1"}
 ```
 
 `/health` lines carry only `method/route/status/latency_ms/client_ip`; the fund-specific `outcome/address/chain_id` appear on `/fund`. Recipient addresses, chain-ids, tx hashes, and the client IP are logged (public on-chain or internal infra). The funding mnemonic and raw request bodies are never logged. Internal dispense errors are logged server-side (for operators) but returned to anonymous callers as a generic `502`.

@@ -116,7 +116,7 @@ ENV PLAYGROUND_LAYER=sim
 ENTRYPOINT ["sim-init.sh"]
 CMD ["zsh"]
 
-# ---- SIM-CLA: sim image with the test13 CLA deploy gate seeded (RUN TARGET: sim-cla)
+# ---- SIM-CLA: sim image with the CLA deploy gate seeded and enforced (RUN TARGET: sim-cla)
 # Replicates the live-network CLA gate locally: simnet seeds gno.land/r/sys/cla
 # (render/addrset deps from GNOROOT/examples) and activates it with a required hash,
 # so a deploy must sign the CLA first — the local twin of scenario 14's deploy-gates.

@@ -54,7 +54,7 @@ wrong deployment).
 Never block on the MCP — it's an accelerator, not a dependency (see `mcp.md`). Raw ABCI recipe:
 
 ```bash
-RPC=https://rpc.topaz.testnets.gno.land:443   # chain-id topaz-1
+RPC=https://rpc.sapphire.testnets.gno.land:443   # chain-id sapphire-1
 hex=$(printf '%s' 'gno.land/r/sys/names.IsEnabled()' | xxd -p | tr -d '\n')
 curl -s "$RPC/abci_query?path=%22vm/qeval%22&data=0x$hex"   # value = base64 at result.response.ResponseBase.Data
 # paths: vm/qeval (eval expr) · vm/qfuncs (list exported funcs, data=pkgpath) · vm/qrender (data=pkgpath:renderpath)
@@ -82,7 +82,7 @@ that returns nothing is the most common way to answer "doesn't exist" when the t
 | `r/sys/names` | Read-only verifier the chain consults to gate package deploys; reads `users`. | `IsEnabled()` (is namespace enforcement on at all?), `IsPaused()`, `IsAuthorizedAddressForNamespace(addr, ns)` |
 | `r/sys/params` | GovDAO-facing **writer** of native chain params (sole privileged caller of native `sys/params`); exposes getters for only a handful (`GetValoperRegisterFee()`, valset getters). **Not** the read surface for arbitrary params. | its own getters for the few it exposes; **raw param values live in the keeper, not this realm** — read them via the param path (see "Reading a chain param value" below) |
 | `sys/params` (native stdlib) | The Go-side params keeper `r/sys/params` writes through; frame-gated to that one realm. | Not a realm — observed indirectly via `r/sys/params` and the params query surface |
-| `r/sys/validators/v3` | Current params-backed validator-set design (operator/signing model, trust-level + cooldown limits). | `GetValidators()`, `IsValidator(a)`, `GetTrustLevel()`, `GetCooldown()` — **report the live value; `master` may have changed since this chain deployed** |
+| `r/sys/validators/v3` | Current params-backed validator-set design (valoper operator/signing-key model with key rotation). | `GetValidators()`, `GetValidator(a)`, `IsValidator(a)`, `RotateValoperSigningKey`, `NotifyValoperChanged` — the rotation knobs are NOT here: fee and period live on `r/sys/params` (`GetValoperRotationFee()`, `GetValoperRotationPeriodBlocks()`). **`qfuncs` the realm and report live values; `master` may have changed since this chain deployed** |
 | `r/sys/validators/v2` | Earlier version (PoA-based). Coexists with `/v3` on some chains. | `qfuncs`/`GetValidators()` — but **don't assume which version drives a given chain's set from source; confirm live which one holds the active valset** |
 | `p/sys/validators` | Pure types/interface shared by the validator realms. No state. | — |
 | `r/sys/cla` | Contributor License Agreement gate the chain consults before deploys. | `Render("")` (enabled? required hash? URL?), `HasValidSignature(addr)` |
@@ -101,7 +101,7 @@ assume**, and prefer checking both *before* deploying rather than reading it off
    whose current owner is you (register via the live controller, e.g. `r/sys/namereg/v1`, if it's
    deployed). Check: `IsAuthorizedAddressForNamespace(addr, ns)`.
 2. **CLA** (`r/sys/cla`). Enforced when a required hash is set. As of the last check, CLA enforcement
-   is **off on topaz (test14)** (no required hash — no `Sign` step needed to deploy) and **on on test13** —
+   is **off on both live testnets** (no required hash — no `Sign` step needed to deploy) —
    always confirm live via `gno_cla_info` or the render's `Required Hash` field. The signer must have
    signed the current agreement. Check: `HasValidSignature(addr)`. To clear it, **sign once from the same key**. With a Gno
    MCP connected, use its `gno_cla_info` / `gno_cla_sign` pair — info reports the required hash and the
@@ -140,12 +140,12 @@ the chain, don't recite it): `auth:p:fee_collector` (gas fee collector), `vm:p:s
 (storage-deposit collector — distinct from the gas one), `vm:p:storage_price`, `node:p:halt_height`,
 `bank:p:restricted_denoms`.
 
-## Worked example — "how do I register a name on topaz (test14)?"
+## Worked example — "how do I register a name on sapphire?"
 
 The model in action. Every concrete value comes from a live query; you explain the steps, the user
 runs the funded tx.
 
-1. **Confirm the chain.** `gno_status` (or RPC `/status`) → chain-id is `topaz-1`. Now reads are about
+1. **Confirm the chain.** `gno_status` (or RPC `/status`) → chain-id is `sapphire-1`. Now reads are about
    the chain the user actually means.
 2. **Is enforcement even on?** `gno_eval gno.land/r/sys/names.IsEnabled()`. If `false`, namespace
    enforcement is off on this network — anyone can already deploy under any `r/<name>/*` and registering
@@ -157,11 +157,15 @@ runs the funded tx.
    (shows the format and price) and `gno_eval ...ValidateNymFormat("nym-alice123")` / `...IsPaused()`. Report the
    format and price you actually read — do not state `nym-<stem><digits>` or any price as fact without this step.
 5. **Explain the steps the user runs.** With the real package path, func, and price in hand: the user signs a
-   `maketx call -pkgpath gno.land/r/sys/namereg/v1 -func Register -args "<username>" -send "<price>ugnot"`
-   from their own funded key (or via a gno-mcp session they authorize). Execution is theirs; you don't broadcast it.
+   `maketx call -pkgpath gno.land/r/sys/namereg/v1 -func Register -args "<username>"` from their own funded
+   key (or via a gno-mcp session they authorize). Two hard constraints read off the deployed source:
+   `Register` panics unless the sent amount **exactly equals** `registerPrice` — which is `0` today, so
+   **omit `-send` entirely** rather than passing `-send "0ugnot"` — and it requires `cur.Previous().IsUserCall()`,
+   so it must be a direct `maketx call` from an EOA; a `maketx run` script can never register. Execution is
+   theirs; you don't broadcast it.
 
 The point: whether `namereg/v1` exists, whether enforcement is on, the exact format and price — all of it
-came from querying topaz (test14), not from this file.
+came from querying sapphire, not from this file.
 
 ## See also
 
@@ -173,5 +177,5 @@ came from querying topaz (test14), not from this file.
 ## Source
 
 Distilled from `examples/gno.land/r/sys/*` + `gnovm/stdlibs/sys/params` in gnolang/gno, the gnolang/gno
-issue/PR roadmap, per-network genesis configs, and verified against live topaz (test14) and test13 (ABCI `vm/qfuncs`/`qeval`/`qrender`).
+issue/PR roadmap, per-network genesis configs, and verified against live sapphire and topaz (ABCI `vm/qfuncs`/`qeval`/`qrender`).
 The design above is durable; concrete values are intentionally absent — query the live chain.

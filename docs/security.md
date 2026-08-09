@@ -6,7 +6,7 @@
 
 A chain's `chain-id` determines what gnomcp may do with it:
 
-- **Write-capable** — `dev` (local), or a `chain-id` starting with a known testnet name (`test`, `topaz` — bare or hyphenated: `test5`, `test-13`, `topaz-1`). Codenamed testnets ended the numbered `test<N>` pattern, so recognition is a release-time name list (`testnetChainNames` in `internal/profiles/validate.go`), not a regex. These get an agent key path and appear in the write tools' profile enums.
+- **Write-capable** — `dev` (local), or a `chain-id` starting with a known testnet name (`test`, `topaz`, `sapphire` — bare or hyphenated: `test5`, `topaz-1`, `sapphire-1`). Codenamed testnets ended the numbered `test<N>` pattern, so recognition is a release-time name list (`testnetChainNames` in `internal/profiles/validate.go`), not a regex. These get an agent key path and appear in the write tools' profile enums.
 - **Read-only** — any other format-safe `chain-id` (betanet `gnoland1`, `staging`, mainnet). Admitted so deployed source can be audited, but excluded from every write tool: no agent key, no faucet, no session, and `master-address` is refused at config time. Reads only.
 
 The classification is enforced at startup config validation, at `gnomcp profile add`, and at `gno_profile_add` (which additionally dials the node and refuses the add unless it reports the declared chain-id). No override turns a read-only chain writable — the write path for mainnet/betanet does not exist in code. A `chain-id` carrying shell metacharacters or whitespace is rejected outright, since it is interpolated into the commands the user pastes into a terminal.

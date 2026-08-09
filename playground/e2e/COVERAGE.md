@@ -49,7 +49,7 @@ listed).
 | write.addpkg | gno_addpkg deploy | 02 | covered |
 | write.short-name-expansion | gno_addpkg expands a bare package name to gno.land/r/<agent-address>/<name>, regenerating the auto-injected gnomod.toml for the expanded path | 13 | covered |
 | write.address-namespace | short-form deploys land under the agent own-address namespace (always authorized, gnoweb-safe) | 13 | covered |
-| write.deploy-gates | deploy clears the genesis-activated namespace + CLA gates (own-address namespace + sign r/sys/cla); the gno_addpkg CLA hint guides recovery on the unsigned-CLA error | 14 | covered (live-only; the default e2e simnet has the gates off) |
+| write.deploy-gates | deploy clears whatever genesis-activated gates the chain enforces (own-address namespace, plus r/sys/cla when enforced); the gno_addpkg CLA hint guides recovery on the unsigned-CLA error | 14 | covered for the namespace gate (live-only; the default e2e simnet has the gates off). The CLA half is dormant while live enforcement is off — 12 covers it on `e2e-clagate` |
 | write.cla-sign-tool | the gno_cla_info / gno_cla_sign pair: fetch hash + agreement URL, then sign with that hash | 12, 14 | covered (12 on the e2e-clagate image — CLA gate enforced on simnet; 14 accepts it as the preferred live path) |
 | write.cla-user-confirmation | the AUT presents the agreement URL and waits for the user's yes BEFORE any gno_cla_sign call — a silent same-turn sign fails | 12 | covered (e2e-clagate image; the driver plays the user in the consent round-trip) |
 | write.run | gno_run MsgRun script | 08 (deferred) | deferred with scenario 08 |
@@ -151,21 +151,21 @@ tree: a regression shows up here only after it ships.
 ## External tier (real testnet)
 
 Scenarios 11–12 (install from scratch, GitHub egress — above) plus 13 (the live
-agent-faucet) and 14 (the live deploy gates). Scenarios 13 and 14 drive the real topaz
+agent-faucet) and 14 (the live deploy gates). Scenarios 13 and 14 drive the real sapphire
 chain: they run the `l2-gnomcp` image (gnomcp + skill, no simnet `profiles.toml` override),
 so the built-in `testnet` profile (`internal/profiles/config.go`) resolves to the live
-network (chain-id `topaz-1`, RPC `https://rpc.topaz.testnets.gno.land:443`,
-faucet-service-url `https://faucet-agent.topaz.testnets.gno.land`). 13 validates the
-zero-config faucet default; 14 covers what only the live chain exercises — the namespace +
-CLA deploy gates, which the simnet leaves off. `blocked` is tolerated when the live faucet
+network (chain-id `sapphire-1`, RPC `https://rpc.sapphire.testnets.gno.land:443`,
+faucet-service-url `https://faucet-agent.sapphire.testnets.gno.land`). 13 validates the
+zero-config faucet default; 14 covers what only the live chain exercises — the namespace
+gate and, when the chain enforces it, the CLA gate; the simnet leaves both off. `blocked` is tolerated when the live faucet
 or chain is unreachable or rate-limits.
 
 | Key | Feature | Scenarios | Status |
 |---|---|---|---|
-| external.faucet-live | gno_faucet_fund tier-2 against the LIVE topaz agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
+| external.faucet-live | gno_faucet_fund tier-2 against the LIVE sapphire agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
 | external.testnet-key-cycle | built-in `testnet` profile end to end on the live network: generate agent key → faucet fund → balance | 13 | covered |
-| external.cla-sign | agent signs the live topaz CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | covered |
-| external.session-spend | session flow against LIVE topaz gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, and the chain's spend_used tracks the right-sized fee | 15 | covered |
+| external.cla-sign | agent signs the live CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | **not currently exercisable** — CLA enforcement reads DISABLED on both live chains (2026-08-09), so 14 records this `blocked`. The tool pair itself stays covered by 12 on the `e2e-clagate` image |
+| external.session-spend | session flow against LIVE sapphire gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, and the chain's spend_used tracks the right-sized fee | 15 | covered |
 
 ## Known harness constraints (not feature gaps)
 

@@ -18,8 +18,8 @@ func RegisterProfileList(s *server.Server) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_profile_list",
 		Description: "Lists every loaded chain profile with its chain-id, endpoints, and lifecycle status — " +
-			"the map between profile names and the chains they reach (e.g. profile 'testnet' -> chain topaz-1). " +
-			"Use when the user names a chain or network ('on topaz', 'on test13') to resolve which profile to pass " +
+			"the map between profile names and the chains they reach (e.g. profile 'testnet' -> chain sapphire-1). " +
+			"Use when the user names a chain or network ('on sapphire', 'on topaz') to resolve which profile to pass " +
 			"to the other tools, or to see which chains are configured at all. " +
 			"Returns one entry per profile: name, chain-id, kind (local | testnet | read-only), a sunset flag " +
 			"(a retiring testnet — still fully writable, but prefer the current testnet for new work), " +
