@@ -24,7 +24,7 @@ func proposeFake(feeUgnot int64) *chain.Fake {
 }
 
 func TestSessionPropose_spendLimitBelowFeeErrors(t *testing.T) {
-	// The exact test13 shape: live fee 4000000ugnot, requested limit 1000000ugnot.
+	// A limit below one write's fee: live fee 4000000ugnot, requested limit 1000000ugnot.
 	// Such a session can never broadcast (the ante counts the full fee against
 	// the spend limit), so propose must refuse with both numbers.
 	s := newBaseTestServer(t)

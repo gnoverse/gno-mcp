@@ -73,23 +73,29 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	}
 	tn, ok := cfg.Profiles["testnet"]
 	require.True(t, ok, "testnet default missing")
-	assert.Equal(t, "topaz-1", tn.ChainID, "testnet default chain-id")
-	assert.Equal(t, "https://rpc.topaz.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
-	assert.Equal(t, "https://topaz.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
-	assert.Equal(t, "https://indexer.topaz.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
-	assert.Equal(t, "https://faucet-agent.topaz.testnets.gno.land", tn.FaucetServiceURL, "testnet default agent-faucet service url")
+	assert.Equal(t, "sapphire-1", tn.ChainID, "testnet default chain-id")
+	assert.Equal(t, "https://rpc.sapphire.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
+	assert.Equal(t, "https://sapphire.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
+	assert.Equal(t, "https://indexer.sapphire.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
+	assert.Equal(t, "https://faucet-agent.sapphire.testnets.gno.land", tn.FaucetServiceURL, "testnet default agent-faucet service url")
 	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
 
-	old, ok := cfg.Profiles["test13"]
+	old, ok := cfg.Profiles["topaz"]
 	require.True(t, ok, "sunset predecessor testnet missing from builtins")
-	assert.Equal(t, "test-13", old.ChainID, "test13 chain-id")
-	assert.True(t, old.Sunset, "test13 must be marked sunset")
+	assert.Equal(t, "topaz-1", old.ChainID, "topaz chain-id")
+	assert.True(t, old.Sunset, "topaz must be marked sunset")
 	assert.True(t, old.IsTestnet(), "sunset builtin must stay a writable testnet")
-	assert.Equal(t, "https://rpc.test13.testnets.gno.land:443", old.RPCURL, "test13 rpc-url")
-	assert.Equal(t, "https://test13.testnets.gno.land", old.GnowebURL, "test13 gnoweb-url")
-	assert.Equal(t, "https://faucet-agent.test13.testnets.gno.land", old.FaucetServiceURL, "test13 faucet (live) must be configured so deploys can fund")
-	assert.Equal(t, "https://indexer.test13.testnets.gno.land/graphql/query", old.TxIndexerURL, "test13 indexer (live) must be configured")
+	assert.Equal(t, "https://rpc.topaz.testnets.gno.land:443", old.RPCURL, "topaz rpc-url")
+	assert.Equal(t, "https://topaz.testnets.gno.land", old.GnowebURL, "topaz gnoweb-url")
+	assert.Equal(t, "https://faucet-agent.topaz.testnets.gno.land", old.FaucetServiceURL, "topaz faucet (live) must be configured so deploys can fund")
+	assert.Equal(t, "https://indexer.topaz.testnets.gno.land/graphql/query", old.TxIndexerURL, "topaz indexer (live) must be configured")
+
+	// A retired chain's builtin goes away with its infrastructure: test13's
+	// hosts no longer resolve, so shipping the profile would only hand the
+	// agent a chain every call fails against.
+	_, ok = cfg.Profiles["test13"]
+	assert.False(t, ok, "retired testnet must not ship as a builtin")
 }
 
 func TestLoad_parsesFaucetFields(t *testing.T) {

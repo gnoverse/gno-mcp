@@ -46,7 +46,7 @@ type gnoclientDispenser struct {
 	mu        sync.Mutex // serialises sends so concurrent grants don't race the account sequence
 	cli       *gnoclient.Client
 	from      crypto.Address
-	gasWanted int64 // execution ceiling; a test-13 bank send burns ~1.6M
+	gasWanted int64 // execution ceiling; a bank send burns ~1.6M
 	floor     int64 // ugnot fee floor at the genesis price (gasWanted / genesisGasPriceDivisor)
 }
 

@@ -14,12 +14,14 @@
 Every on-chain write — a realm call, a deploy, a send — is a transaction carrying a **fee** and a
 **gas limit**. Get the mental model wrong and you either overpay real money on every tx or hit
 opaque "out of gas" / "insufficient fee" failures. The single most expensive misconception:
-**the chain deducts the *full fee you offer*, not the gas you actually use.** gnomcp pins the fee to
-the chain minimum precisely because of this; understand the model and you understand both tools.
+**the chain deducts the *full fee you offer*, not the gas you actually use.** gnomcp keeps the offer
+tight for exactly this reason — it sizes gas from a dry run and offers 2× the live price floor, not a
+fixed constant; understand the model and you understand both tools.
 
 ## The mapping — gnomcp tool ↔ gnokey command
 
-gnomcp does not call gnokey. It has its own keystore (`~/.gnomcp/keys/`, **separate** from gnokey's
+gnomcp does not call gnokey. It has its own keystore (`~/.local/share/gnomcp/agent-keys/<profile>/`, overridable with
+`GNOMCP_AGENT_KEYS_PATH`, **separate** from gnokey's
 `~/.gnokey/` — a `gno_key_generate` key is invisible to `gnokey list`, and vice-versa) and builds,
 signs, and broadcasts each tx atomically in one tool call. gnokey splits the same work into
 `maketx` → `sign` → `broadcast`. Same messages underneath:
@@ -34,7 +36,7 @@ signs, and broadcasts each tx atomically in one tool call. gnokey splits the sam
 | `gno_session_revoke` | `gnokey maketx session revoke` | `auth.MsgRevokeSession` | Close a session |
 | `gno_key_generate` | `gnokey add` / `add --recover` | — | Create / recover a key |
 | `gno_key_list` · `gno_key_delete` · `gno_key_address` | `gnokey list` · `delete` · (address of) | — | Manage the gnomcp keystore |
-| `gno_eval` · `gno_render` · `gno_packages` · `gno_account` | `gnokey query vm/qeval` · `vm/qrender` · `vm/qfuncs` · `auth/accounts/<addr>` | — | Reads (ABCI queries) |
+| `gno_eval` · `gno_render` · `gno_packages` · `gno_account` | `gnokey query vm/qeval` · `vm/qrender` · `vm/qpaths` · `auth/accounts/<addr>` | — | Reads (ABCI queries) |
 
 Reads have no key, fee, or signature — `gnokey query` and `gno_eval`/`gno_render` are the same ABCI
 paths (see `mcp.md`, `sysrealms.md`). Everything below is about the **write** path.
@@ -56,7 +58,7 @@ ratio clears the chain's minimum (next section). So the two knobs interact only 
 raise `GasWanted` and you must raise `GasFee` to keep the ratio above the floor.
 
 **The floor.** The minimum acceptable fee is `GasWanted × minGasPrice`. The genesis price is
-**1 ugnot per 1000 gas** — topaz (test14) runs at that floor (`1ugnot/1000gas`); test13 had drifted
+**1 ugnot per 1000 gas** — sapphire and topaz both run at that floor (`1ugnot/1000gas`); earlier testnets had drifted
 to `10ugnot/1000gas`. Re-query `auth/gasprice` live; the floor moves per chain. At the genesis
 price, `GasWanted = 10_000_000` puts the floor at **10,000 ugnot (0.01 GNOT)**. gnomcp does not offer a fixed pair: every write **dry-runs first at a
 1B-gas measuring ceiling**, then broadcasts at `GasWanted = measured × 1.5` floored at
@@ -77,8 +79,12 @@ chain gas price × 2** (congestion insurance), floored at `DefaultGasFeeUgnot = 
 price, and the floor moves with it (gnomcp queries the live price per write rather than assuming
 the config). gnomcp mirrors the genesis ratio as `minGasPriceDivisor`
 and its comment flags that it must change for a chain with a different `min_gas_prices`. Two price
-gates exist: this static config floor (checked in CheckTx) and an adaptive EIP-1559-style block price
-(skipped when zero, the common testnet case) — on topaz (test14) the static floor is the operative one (the adaptive block price is zero on the testnets checked).
+gates exist and BOTH run, in this order: the adaptive EIP-1559-style **block price** first (skipped
+only when it is zero or invalid), then the node's static config floor. What `auth/gasprice` returns
+is the *block* price — `LastGasPrice`, the price of the last block — not `min_gas_prices`. On both
+live testnets it reads `1ugnot/1000gas`, i.e. nonzero, so the block-price gate is active and is the
+one a tx hits first; the two happen to coincide there, which is why the numbers agree even though
+the mechanism differs.
 
 ## Failure modes — tell them apart
 
@@ -181,9 +187,9 @@ With a gnomcp server connected, an agent does writes through `gno_call` / `gno_a
 `gno_key_send` / sessions — **never** raw `gnokey`, and never by reading, asking for, or importing a
 key or mnemonic. Reaching for `gnokey` for a write means you took a wrong turn, because:
 
-- **Separate keystore.** gnomcp keys live in `~/.gnomcp/keys/`; `gnokey` can't see or sign with them.
-- **Atomic + safe defaults.** gnomcp builds-signs-broadcasts in one step, simulates first, and pins
-  the fee to the floor — you can't accidentally overpay or strand a key.
+- **Separate keystore.** gnomcp keys live under `~/.local/share/gnomcp/agent-keys/<profile>/`; `gnokey` can't see or sign with them.
+- **Atomic + safe defaults.** gnomcp builds-signs-broadcasts in one step, simulates first, and offers
+  2× the live price floor off right-sized gas — you can't accidentally overpay or strand a key.
 - **It's a hard rule here.** The gno-build skill forbids it, and the e2e flows fail any run where the
   agent shells out to `gnokey`.
 
@@ -200,11 +206,11 @@ fee — every gnomcp write result echoes the real values):
 
 ```
 # gno_call{realm:"gno.land/r/demo/foo", func:"Bump", args:["1"], send:"", key:"alice"}
-# (light call on topaz (test14): gas-wanted floors at 10M; live price 1ugnot/1000gas → fee = 10M × 1ugnot/1000gas × 2)
+# (light call on sapphire: gas-wanted floors at 10M; live price 1ugnot/1000gas → fee = 10M × 1ugnot/1000gas × 2)
 gnokey maketx call \
   -pkgpath gno.land/r/demo/foo -func Bump -args 1 \
   -gas-wanted 10000000 -gas-fee 20000ugnot \
-  -remote https://rpc.topaz.testnets.gno.land:443 -chainid topaz-1 \
+  -remote https://rpc.sapphire.testnets.gno.land:443 -chainid sapphire-1 \
   -broadcast alice
 ```
 
@@ -232,5 +238,5 @@ and fee/gas-price logic (`tm2/pkg/sdk/auth`, `tm2/pkg/std`), and the vm storage-
 (`gno.land/pkg/sdk/vm`) in gnolang/gno at the commit pinned in this repo's go.mod; the gnomcp write
 path (`internal/chain/real.go`, `internal/tools/write`); and the gnolang/gno issue tracker (#3805,
 #5086, #3704, #329, #2109, #4279, #5122, #203, #416, #3703). Mechanics verified against the live
-topaz (test14) and test13 deploy-gate flows (note: the CLA gate is currently disabled on topaz and
-enabled on test13 — see sysrealms.md). Flag surface is version-bound — confirm with `gnokey <cmd> -help`.
+sapphire and topaz deploy-gate flows (note: the CLA gate is currently disabled on both live
+chains — see sysrealms.md). Flag surface is version-bound — confirm with `gnokey <cmd> -help`.
