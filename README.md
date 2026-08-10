@@ -16,7 +16,7 @@
 >
 > - The tool API can still change, and the session write path will be reworked.
 > - Writes are confined to dev/testnet — no code path signs on mainnet or betanet.
-> - No guaranteed upgrade path yet.
+> - Upgrading isn't guaranteed to preserve your configuration: re-running the installer rebuilds the MCP registration.
 >
 > Read [docs/security.md](docs/security.md) and file issues when something looks off.
 
@@ -31,6 +31,8 @@ curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/insta
 This runs a script from the internet on your machine — read [the script](scripts/install.sh) first.
 
 When it finishes, restart your editor or agent so it loads gnomcp.
+
+To upgrade later, run the same command again: it moves the binary to the newest release, and refreshes the plugin for Claude Code and Gemini CLI. Codex and OpenCode manage the plugin themselves — see [docs/gnomcp.md](docs/gnomcp.md#install).
 
 Other clients (Cursor, Claude Desktop, …), manual install, building from source, and Docker → **[docs/gnomcp.md](docs/gnomcp.md#install)**.
 

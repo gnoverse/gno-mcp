@@ -29,6 +29,17 @@ This pipes a script straight from the internet into your shell. Open [scripts/in
 
 Pass options after `sh -s --`: `--harness claude|gemini|codex|opencode|none` (repeatable), `--bin-dir DIR`, `--version vX.Y.Z`.
 
+`--version` pins the **binary** and nothing else. No harness plugin manager can install a chosen plugin version, so a pinned run registers the MCP server, leaves the plugin exactly as it found it, and prints the commands to install or refresh it yourself — rather than pairing a deliberately old binary with the newest skills.
+
+**Upgrading is the same command.** Re-running the installer always moves the binary to the newest release, and refreshes the plugin for Claude Code and Gemini CLI. Codex and OpenCode manage the plugin themselves — the installer refreshes their MCP registration and prints the plugin steps. It also rebuilds the MCP registration from scratch, so re-add any custom `-e` env vars you had set on it.
+
+Upgrading the Claude Code plugin by hand needs both steps — `claude plugin update` alone reads the cached marketplace and will call a stale version current:
+
+```bash
+claude plugin marketplace update gnoverse
+claude plugin update gnomcp@gnoverse
+```
+
 Prefer not to run a script? Download `gno-mcp_<os>_<arch>.tar.gz` from the [releases page](https://github.com/gnoverse/gno-mcp/releases/latest), put `gnomcp` wherever you like, and follow your client's section below.
 
 **When it's done, restart your client.** Plugins and MCP servers load at startup, so a window that was already open won't see gnomcp.
@@ -88,6 +99,8 @@ The plugin registers the `gno` skill and, when the binary is on PATH or in `~/.l
 ```bash
 gemini extensions install https://github.com/gnoverse/gno-mcp
 ```
+
+Already installed? `install` refuses to overwrite — upgrade with `gemini extensions update gnomcp`.
 
 ### Cursor
 
