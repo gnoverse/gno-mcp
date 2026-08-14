@@ -1,5 +1,7 @@
 #!/bin/sh
 # install.sh — install the gnomcp binary and wire it into coding-agent harnesses.
+# Re-run it to upgrade an existing install: binary, plugin, and MCP registration
+# are all brought up to the target release.
 # Keep this script simple and auditable: read it before piping it to sh.
 #
 #   curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh
@@ -7,6 +9,7 @@
 # Flags (also: --flag=value):
 #   --bin-dir DIR     binary install dir            (default: ~/.local/bin)
 #   --version TAG     release tag, e.g. v0.1.0      (default: latest)
+#                     pins the binary only; the plugin is left untouched
 #   --harness NAME    wire one harness: claude | gemini | codex | opencode | none
 #                     (repeatable; default: auto-detect installed harnesses)
 #   -h, --help        this text
@@ -27,6 +30,7 @@ install.sh — install the gnomcp binary and wire it into coding-agent harnesses
 Flags (also: --flag=value):
   --bin-dir DIR     binary install dir            (default: ~/.local/bin)
   --version TAG     release tag, e.g. v0.1.0      (default: latest)
+                    pins the binary only; the plugin is left untouched
   --harness NAME    wire one harness: claude | gemini | codex | opencode | none
                     (repeatable; default: auto-detect installed harnesses)
   -h, --help        this text
@@ -113,20 +117,53 @@ esac
 # ---- Harness wiring (skills install via each harness's own plugin manager)
 # Fallible commands carry explicit `|| return 1`: POSIX suspends `set -e`
 # inside a function whose call is ||-tested, so errors must be routed by hand.
+
+# `--version` pins the binary only. No harness plugin manager can select a
+# plugin version, so touching the plugin would pair a deliberately old binary
+# with the newest skills.
+version_pinned() { [ "$VERSION" != latest ]; }
 wire_claude() {
   info "Wiring Claude Code (plugin + MCP server)..."
-  if ! claude plugin marketplace add "${REPO}" 2>/dev/null; then
-    claude plugin marketplace list 2>/dev/null | grep -q gnoverse || return 1
-  fi
-  claude plugin install gnomcp@gnoverse --scope user || return 1
+  # Register the server before refreshing the plugin: the registration is what
+  # makes gnomcp usable at all, and the two plugin steps below reach the
+  # network, so a blip there must not cost the user their MCP server.
   claude mcp remove gnomcp --scope user >/dev/null 2>&1 || true
   claude mcp add gnomcp --scope user -- "${GNOMCP}" || return 1
+  if version_pinned; then
+    info "Claude Code: MCP server registered. Plugin left untouched — ${VERSION} pins the binary only."
+    info "  To install or refresh the plugin at its own latest:"
+    info "    claude plugin marketplace add ${REPO}"
+    info "    claude plugin install gnomcp@gnoverse --scope user"
+    return 0
+  fi
+  # Ensure the marketplace exists, then force a refetch. `add` reports success
+  # without refetching one that is already on disk, so only `update` can carry a
+  # re-run to a new release — and it must stay fatal: a tolerated refresh
+  # failure leaves the plugin on its cached version while the script claims to
+  # have upgraded it.
+  claude plugin marketplace add "${REPO}" >/dev/null 2>&1 || true
+  claude plugin marketplace update gnoverse || return 1
+  # `plugin update` resolves versions from that marketplace clone alone, so the
+  # refresh above is what lets it see a new release; `install` covers the run
+  # where there is nothing to update yet.
+  claude plugin install gnomcp@gnoverse --scope user || return 1
+  claude plugin update gnomcp@gnoverse --scope user || return 1
   info "Claude Code done — start (or restart) claude so the plugin loads."
+  info "  The MCP entry is rebuilt from scratch; re-add any custom '-e' vars."
 }
 
 wire_gemini() {
   info "Wiring Gemini CLI (extension)..."
-  gemini extensions install "https://github.com/${REPO}" || return 1
+  if version_pinned; then
+    info "Gemini CLI: extension left untouched — ${VERSION} pins the binary only."
+    info "  Install or refresh it with: gemini extensions install https://github.com/${REPO}"
+    return 0
+  fi
+  # `extensions install` rejects an extension that is already installed, and
+  # `update` fails when there is none — try the upgrade, fall back to the
+  # first install.
+  gemini extensions update gnomcp 2>/dev/null ||
+    gemini extensions install "https://github.com/${REPO}" || return 1
   info "Gemini CLI done — restart gemini so the extension loads."
 }
 
