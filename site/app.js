@@ -1,3 +1,4 @@
+(function () {
   /* Simple Analytics pre-load queue: the SA script drains window.sa_event.q on
      load. Fire-and-forget - analytics must never break the page. */
   var saEvent = function (name) {
@@ -24,7 +25,7 @@
         var sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
-        flash("Press ⌘C");
+        flash(/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "Press ⌘C" : "Press Ctrl+C");
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(btn.dataset.copy)
@@ -47,3 +48,4 @@
     }, { rootMargin: "0px 0px -8% 0px" });
     document.querySelectorAll(".reveal").forEach(function (el) { io.observe(el); });
   }
+})();
