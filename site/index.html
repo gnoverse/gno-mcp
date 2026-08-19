@@ -6,11 +6,21 @@
 <meta name="description" content="gnomcp puts your AI agent on gno.land: audit contracts before you trust them, get chain questions answered in plain language, and ship real apps from a conversation.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#070e1a">
+<link rel="canonical" href="https://mcp.gno.dev/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mcp.gno.dev/">
+<meta property="og:title" content="gnomcp · put your agent on gno.land">
+<meta property="og:description" content="gnomcp puts your AI agent on gno.land: audit contracts before you trust them, get chain questions answered in plain language, and ship real apps from a conversation.">
+<meta name="twitter:card" content="summary">
+<link rel="preload" href="fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%230a0a0a%22/%3E%3Ctext x=%2232%22 y=%2246%22 font-size=%2238%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%238ec5b2%22 text-anchor=%22middle%22%3E%E2%9D%AF%3C/text%3E%3C/svg%3E">
 <title>gnomcp · put your agent on gno.land</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<a class="skip-link" href="#top">Skip to content</a>
 
 <header class="site-header">
   <div class="container">
@@ -35,8 +45,8 @@
           <h1>Read, audit, and build on <em>gno.land</em> with your AI agent</h1>
           <p class="hero-sub">gnomcp puts your agent on <a href="https://gno.land">gno.land</a>, where every contract is published as readable source. Ask whether a contract is safe, have a vote explained, or turn an idea into a live app.</p>
           <div class="install-line">
-            <code id="install-cmd"><span class="dollar">$ </span>curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh</code>
-            <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh">Copy</button>
+            <code><span class="dollar">$ </span>curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh</code>
+            <button class="copy-btn" type="button" aria-live="polite" data-copy="curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh">Copy</button>
           </div>
           <p class="install-note">Pipes a script into your shell. <a href="https://github.com/gnoverse/gno-mcp/blob/main/scripts/install.sh">Read it first ↗</a></p>
           <div class="hero-actions">
@@ -137,7 +147,7 @@
         </div>
         <div class="flow">
           <h3>Delegate, with a hard cap</h3>
-          <blockquote>From now on act as my account: budget 5 GNOT, only gno.land/r/demo/profile, for two weeks.</blockquote>
+          <blockquote>From now on act as my account: budget 5 GNOT, only gno.land/r/demo/profile, for 48 hours.</blockquote>
           <p>The chain itself enforces the budget, the paths, and the expiry. No clever prompt can spend past them.</p>
         </div>
       </div>
@@ -147,7 +157,7 @@
           <span class="eyebrow">Sessions</span>
           <h3>Act as yourself, safely</h3>
           <p>Want writes under your own address? The agent proposes a scoped session and hands you a <code>gnokey</code> command to sign on your own machine. It never touches your keys. Once approved it writes as you, within the limits you set, and revoking takes one command.</p>
-          <p class="sessions-note"><span class="wip-chip">Pre-release</span><span>Sessions are the newest part of gnomcp and still evolving. Keep scopes tight and spend limits low.</span></p>
+          <p class="sessions-note"><span class="wip-chip">Pre-release</span><span>Sessions are the newest part of gnomcp and still evolving. Keep scopes tight, spend limits low, and expiry short.</span></p>
         </div>
         <div class="session-steps" role="group" aria-label="Session authorization flow">
           <div class="session-step"><span class="s-n">01</span><span class="s-t"><b>Agent proposes:</b> scoped paths, spend limit, expiry</span></div>
@@ -209,7 +219,7 @@
       <div class="inv-grid reveal">
         <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Your keys stay in gnokey</h3><p>The agent signs with its own key. Acting as you goes through an authorization you sign yourself.</p></div></div>
         <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>No signing on real-funds chains</h3><p>A write path for real-funds chains does not exist in the code. Writes stay on dev and testnet chains.</p></div></div>
-        <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Chain output is data, not instructions</h3><p>Everything read from the chain is wrapped as untrusted content, so a malicious realm can't steer the agent.</p></div></div>
+        <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Chain output is data, not instructions</h3><p>Text read from the chain is wrapped as untrusted content, and raw source arrives as resource data, so a malicious realm can't pass its content off as instructions.</p></div></div>
         <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Bounded reads</h3><p>Output is budgeted and summarized, never silently truncated.</p></div></div>
         <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Every write is logged</h3><p>An append-only trail records the tool, the profile, the result, and which account signed.</p></div></div>
         <div class="inv"><span class="mark" aria-hidden="true"></span><div><h3>Structured errors</h3><p>Machine-routable codes and recovery hints, so the agent fails forward.</p></div></div>
@@ -232,8 +242,11 @@
         <div class="step">
           <span class="step-n">01</span>
           <h3>Install</h3>
-          <div class="mini-cmd"><span class="dollar">$ </span>curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh</div>
-          <p>This pipes a script from the internet into your shell, so <a href="https://github.com/gnoverse/gno-mcp/blob/main/scripts/install.sh">read it first</a>. Claude Code, Gemini CLI, and Codex are wired automatically; OpenCode gets printed steps.</p>
+          <div class="mini-cmd">
+            <code><span class="dollar">$ </span>curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh</code>
+            <button class="copy-btn" type="button" aria-live="polite" data-copy="curl -fsSL https://raw.githubusercontent.com/gnoverse/gno-mcp/main/scripts/install.sh | sh">Copy</button>
+          </div>
+          <p>This pipes a script from the internet into your shell, so <a href="https://github.com/gnoverse/gno-mcp/blob/main/scripts/install.sh">read it first</a>. Claude Code, Gemini CLI, and Codex are wired automatically; OpenCode gets printed steps. Cursor installs as <a href="https://github.com/gnoverse/gno-mcp/blob/main/docs/gnomcp.md#cursor">a plugin</a>; Claude Desktop and <a href="https://github.com/gnoverse/gno-mcp/blob/main/docs/gnomcp.md#other-mcp-clients">any other MCP client</a> take one config block.</p>
         </div>
         <div class="step">
           <span class="step-n">02</span>
