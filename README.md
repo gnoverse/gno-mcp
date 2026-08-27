@@ -42,9 +42,9 @@ gnomcp ships pointed at the public testnet and a local gnodev node — nothing t
 
 | Profile | Chain-id | RPC |
 |---------|----------|-----|
-| `testnet` | `sapphire-1` | `https://rpc.sapphire.testnets.gno.land:443` |
+| `testnet` | `pearl-1` | `https://rpc.pearl.testnets.gno.land:443` |
 | `local` | `dev` | `http://127.0.0.1:26657` (local [gnodev](https://docs.gno.land/builders/local-dev-with-gnodev) node) |
-| `topaz` | `topaz-1` | `https://rpc.topaz.testnets.gno.land:443` (sunset predecessor — still writable) |
+| `sapphire` | `sapphire-1` | `https://rpc.sapphire.testnets.gno.land:443` (sunset predecessor — still writable) |
 
 Then talk to your agent in plain language. New to gno.land? Just ask it to teach you — it gauges your background and gives you a hands-on tour (the `gno-onboard` skill). Otherwise:
 

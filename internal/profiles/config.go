@@ -49,7 +49,7 @@ type Profile struct {
 func (p Profile) IsLocal() bool { return p.ChainID == "dev" }
 
 // IsTestnet reports whether the profile targets a write-capable testnet (a
-// chain on the testnet name list, e.g. sapphire-1, topaz-1 — sunset or not).
+// chain on the testnet name list, e.g. pearl-1, sapphire-1 — sunset or not).
 // Read-only chains (mainnet/betanet) are NOT testnets: they have no agent key
 // path and no faucet.
 func (p Profile) IsTestnet() bool {
@@ -138,8 +138,8 @@ func Load(r io.Reader) (*Config, error) {
 // the canonical persistent testnet rolls (append the new codename to
 // testnetChainNames in validate.go and demote the previous chain to a sunset
 // builtin named after its codename). The chain reports its chain-id with a
-// version suffix ("sapphire-1") while its hosts use the bare codename
-// ("sapphire.testnets.gno.land"). Builtins carry at most the current testnet
+// version suffix ("pearl-1") while its hosts use the bare codename
+// ("pearl.testnets.gno.land"). Builtins carry at most the current testnet
 // and its immediate predecessor: a chain drops out once its hosts stop
 // resolving, since a profile pointing at dead infrastructure only offers the
 // agent a chain every call fails against.
@@ -147,20 +147,20 @@ const (
 	builtinLocalRPC   = "http://127.0.0.1:26657"
 	builtinLocalChain = "dev"
 
-	builtinTestnetRPC     = "https://rpc.sapphire.testnets.gno.land:443"
-	builtinTestnetChain   = "sapphire-1"
-	builtinTestnetGnoweb  = "https://sapphire.testnets.gno.land"
-	builtinTestnetIndexer = "https://indexer.sapphire.testnets.gno.land/graphql/query"
-	builtinTestnetFaucet  = "https://faucet-agent.sapphire.testnets.gno.land"
+	builtinTestnetRPC     = "https://rpc.pearl.testnets.gno.land:443"
+	builtinTestnetChain   = "pearl-1"
+	builtinTestnetGnoweb  = "https://pearl.testnets.gno.land"
+	builtinTestnetIndexer = "https://indexer.pearl.testnets.gno.land/graphql/query"
+	builtinTestnetFaucet  = "https://faucet-agent.pearl.testnets.gno.land"
 
-	// topaz is the sunset predecessor: still fully writable while its infra
+	// sapphire is the sunset predecessor: still fully writable while its infra
 	// stays up (deploys, faucet, indexer all live) — the sunset label only
 	// steers new work toward the current testnet.
-	builtinTopazRPC     = "https://rpc.topaz.testnets.gno.land:443"
-	builtinTopazChain   = "topaz-1"
-	builtinTopazGnoweb  = "https://topaz.testnets.gno.land"
-	builtinTopazIndexer = "https://indexer.topaz.testnets.gno.land/graphql/query"
-	builtinTopazFaucet  = "https://faucet-agent.topaz.testnets.gno.land"
+	builtinSapphireRPC     = "https://rpc.sapphire.testnets.gno.land:443"
+	builtinSapphireChain   = "sapphire-1"
+	builtinSapphireGnoweb  = "https://sapphire.testnets.gno.land"
+	builtinSapphireIndexer = "https://indexer.sapphire.testnets.gno.land/graphql/query"
+	builtinSapphireFaucet  = "https://faucet-agent.sapphire.testnets.gno.land"
 )
 
 // BuiltinProfiles returns the zero-config default profiles: the current
@@ -181,12 +181,12 @@ func BuiltinProfiles() map[string]Profile {
 			TxIndexerURL:     builtinTestnetIndexer,
 			FaucetServiceURL: builtinTestnetFaucet,
 		},
-		"topaz": {
-			RPCURL:           builtinTopazRPC,
-			ChainID:          builtinTopazChain,
-			GnowebURL:        builtinTopazGnoweb,
-			TxIndexerURL:     builtinTopazIndexer,
-			FaucetServiceURL: builtinTopazFaucet,
+		"sapphire": {
+			RPCURL:           builtinSapphireRPC,
+			ChainID:          builtinSapphireChain,
+			GnowebURL:        builtinSapphireGnoweb,
+			TxIndexerURL:     builtinSapphireIndexer,
+			FaucetServiceURL: builtinSapphireFaucet,
 			Sunset:           true,
 		},
 	}

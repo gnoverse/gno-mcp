@@ -6,9 +6,9 @@ image: l2-gnomcp
 timeout-minutes: 20
 covers: [external.session-spend, session.propose, session.authorize, write.signer-reporting]
 ---
-# Session spend on the LIVE sapphire testnet — a modest limit funds real writes
+# Session spend on the LIVE pearl testnet — a modest limit funds real writes
 
-Driver context: the AUT runs `l2-gnomcp` (built-in `testnet` profile → live sapphire-1,
+Driver context: the AUT runs `l2-gnomcp` (built-in `testnet` profile → live pearl-1,
 chain gas price 1ugnot/1000gas as of 2026-08-09 — re-read it, it is the value most
 likely to have moved). This scenario pins the
 fee/spend decoupling on a real network: a **1000000ugnot** spend limit — far too
@@ -17,8 +17,8 @@ gas a light write actually reserves — must fund several session-signed writes.
 
 Preflight (driver, before turn 1):
 - Create a throwaway master key in a scratch gnokey home (`gnokey add`), fund it via
-  the live agent faucet (`POST https://faucet-agent.sapphire.testnets.gno.land/fund`,
-  body `{"address": "<addr>", "chain_id": "sapphire-1"}` — grants 10 GNOT), and confirm
+  the live agent faucet (`POST https://faucet-agent.pearl.testnets.gno.land/fund`,
+  body `{"address": "<addr>", "chain_id": "pearl-1"}` — grants 10 GNOT), and confirm
   the balance via RPC before sending turn 1.
 - Substitute `$MASTER_ADDR` (the funded address) in Instruct text exactly like
   `$RUN_ID`. This scenario has no fixed premined master — external chains have no
@@ -26,7 +26,7 @@ Preflight (driver, before turn 1):
 - Record `FEE` = the live per-write fee: `ceil(10000000 × price) × 2` from
   `auth/gasprice` (equivalently what `gno_account`-era `GasFeeUgnot` reports;
   20000ugnot at 1/1000). All spend arithmetic below is in units of `FEE`.
-- External tier: `blocked` (never `fail`) if sapphire RPC or the faucet is down.
+- External tier: `blocked` (never `fail`) if pearl RPC or the faucet is down.
   Chain ground truth comes from the driver's own RPC queries
   (`auth/accounts/$MASTER_ADDR/session/<session>`), not gnoquery.
 
