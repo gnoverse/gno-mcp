@@ -1,6 +1,6 @@
 # Tools
 
-26 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
+25 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
 
 Chain-returned bytes are untrusted: the inline-text read/indexer tools (including `gno_render`) wrap their output in an `<untrusted_content>` envelope, and `gno_read` delivers content as an MCP resource (see `docs/security.md` §4).
 
@@ -47,7 +47,7 @@ These tools require no config — the built-in `local` and `testnet` profiles ar
 ### `gno_profile_list`
 
 - **Args:** none
-- **Returns:** the catalog of loaded profiles — per profile: name, chain-id, kind (`local` | `testnet` | `read-only`), a `sunset` flag (retiring testnet — still fully writable; prefer the current testnet for new work), and the configured endpoints (RPC, gnoweb, tx-indexer, faucet). Plain config, never dialed — use `gno_status` for liveness. This is how an agent maps a chain the user names ("on sapphire", "on topaz") to the profile to pass to other tools.
+- **Returns:** the catalog of loaded profiles — per profile: name, chain-id, kind (`local` | `testnet` | `read-only`), a `sunset` flag (retiring testnet — still fully writable; prefer the current testnet for new work), and the configured endpoints (RPC, gnoweb, tx-indexer, faucet). Plain config, never dialed — use `gno_status` for liveness. This is how an agent maps a chain the user names ("on pearl", "on sapphire") to the profile to pass to other tools.
 
 ## Read-only (discovery)
 
@@ -63,17 +63,11 @@ These tools require no config — the built-in `local` and `testnet` profiles ar
 
 - **Args:** `name` (required), then exactly one form: `rpc_url` + `chain_id` (explicit), or `gnoweb_url` (discovery). Optional: `tx_indexer_url`, `faucet_service_url`, `faucet_url`.
 - **Returns:** confirmation plus the `gnomcp profile add` command to persist the profile.
-- Adds a profile **in-memory only** — it disappears on restart and never touches `profiles.toml`. Init-time profiles cannot be overridden; re-adding a dynamically added name replaces it. Only `dev` and known-testnet chain-ids (`test*`, `topaz-*`, `sapphire-*`) are accepted, and the node is dialed to confirm it reports the declared chain-id (gnoweb meta-tags are a hint, not truth; a non-loopback gnoweb advertising a loopback RPC is rejected). No `master-address` field: dynamic profiles support reads and agent-key writes only — sessions require a persisted profile. After a successful add the tool set is re-published (`tools/list_changed`), which can summon gated tools (faucet, indexer) mid-session.
+- Adds a profile **in-memory only** — it disappears on restart and never touches `profiles.toml`. Init-time profiles cannot be overridden; re-adding a dynamically added name replaces it. Only `dev` and known-testnet chain-ids (`test*`, `sapphire-*`, `pearl-*`) are accepted, and the node is dialed to confirm it reports the declared chain-id (gnoweb meta-tags are a hint, not truth; a non-loopback gnoweb advertising a loopback RPC is rejected). No `master-address` field: dynamic profiles support reads and agent-key writes only — sessions require a persisted profile. After a successful add the tool set is re-published (`tools/list_changed`), which can summon gated tools (faucet, indexer) mid-session.
 
 ## Read-only (indexer)
 
-These three tools are only registered when at least one profile has a `tx-indexer-url` set.
-
-### `gno_list`
-
-- **Args:** `namespace?`, `tag?`, `category?`, `profile?`
-- **Returns:** filtered list of realms from the tx-indexer catalog, wrapped in an `<untrusted_content>` envelope (entries echo realm-supplied paths and descriptions).
-- The tx-indexer schema does not expose a realms query yet, so every call currently returns an error — the contract above describes the tool once that indexer support lands. Use `gno_packages` to enumerate realms in the meantime.
+Both tools are only registered when at least one profile has a `tx-indexer-url` set.
 
 ### `gno_history`
 

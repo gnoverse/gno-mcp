@@ -257,11 +257,20 @@ Three predicates that look interchangeable but aren't:
 | Authority transitions gated at the right boundary | Crossing entrypoints use their runtime-current first `cur`; non-crossing helper methods that accept `_ int, rlm realm` check `rlm.IsCurrent()` before resolving realm identity. |
 | Forgery defended by nominal type assertion | `IsCanonicalTeller(t)` checks `_, ok := t.(*fnTeller)`. Embedding wrappers fail this. |
 | `*PrivateLedger`'s unauthenticated mutators isolated by package privacy | `Mint`/`Burn`/etc. have no `cur` check. They're safe only because no realm exports the `*PrivateLedger` pointer. |
+| Frame-relative tellers confined to their home realm | The `CallerTeller()` write path checks that the invoking realm is the token's own, sub-realms included, so a teller a realm builds and then exports is inert anywhere else. **pearl only.** |
+
+**`CallerTeller()` differs by chain** — `(*PrivateLedger)` on pearl, `(*Token)` on sapphire; it is
+the sole difference in grc20's 26-function exported surface. The receiver matters to the argument
+above: on pearl only the creating realm holds the ledger, so a foreign realm cannot mint a
+frame-relative teller at all, and the home-realm check makes a leaked one useless. On sapphire any
+holder of the published `*Token` can construct one, and construction privacy is the only barrier —
+which is why code that passes tellers between realms may pass review on sapphire and break on pearl.
+`networks.md` carries the full cross-chain drift surface.
 
 Realm authors using GRC20 must:
 
 1. Store `*PrivateLedger` in a **lowercase** package-level variable.
-2. Expose only authenticated entry points (`Transfer(cur realm, to address, amount int64)` calling `userTeller.Transfer(...)`).
+2. Expose only authenticated entry points (`Transfer(cur realm, to address, amount int64)` calling `userTeller.Transfer(...)`), taking the caller teller off whichever receiver the target chain declares it on.
 3. If accepting a `Teller` from external callers, gate with `IsCanonicalTeller(t)` before dispatching its methods.
 4. **Never import `gno.land/r/tests/vm/test20`** — its `PrivateLedger` is deliberately exported for tests; using it in production = instant compromise.
 

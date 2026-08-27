@@ -54,7 +54,7 @@ wrong deployment).
 Never block on the MCP — it's an accelerator, not a dependency (see `mcp.md`). Raw ABCI recipe:
 
 ```bash
-RPC=https://rpc.sapphire.testnets.gno.land:443   # chain-id sapphire-1
+RPC=https://rpc.pearl.testnets.gno.land:443   # chain-id pearl-1
 hex=$(printf '%s' 'gno.land/r/sys/names.IsEnabled()' | xxd -p | tr -d '\n')
 curl -s "$RPC/abci_query?path=%22vm/qeval%22&data=0x$hex"   # value = base64 at result.response.ResponseBase.Data
 # paths: vm/qeval (eval expr) · vm/qfuncs (list exported funcs, data=pkgpath) · vm/qrender (data=pkgpath:renderpath)
@@ -140,12 +140,12 @@ the chain, don't recite it): `auth:p:fee_collector` (gas fee collector), `vm:p:s
 (storage-deposit collector — distinct from the gas one), `vm:p:storage_price`, `node:p:halt_height`,
 `bank:p:restricted_denoms`.
 
-## Worked example — "how do I register a name on sapphire?"
+## Worked example — "how do I register a name on pearl?"
 
 The model in action. Every concrete value comes from a live query; you explain the steps, the user
 runs the funded tx.
 
-1. **Confirm the chain.** `gno_status` (or RPC `/status`) → chain-id is `sapphire-1`. Now reads are about
+1. **Confirm the chain.** `gno_status` (or RPC `/status`) → chain-id is `pearl-1`. Now reads are about
    the chain the user actually means.
 2. **Is enforcement even on?** `gno_eval gno.land/r/sys/names.IsEnabled()`. If `false`, namespace
    enforcement is off on this network — anyone can already deploy under any `r/<name>/*` and registering
@@ -165,7 +165,7 @@ runs the funded tx.
    theirs; you don't broadcast it.
 
 The point: whether `namereg/v1` exists, whether enforcement is on, the exact format and price — all of it
-came from querying sapphire, not from this file.
+came from querying pearl, not from this file.
 
 ## See also
 
@@ -177,5 +177,5 @@ came from querying sapphire, not from this file.
 ## Source
 
 Distilled from `examples/gno.land/r/sys/*` + `gnovm/stdlibs/sys/params` in gnolang/gno, the gnolang/gno
-issue/PR roadmap, per-network genesis configs, and verified against live sapphire and topaz (ABCI `vm/qfuncs`/`qeval`/`qrender`).
+issue/PR roadmap, per-network genesis configs, and verified against live pearl and sapphire (ABCI `vm/qfuncs`/`qeval`/`qrender`).
 The design above is durable; concrete values are intentionally absent — query the live chain.

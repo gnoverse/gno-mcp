@@ -150,7 +150,7 @@ See `build.md` for filetest layout and authoring patterns.
 
 ## Common community packages (kept in `examples/`)
 
-The packages below survived the test-13 quarantine (`examples/quarantined/` got everything else) — safe to import, but verify against the target chain: neither live testnet deploys every listed package (grc721 is on neither; commondao is on topaz but NOT sapphire, which carries 140 packages to topaz's 397):
+The packages below survived the test-13 quarantine (`examples/quarantined/` got everything else) — safe to import, but verify against the target chain: neither live testnet deploys every listed package (grc721 and commondao are on neither; pearl carries 85 packages to sapphire's 397):
 
 | Purpose | Import path |
 |---|---|
@@ -161,10 +161,10 @@ The packages below survived the test-13 quarantine (`examples/quarantined/` got 
 | Ownership / single-owner pattern | `gno.land/p/nt/ownable/v0` |
 | Authorization patterns | `gno.land/p/moul/authz` |
 | Pagination | `gno.land/p/jeronimoalbi/pager` |
-| DAO primitives | `gno.land/p/nt/commondao/v0` — **topaz only, absent on sapphire** |
+| DAO primitives | `gno.land/p/nt/commondao/v0` — **absent from both live testnets** |
 | Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` |
 
-There is no canonical GRC721/NFT package deployed on either live testnet — `gno.land/p/demo/tokens/grc721` does not resolve on-chain (verified on sapphire and topaz). Query the target chain before assuming an NFT import path.
+There is no canonical GRC721/NFT package deployed on either live testnet — `gno.land/p/demo/tokens/grc721` does not resolve on-chain (verified on pearl and sapphire). Query the target chain before assuming an NFT import path.
 
 **Use `avl.Tree` (or `bptree`) instead of Go's `map`** for growing keyed state — a persisted map rewrites wholesale on every mutation, and its insertion-order iteration is an impl detail, not an ordering contract. (Iteration is deterministic, so it's a gas/design issue, not a consensus risk.) See `patterns.md` and `memory.md` § Map iteration order.
 

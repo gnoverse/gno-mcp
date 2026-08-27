@@ -138,7 +138,7 @@ For in-repo development register a dev server once: `claude mcp add gnomcp -- go
 
 ## Configuration
 
-Profiles are the source of truth for which chains gnomcp can reach; `testnet` (the current public testnet), its sunset predecessor (e.g. `topaz` — still writable, labeled sunset), and `local` ship built in — `gno_profile_list` shows the loaded catalog with each profile's chain-id and endpoints. Any format-safe chain-id can be added: dev and testnet chains are read/write, while mainnet and betanet are admitted **read-only** — the agent can inspect and audit deployed code, but no code path signs a transaction there, and `master-address` on a read-only chain is rejected.
+Profiles are the source of truth for which chains gnomcp can reach; `testnet` (the current public testnet), its sunset predecessor (e.g. `sapphire` — still writable, labeled sunset), and `local` ship built in — `gno_profile_list` shows the loaded catalog with each profile's chain-id and endpoints. Any format-safe chain-id can be added: dev and testnet chains are read/write, while mainnet and betanet are admitted **read-only** — the agent can inspect and audit deployed code, but no code path signs a transaction there, and `master-address` on a read-only chain is rejected.
 
 gnomcp can connect to a chain on the fly during a session, but a chain added that way isn't saved. Persist the ones you want it to remember between runs with `gnomcp profile add` (below); a saved profile is also what user-session writes need, since it carries the `master-address`.
 
@@ -181,7 +181,7 @@ tx-indexer-url     = "https://my-indexer.example.com/graphql/query"  # …then c
 rpc-url              = "https://rpc.test99.testnets.gno.land:443"
 chain-id             = "test99"
 master-address       = "g1..."       # enables session writes — the agent acting as this user (bech32)
-tx-indexer-url       = "..."         # optional; enables gno_history/gno_activity (gno_list pending indexer support) — full GraphQL endpoint including path, see below
+tx-indexer-url       = "..."         # optional; enables gno_history/gno_activity — full GraphQL endpoint including path, see below
 default-spend-limit  = "50000000ugnot" # optional; per-session default — must cover at least one write's gas fee at the chain's live gas price, or every propose fails
 default-expires-in   = "1h"          # optional; Go duration string
 faucet-url           = "..."         # optional; faucet page gno_faucet_fund links the user to

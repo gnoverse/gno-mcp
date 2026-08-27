@@ -1,73 +1,107 @@
 # Networks — per-chain facts and cross-chain drift
 
-Both public testnets are live and **fully writable**: sapphire (chain-id `sapphire-1`) is the
-current chain, topaz (`topaz-1`) is its sunset predecessor (retiring — prefer sapphire for new
-work, but deploys to topaz must work without friction). Every value below was verified live on
-**2026-08-09**; chain state moves, so re-query anything load-bearing (`gno_status`,
-`auth/gasprice`, a realm's render) before relying on it. Method and design live in the topic
-references — this file is only the per-chain snapshot and the cross-chain differences.
+Both public testnets are live and **fully writable**: pearl (chain-id `pearl-1`) is the current
+chain, sapphire (`sapphire-1`) is its sunset predecessor, retiring but still fully writable
+(prefer pearl for new work, but deploys to sapphire must work without friction). Every value below
+was verified live on **2026-08-27**; chain state moves, so re-query anything load-bearing
+(`gno_status`, `auth/gasprice`, a realm's render) before relying on it. Method and design live in
+the topic references — this file is only the per-chain snapshot and the cross-chain differences.
 
 ## Per-chain matrix
 
-| Fact | sapphire — current | topaz — sunset, still writable |
+| Fact | pearl — current | sapphire — sunset, still writable |
 |---|---|---|
-| chain-id | `sapphire-1` | `topaz-1` |
-| RPC | `rpc.sapphire.testnets.gno.land:443` | `rpc.topaz.testnets.gno.land:443` |
-| gnoweb | `sapphire.testnets.gno.land` | `topaz.testnets.gno.land` |
+| chain-id | `pearl-1` | `sapphire-1` |
+| RPC | `rpc.pearl.testnets.gno.land:443` | `rpc.sapphire.testnets.gno.land:443` |
+| gnoweb | `pearl.testnets.gno.land` | `sapphire.testnets.gno.land` |
 | node version | `v1.0.0-rc.0` | `v1.0.0-rc.0` (same) |
 | gas price (`auth/gasprice`) | `1ugnot/1000gas` (genesis floor) | `1ugnot/1000gas` (same) |
 | minimum fee (price floor) for a 10M-gas write | 10,000 ugnot (0.01 GNOT) — gnomcp offers ×2 over the floor (`gnokey.md`) | same |
 | storage deposit (`params/vm:p:storage_price`) | 100 ugnot | 100 ugnot (same) |
 | CLA deploy gate (`r/sys/cla`) | **OFF** — "enforcement is currently DISABLED" | **OFF** (same) |
 | namespace gate (`r/sys/names.IsEnabled`) | `true`; personal-address path free | same |
-| name registration | `r/sys/namereg/v1`, not paused; `registerPrice` is **0 today** but GovDAO-settable (`ProposeNewRegisterPrice`), and `Register` requires the sent amount to equal it exactly — read it live, don't assume free | same flow, same controller |
+| name registration | `r/sys/namereg/v1`, not paused; `registerPrice` **0 today** but GovDAO-settable, and `Register` requires the sent amount to equal it exactly — read it live, don't assume free. Format `nym-<stem><digits>`: stem 5–13 lowercase letters, exactly 3 digits, 12–20 chars total. No names registered yet | same controller, same format and price; names already registered |
 | faucet (`faucet-agent.<host>/limits`) | 10 GNOT/grant, 1/addr/24h | identical, still live |
-| tx indexer | `indexer.sapphire…/graphql/query` | `indexer.topaz…/graphql/query` (live) |
-| toolchain tag (local testing) | `chain/sapphire` at `9ab5198` — matches its branch tip; node reports `build_version: chain/sapphire` | `chain/topaz` at `fc40526` — **lags** `heads/chain/topaz` (`63c2673`); node reports a branch build, so pin that sha |
-| ecosystem | 140 pkgs (fresh chain, 11 in user namespaces) | 397 pkgs |
-| notably absent | grc721, GnoSwap, Akkadia, `p/nt/commondao/v0`, `r/gnoland/boards2/v1/hub` | grc721 |
-| only here | `p/nt/groups/v0`, `p/gnoland/boards/exts/hub` | `p/nt/commondao/v0`, `boards2` hub |
+| tx indexer | `indexer.pearl…/graphql/query` — current, sitting at the chain tip, and running a build that serves `getSupply` | `indexer.sapphire…/graphql/query` — current, but an older build with no `getSupply` |
+| toolchain tag (local testing) | `chain/pearl` at `c4c72fd` — matches `heads/chain/pearl` | `chain/sapphire` at `9ab5198` — matches its branch tip |
+| ecosystem | 85 pkgs — the curated genesis set, no user deploys yet | 397 pkgs |
+| notably absent | grc721, GnoSwap, Akkadia, `p/nt/commondao/v0` | grc721 under `p/demo`, `p/nt/commondao/v0` |
+| only here | nothing — pearl's tree is a strict subset of sapphire's | 312 user-namespace deploys (GnoSwap, aib IBC, personal-address packages) |
 
-Toolchain tags use the short chain **name**, never the chain-id (`chain/sapphire`, not
-`chain/sapphire-1`). Both chains ship one, and neither is a valid `go install @` ref (the `/`),
-so both install by commit SHA — see `toolchain.md`. Watch the tag-vs-branch gap: sapphire's tag
-is its branch tip, topaz's is not, so for topaz pin the sha its node reports rather than the tag.
+Toolchain tags use the short chain **name**, never the chain-id (`chain/pearl`, not `chain/pearl-1`).
+Both chains ship one, both match their branch tips, and neither is a valid `go install @` ref (the
+`/`), so both install by commit SHA — see `toolchain.md`. Neither node reports a build sha (`/status`
+carries a release `version` and an empty `software`), so the tag is the only anchor the repo offers.
 
-Namespaces are registered on sapphire for aib, akkadia, gnoswap, onbloc and samcrew, but those
-teams have **not deployed yet** — a registered namespace is not a deployed package. Query the
-chain before importing anything from them.
+**Pearl carries no user deploys.** It launched fresh on 2026-08-27 with a curated 85-package genesis
+and no namespaces claimed, so anything outside that set is absent — including packages that exist on
+sapphire. Query the chain before importing.
+
+**Supply figures come from the indexer, on pearl only.** `getSupply(denom)` returns `total`,
+`locked` and `spendable` at a given height, where `locked` is the unvested portion held by vesting
+accounts. Pearl created vesting accounts at genesis, which is what makes the split meaningful there;
+sapphire's indexer runs a build without the query. Read it from the indexer, never from a realm.
+
+## Retired chains
+
+**topaz (`topaz-1`)** is gone: its RPC, gnoweb, indexer and faucet hostnames no longer resolve, so
+gnomcp ships no builtin profile for it and `topaz-1` is no longer a writable chain-id. Its tag
+`chain/topaz` (`fc40526`) survives in the repo and sits **behind** `heads/chain/topaz` (`63c2673`),
+which is why a tag is worth comparing against its branch head before pinning. `p/nt/commondao/v0`
+was deployed only here, so it now resolves on no live testnet.
+
+Earlier numbered testnets (`test1`–`test13`) are likewise dead; the `test` name stays writable
+because it also covers the e2e simnet's `test-9999`.
 
 ## Cross-chain API drift — same import path, different source
 
-Sapphire and topaz were cut close together, so the shared packages barely moved. Diffing the
-deployed sources of `p/nt/avl/v0`, `p/nt/uassert/v0` and `p/nt/markdown/sanitize/v0` on both
-chains: **byte-identical**. The one difference is additive:
+Pearl was cut from a later master than sapphire, so shared packages have moved. Comparing the
+deployed sources of the 22 packages these references teach, file by file:
 
-| Package | topaz form | sapphire form |
-|---|---|---|
-| `p/demo/tokens/grc20` | no creation event | `NewToken` now emits a `NewToken` event (`NewTokenEvent`) carrying `Token.ID()`, name, symbol, decimals |
+| Package | pearl vs sapphire |
+|---|---|
+| `p/nt/{ufmt,uassert,urequire,seqid,ownable,mux,bptree,testutils}/v0`, `p/moul/{txlink,authz,realmpath}`, `p/jeronimoalbi/pager`, `r/sys/cla`, `r/gnoland/blog`, `r/tests/vm` | byte-identical |
+| `p/nt/avl/v0` | a documentation link in `README.md`; API and implementation identical |
+| `p/nt/markdown/sanitize/v0` | added test cases only; `sanitize.gno` identical |
+| `p/nt/treasury/v0` | `render.gno` puts banker IDs through `md.EscapeText`; signatures unchanged, rendered output differs |
+| `r/sys/names`, `r/sys/namereg/v1`, `r/sys/users` | internals only — **exported API identical** (6, 11 and 29 functions, same signatures). Pearl adds `cur.IsCurrent()` guards to crossing entrypoints such as `names.Enable`, so the boundary rule `security.md` teaches is enforced in the genesis realms themselves |
+| `p/demo/tokens/grc20` | **breaking** — see below |
 
-`NewToken`'s signature (`NewToken(name, symbol string, decimals int, id seqid.ID, rlm realm)`) and
-`Token.ID()`'s format are **unchanged** between the two chains, so grc20 code ports either way; only
-an indexer watching for the new event sees a difference.
+**`p/demo/tokens/grc20` breaks source compatibility.** `CallerTeller()` moved off `*Token` and onto
+`*PrivateLedger`:
 
-That is the whole drift surface for these packages — do not assume the larger test13-era divergence
-still applies. It does not: code written against topaz compiles and behaves the same on sapphire.
-Still read the **target chain's** deployed source (`gno_read` / `vm/qfile`) before relying on any
-package this file does not cover.
+```go
+tok, ledger := newTestToken(...)
+teller := tok.CallerTeller()     // sapphire
+teller := ledger.CallerTeller()  // pearl
+```
+
+Pearl also adds a `guardHome` check: a frame-relative teller only works inside the token's own realm
+(sub-realms included), so a teller that a realm builds and then exports is inert everywhere else.
+Code written against sapphire's grc20 will not compile on pearl, and a design that passed tellers
+between realms will not work there. Port deliberately rather than assuming it moves.
+
+One breaking change in 22 packages, and it is the only difference an importer can observe: every
+other package either matches byte for byte or moved without touching its exported signatures. Still
+read the **target chain's** deployed source (`gno_read` / `vm/qfile`) before relying on any package
+this file does not cover.
 
 ## Deploying to either chain — the checklist
 
 1. **Confirm the target** — `gno_status` (chain-id) or `gno_profile_list` (name ↔ chain-id map).
 2. **Gates** — namespace: personal-address path is free on both. CLA: enforcement is **off on both
    chains today**, so no `Sign` step is needed — but it is a chain setting, so confirm live with
-   `gno_cla_info` rather than trusting this line.
+   `gno_cla_info` rather than trusting this line. Both chains currently accept code from anyone
+   (no code-submission policy set); a chain may adopt a review gate that parks a deploy instead of
+   publishing it, so read the deploy's result rather than assuming a package went live.
 3. **Fund** — faucets are identical (10 GNOT, 1/addr/24h) and both live.
 4. **Fees** — same price on both (`1ugnot/1000gas`); still query `auth/gasprice` per chain, since
    this is the value most likely to drift next.
-5. **Imports** — the drift table above is short, but sapphire carries far fewer packages (140 vs
-   397). "It exists on topaz" does not mean it exists on sapphire — verify on the target chain.
-6. **Local tests** — use the chain-matched toolchain and vendor on-chain deps from the matching
+5. **Imports** — pearl carries 85 packages to sapphire's 397, and pearl's set is a strict subset.
+   "It exists on sapphire" does not mean it exists on pearl — verify on the target chain. Where a
+   package exists on both, check the drift table: grc20 in particular is not source-compatible.
+6. **Transaction history** — `gno_activity`/`gno_history` work on both chains. To enumerate what
+   is deployed, use `gno_packages`, which reads the chain directly and needs no indexer.
+7. **Local tests** — use the chain-matched toolchain and vendor on-chain deps from the matching
    source tree; a develop-HEAD toolchain can refuse to compile deps auto-fetched from either chain
-   (`toolchain.md`). Both chains install by commit SHA; for topaz take the sha from `/status`,
-   since `chain/topaz` lags its branch.
+   (`toolchain.md`). Both chains install by commit SHA from a tag that matches its branch tip.
