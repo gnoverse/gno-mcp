@@ -9,17 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFake_List(t *testing.T) {
-	f := NewFake()
-	f.SetList(ListFilter{Tag: "fungible"}, []Realm{
-		{Path: "gno.land/r/demo/tokens/grc20", Tags: []string{"fungible", "token"}},
-	})
-	got, err := f.List(context.Background(), ListFilter{Tag: "fungible"})
-	require.NoError(t, err, "List")
-	require.Len(t, got, 1)
-	assert.Equal(t, "gno.land/r/demo/tokens/grc20", got[0].Path)
-}
-
 func TestFake_History(t *testing.T) {
 	f := NewFake()
 	f.SetHistory("gno.land/r/foo", []TxEvent{

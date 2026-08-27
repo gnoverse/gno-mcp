@@ -31,8 +31,7 @@ listed).
 
 | Key | Feature | Scenarios | Status |
 |---|---|---|---|
-| idx.list | gno_list catalog search | — | gap: simnet runs no tx-indexer; requires one in the e2e image |
-| idx.history | gno_history deploy/tx log | — | gap (same) |
+| idx.history | gno_history deploy/tx log | — | gap: simnet runs no tx-indexer; requires one in the e2e image |
 | idx.activity | gno_activity MsgCall/MsgRun log | — | gap (same) |
 
 ## Write tools (agent identity)

@@ -161,13 +161,6 @@ query Transactions($filter: TransactionFilter!) {
 
 // ---- interface methods
 
-// List returns realms matching the filter. The tx-indexer schema does not expose a
-// `realms` query as of this writing; this method returns an error until the metadata
-// indexing extension lands in the schema.
-func (c *GraphQL) List(_ context.Context, _ ListFilter) ([]Realm, error) {
-	return nil, fmt.Errorf("indexer: List not supported by this indexer (realms query not yet in schema)")
-}
-
 // History returns every transaction touching realm in chronological order.
 func (c *GraphQL) History(ctx context.Context, realm string) ([]TxEvent, error) {
 	vars := map[string]any{

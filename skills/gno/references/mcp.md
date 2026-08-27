@@ -21,7 +21,7 @@ fallbacks below — never block on the MCP.
 | Read one whole file verbatim (audit-grade) | `gno_read` with `file` + `full=true` (gets the larger budget) | local `.gno` files, gnoweb source view |
 | Read a whole package raw (realm **or** pure) | `gno_read` with `full=true` — small packages only; big ones overflow the budget, use the per-file path | same |
 | Discover packages under a namespace/path | `gno_packages` (prefix `gno.land/r/x/` or `@namespace`) | gnoweb, `gno` CLI |
-| Browse the realm catalog by namespace/tag/category | `gno_packages` (path prefix or `@namespace`). `gno_list` needs a `realms` query that no deployed indexer serves, so it errors on every chain | gnoweb |
+| Enumerate deployed packages under a namespace | `gno_packages` (path prefix or `@namespace`; paths only, no tags or categories — those are not indexed on-chain) | gnoweb |
 | See rendered `Render()` output | `gno_render` | gnoweb |
 | Read on-chain state / evaluate an expression | `gno_eval` | — |
 | Check an address's balance / sequence (nonce) | `gno_account` (`exists:false` = never funded, not an error) | gnoweb |

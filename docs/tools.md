@@ -1,6 +1,6 @@
 # Tools
 
-26 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
+25 tools across read, discovery, admin, indexer, and write categories. All tools except `gno_connect` and `gno_profile_add` accept a `profile` parameter that selects which profile (chain) to target; when omitted, the server applies the default profile (discovered local node, else `testnet`).
 
 Chain-returned bytes are untrusted: the inline-text read/indexer tools (including `gno_render`) wrap their output in an `<untrusted_content>` envelope, and `gno_read` delivers content as an MCP resource (see `docs/security.md` §4).
 
@@ -67,13 +67,7 @@ These tools require no config — the built-in `local` and `testnet` profiles ar
 
 ## Read-only (indexer)
 
-These three tools are only registered when at least one profile has a `tx-indexer-url` set.
-
-### `gno_list`
-
-- **Args:** `namespace?`, `tag?`, `category?`, `profile?`
-- **Returns:** filtered list of realms from the tx-indexer catalog, wrapped in an `<untrusted_content>` envelope (entries echo realm-supplied paths and descriptions).
-- The tx-indexer schema does not expose a realms query yet, so every call currently returns an error — the contract above describes the tool once that indexer support lands. Use `gno_packages` to enumerate realms in the meantime.
+Both tools are only registered when at least one profile has a `tx-indexer-url` set.
 
 ### `gno_history`
 

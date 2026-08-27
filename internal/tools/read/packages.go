@@ -14,8 +14,8 @@ import (
 // profile name to the chain.Client used to satisfy calls.
 //
 // gno_packages discovers package paths under a prefix or namespace via
-// vm/qpaths — chain-native, no tx-indexer required. It complements gno_list
-// (indexer catalog search) and gno_read (source).
+// vm/qpaths — chain-native, no tx-indexer required. It complements gno_read
+// (source).
 func RegisterPackages(s *server.Server, resolve chain.Resolver) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_packages",
@@ -24,7 +24,7 @@ func RegisterPackages(s *server.Server, resolve chain.Resolver) {
 			"Accepts a path prefix ('gno.land/r/demo/' returns everything under it, both /r/ and /p/) " +
 			"or '@namespace' ('@demo' returns gno.land/p/demo/* and gno.land/r/demo/*). " +
 			"Returns a newline-separated list of fully-qualified package paths (no metadata). " +
-			"Does NOT read source (use gno_read) or search by tag/category (use gno_list, which needs a tx-indexer). " +
+			"Does NOT read source (use gno_read); tags and categories are not indexed on-chain. " +
 			"Backed by vm/qpaths; HEAD-only.",
 		InputSchema: packagesInputSchema(s),
 		OutputKind:  server.OutputText,

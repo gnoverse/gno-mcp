@@ -52,7 +52,6 @@ func registerAllTools(d *toolDeps) {
 	readtools.RegisterProfileList(s)
 
 	if s.AnyProfileHasIndexer() {
-		idxtools.RegisterList(s, d.indexerResolver)
 		idxtools.RegisterHistory(s, d.indexerResolver)
 		idxtools.RegisterActivity(s, d.indexerResolver)
 	}

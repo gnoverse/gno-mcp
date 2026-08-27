@@ -99,7 +99,7 @@ func TestRegisterAllTools_gateFlipSummonsTools(t *testing.T) {
 	registerAllTools(deps)
 	_, ok := s.Registry().Get("gno_faucet_fund")
 	require.False(t, ok, "local-only config must not register the faucet tool")
-	_, ok = s.Registry().Get("gno_list")
+	_, ok = s.Registry().Get("gno_history")
 	require.False(t, ok, "no indexer profile -> no indexer tools")
 	_, ok = s.Registry().Get("gno_profile_add")
 	require.True(t, ok, "gno_profile_add must always register")
@@ -115,7 +115,7 @@ func TestRegisterAllTools_gateFlipSummonsTools(t *testing.T) {
 	require.True(t, ok, "adding a testnet profile must summon the faucet tool")
 	assert.Contains(t, profileEnumOf(t, faucet), "dyn13", "faucet profile enum must list the dynamic profile")
 
-	_, ok = s.Registry().Get("gno_list")
+	_, ok = s.Registry().Get("gno_history")
 	require.True(t, ok, "adding an indexer-bearing profile must summon the indexer tools")
 
 	render, ok := s.Registry().Get("gno_render")

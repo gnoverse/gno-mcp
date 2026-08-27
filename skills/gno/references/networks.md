@@ -100,9 +100,8 @@ this file does not cover.
 5. **Imports** — pearl carries 85 packages to sapphire's 397, and pearl's set is a strict subset.
    "It exists on sapphire" does not mean it exists on pearl — verify on the target chain. Where a
    package exists on both, check the drift table: grc20 in particular is not source-compatible.
-6. **Transaction history** — `gno_activity`/`gno_history` work on both chains. `gno_list` does not
-   work anywhere: it needs a `realms` query absent from both deployed indexers, so enumerate
-   packages with `gno_packages` instead.
+6. **Transaction history** — `gno_activity`/`gno_history` work on both chains. To enumerate what
+   is deployed, use `gno_packages`, which reads the chain directly and needs no indexer.
 7. **Local tests** — use the chain-matched toolchain and vendor on-chain deps from the matching
    source tree; a develop-HEAD toolchain can refuse to compile deps auto-fetched from either chain
    (`toolchain.md`). Both chains install by commit SHA from a tag that matches its branch tip.

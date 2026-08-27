@@ -1,5 +1,5 @@
-// Package indexer holds the tx-indexer-backed MCP tools (gno_list,
-// gno_history, gno_activity). Each tool exposes a Register* function
+// Package indexer holds the tx-indexer-backed MCP tools (gno_history,
+// gno_activity). Each tool exposes a Register* function
 // that adds itself to a server.Server's Registry. Tools register with
 // Capability=CapIndexerRead and are only wired up when at least one
 // profile has tx-indexer-url configured.

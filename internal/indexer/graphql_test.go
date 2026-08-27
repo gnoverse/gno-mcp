@@ -195,13 +195,6 @@ func TestGraphQL_Activity_rejectsUntil(t *testing.T) {
 	assert.True(t, strings.Contains(err.Error(), "time filtering"), "error should contain 'time filtering', got: %v", err)
 }
 
-func TestGraphQL_List_notSupported(t *testing.T) {
-	c := NewGraphQL("http://127.0.0.1:1") // URL won't be called
-	_, err := c.List(context.Background(), ListFilter{})
-	require.Error(t, err, "expected error for unsupported List")
-	assert.True(t, strings.Contains(err.Error(), "not supported"), "error should mention 'not supported', got: %v", err)
-}
-
 func TestGraphQL_unreachable(t *testing.T) {
 	c := NewGraphQL("http://127.0.0.1:1")
 	_, err := c.History(context.Background(), "gno.land/r/x")
