@@ -49,7 +49,7 @@ type Profile struct {
 func (p Profile) IsLocal() bool { return p.ChainID == "dev" }
 
 // IsTestnet reports whether the profile targets a write-capable testnet (a
-// chain on the testnet name list, e.g. pearl-1, sapphire-1 — sunset or not).
+// chain on the testnet name list, e.g. pearl-1 — sunset or not).
 // Read-only chains (mainnet/betanet) are NOT testnets: they have no agent key
 // path and no faucet.
 func (p Profile) IsTestnet() bool {
@@ -142,7 +142,9 @@ func Load(r io.Reader) (*Config, error) {
 // ("pearl.testnets.gno.land"). Builtins carry at most the current testnet
 // and its immediate predecessor: a chain drops out once its hosts stop
 // resolving, since a profile pointing at dead infrastructure only offers the
-// agent a chain every call fails against.
+// agent a chain every call fails against. Verify a satellite endpoint against
+// the chain-id in its own data before shipping it — a host may answer while
+// serving another chain.
 const (
 	builtinLocalRPC   = "http://127.0.0.1:26657"
 	builtinLocalChain = "dev"
@@ -152,20 +154,11 @@ const (
 	builtinTestnetGnoweb  = "https://pearl.testnets.gno.land"
 	builtinTestnetIndexer = "https://indexer.pearl.testnets.gno.land/graphql/query"
 	builtinTestnetFaucet  = "https://faucet-agent.pearl.testnets.gno.land"
-
-	// sapphire is the sunset predecessor: still fully writable while its infra
-	// stays up (deploys, faucet, indexer all live) — the sunset label only
-	// steers new work toward the current testnet.
-	builtinSapphireRPC     = "https://rpc.sapphire.testnets.gno.land:443"
-	builtinSapphireChain   = "sapphire-1"
-	builtinSapphireGnoweb  = "https://sapphire.testnets.gno.land"
-	builtinSapphireIndexer = "https://indexer.sapphire.testnets.gno.land/graphql/query"
-	builtinSapphireFaucet  = "https://faucet-agent.sapphire.testnets.gno.land"
 )
 
 // BuiltinProfiles returns the zero-config default profiles: the current
-// testnet under the rolling name "testnet", its sunset predecessor under its
-// codename, and "local". All are read-only for sessions (no master-address);
+// testnet under the rolling name "testnet" and "local", joined by a sunset
+// predecessor under its codename while its infrastructure lives. All are read-only for sessions (no master-address);
 // the user opts into session writes by setting one. Returned as a fresh map
 // each call so callers may mutate it.
 func BuiltinProfiles() map[string]Profile {
@@ -180,14 +173,6 @@ func BuiltinProfiles() map[string]Profile {
 			GnowebURL:        builtinTestnetGnoweb,
 			TxIndexerURL:     builtinTestnetIndexer,
 			FaucetServiceURL: builtinTestnetFaucet,
-		},
-		"sapphire": {
-			RPCURL:           builtinSapphireRPC,
-			ChainID:          builtinSapphireChain,
-			GnowebURL:        builtinSapphireGnoweb,
-			TxIndexerURL:     builtinSapphireIndexer,
-			FaucetServiceURL: builtinSapphireFaucet,
-			Sunset:           true,
 		},
 	}
 }

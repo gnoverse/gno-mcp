@@ -81,20 +81,10 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
 
-	old, ok := cfg.Profiles["sapphire"]
-	require.True(t, ok, "sunset predecessor testnet missing from builtins")
-	assert.Equal(t, "sapphire-1", old.ChainID, "sapphire chain-id")
-	assert.True(t, old.Sunset, "sapphire must be marked sunset")
-	assert.True(t, old.IsTestnet(), "sunset builtin must stay a writable testnet")
-	assert.Equal(t, "https://rpc.sapphire.testnets.gno.land:443", old.RPCURL, "sapphire rpc-url")
-	assert.Equal(t, "https://sapphire.testnets.gno.land", old.GnowebURL, "sapphire gnoweb-url")
-	assert.Equal(t, "https://faucet-agent.sapphire.testnets.gno.land", old.FaucetServiceURL, "sapphire faucet (live) must be configured so deploys can fund")
-	assert.Equal(t, "https://indexer.sapphire.testnets.gno.land/graphql/query", old.TxIndexerURL, "sapphire indexer (live) must be configured")
-
 	// A retired chain's builtin goes away with its infrastructure: the hosts
-	// for topaz and test13 no longer resolve, so shipping either profile would
-	// only hand the agent a chain every call fails against.
-	for _, name := range []string{"topaz", "test13"} {
+	// for sapphire, topaz and test13 no longer resolve, so shipping any of
+	// those profiles would only hand the agent a chain every call fails against.
+	for _, name := range []string{"sapphire", "topaz", "test13"} {
 		_, ok = cfg.Profiles[name]
 		assert.False(t, ok, "retired testnet %q must not ship as a builtin", name)
 	}

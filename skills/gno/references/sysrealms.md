@@ -177,5 +177,5 @@ came from querying pearl, not from this file.
 ## Source
 
 Distilled from `examples/gno.land/r/sys/*` + `gnovm/stdlibs/sys/params` in gnolang/gno, the gnolang/gno
-issue/PR roadmap, per-network genesis configs, and verified against live pearl and sapphire (ABCI `vm/qfuncs`/`qeval`/`qrender`).
+issue/PR roadmap, per-network genesis configs, and verified against live pearl (ABCI `vm/qfuncs`/`qeval`/`qrender`).
 The design above is durable; concrete values are intentionally absent — query the live chain.

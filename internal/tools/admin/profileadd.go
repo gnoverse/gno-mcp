@@ -37,7 +37,7 @@ func RegisterProfileAdd(s *server.Server, gnowebClient *http.Client, verify Chai
 			"profile list, e.g. after gno_connect discovers one. Two input forms (exactly one): " +
 			"rpc_url + chain_id (explicit), or gnoweb_url (discovers them from the page's gnoconnect " +
 			"meta-tags; treated as a hint — the node is dialed and must report the same chain-id either way). " +
-			"dev and known testnets (test*, sapphire-*, pearl-*) are write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is " +
+			"dev and known testnets (test*, pearl-*) are write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is " +
 			"admitted READ-ONLY — readable via the read tools, but with no agent key, faucet, or write path, " +
 			"which is exactly what auditing deployed source on gno.land needs. " +
 			"Profiles loaded at startup cannot be overridden; re-adding a profile created by this tool replaces it. " +
@@ -76,7 +76,7 @@ func profileAddInputSchema() map[string]any {
 			"chain_id": map[string]any{
 				"type": "string",
 				"description": "Chain-id the node reports (e.g. 'pearl-1', or 'gnoland1' for betanet — read-only). " +
-					"dev and known testnets (test*, sapphire-*, pearl-*) are write-capable; any other id is admitted read-only. " +
+					"dev and known testnets (test*, pearl-*) are write-capable; any other id is admitted read-only. " +
 					"Required together with rpc_url unless gnoweb_url is given. Cross-checked against the live node.",
 			},
 			"gnoweb_url": map[string]any{

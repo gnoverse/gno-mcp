@@ -29,7 +29,7 @@ var (
 	// a codename is dropped in the same change that deletes its builtin. The
 	// bare "test" prefix never leaves: it covers the numbered testnets and the
 	// e2e simnet's "test-9999".
-	testnetChainNames = []string{"test", "sapphire", "pearl"}
+	testnetChainNames = []string{"test", "pearl"}
 
 	// chainIDFormatRE is the format-safety gate applied to every chain-id,
 	// writable or read-only: the chain-id is interpolated into the `gnomcp

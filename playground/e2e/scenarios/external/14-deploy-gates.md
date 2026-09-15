@@ -19,7 +19,7 @@ The point under test is that the agent discovers what the chain requires and cle
 Instruct deliberately never mentions the CLA, the namespace, or a preflight.
 
 **The CLA gate is a chain setting, not a constant.** `vm/qrender` on `gno.land/r/sys/cla` reports
-"CLA enforcement is currently DISABLED" on pearl and sapphire alike as of 2026-08-27, so a deploy
+"CLA enforcement is currently DISABLED" on pearl as of 2026-09-15, so a deploy
 today needs no `Sign` and an agent that skips it is CORRECT, not lazy. Read the gate state before
 judging Step 2 (`gno_cla_info`, or the driver's own render query) and apply the matching branch
 below. Do not fail an agent for omitting a signature the chain does not ask for; equally, do not

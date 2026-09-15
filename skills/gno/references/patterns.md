@@ -186,7 +186,7 @@ users := make(map[string]User)
 
 **Maps**: O(1) lookup, type-safe values. Use only for **small bounded** in-memory state (e.g. config values). Never for persisted growth state — a persisted map rewrites wholesale on every mutation (gas/storage), and its insertion-order iteration is an impl detail you shouldn't expose as output ordering. (Iteration is deterministic, so this is a gas/design issue, not a consensus risk.)
 
-`gno.land/p/nt/bptree/v0` (B+tree) is an accepted alternative for ordered keyed state — used by `commondao` (in the examples tree, deployed on neither live testnet) and others. Either is fine; pick one and stay consistent.
+`gno.land/p/nt/bptree/v0` (B+tree) is an accepted alternative for ordered keyed state — used by `commondao` (in the examples tree, in no genesis set) and others. Either is fine; pick one and stay consistent.
 
 ### Lazy initialization for heavy state
 
@@ -383,7 +383,7 @@ Gas is a measure of computational and storage cost. Every read, write, allocatio
 
 ## Common library imports
 
-Packages that survived the `examples/quarantined/` cull — the test-13 safe-list (PR #5726) that moved unaudited/personal-namespace packages to `examples/quarantined/`. Re-verify against the current master tree before relying on an import; the split moves over time, and the live testnet may not carry a listed package at all — neither `p/demo/tokens/grc721` nor `p/nt/commondao/v0` resolves on pearl or sapphire. Verify each import against the target chain, not just master:
+Packages that survived the `examples/quarantined/` cull — the test-13 safe-list (PR #5726) that moved unaudited/personal-namespace packages to `examples/quarantined/`. Re-verify against the current master tree before relying on an import; the split moves over time, and a genesis set may not carry a listed package at all — neither `p/demo/tokens/grc721` nor `p/nt/commondao/v0` is in pearl's. Verify each import against the target chain, not just master:
 
 | Need | Canonical import |
 |---|---|
@@ -394,12 +394,12 @@ Packages that survived the `examples/quarantined/` cull — the test-13 safe-lis
 | Ownership / single-owner pattern | `gno.land/p/nt/ownable/v0` |
 | Authorization patterns | `gno.land/p/moul/authz` |
 | Pagination | `gno.land/p/jeronimoalbi/pager` |
-| DAO primitives | `gno.land/p/nt/commondao/v0` — **absent from both live testnets** |
+| DAO primitives | `gno.land/p/nt/commondao/v0` — **in no genesis set** |
 | Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` |
 
 Prefer these over re-implementation — they're reviewed, used, and stable.
 
-There is no canonical GRC721/NFT package deployed on either live testnet — `gno.land/p/demo/tokens/grc721` does not resolve on-chain (verified on pearl and sapphire, `InvalidPackageError`). Sapphire does carry several community implementations under personal and `gnoswap` namespaces; pearl carries none. If you need NFTs, query the target chain for an available implementation rather than assuming a path.
+No GRC721/NFT package ships in a genesis set — `gno.land/p/demo/tokens/grc721` does not resolve on pearl (`InvalidPackageError`). If you need NFTs, query the target chain for an implementation someone has deployed rather than assuming a path.
 
 **Don't** import `gno.land/r/tests/vm/test20` — deliberately insecure test fixture exporting `PrivateLedger`. Using it in production code = instant compromise (see `security.md` § Encapsulation pattern).
 

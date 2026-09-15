@@ -58,7 +58,7 @@ ratio clears the chain's minimum (next section). So the two knobs interact only 
 raise `GasWanted` and you must raise `GasFee` to keep the ratio above the floor.
 
 **The floor.** The minimum acceptable fee is `GasWanted × minGasPrice`. The genesis price is
-**1 ugnot per 1000 gas** — pearl and sapphire both run at that floor (`1ugnot/1000gas`); earlier testnets had drifted
+**1 ugnot per 1000 gas** — pearl runs at that floor (`1ugnot/1000gas`); earlier testnets had drifted
 to `10ugnot/1000gas`. Re-query `auth/gasprice` live; the floor moves per chain. At the genesis
 price, `GasWanted = 10_000_000` puts the floor at **10,000 ugnot (0.01 GNOT)**. gnomcp does not offer a fixed pair: every write **dry-runs first at a
 1B-gas measuring ceiling**, then broadcasts at `GasWanted = measured × 1.5` floored at
@@ -238,5 +238,5 @@ and fee/gas-price logic (`tm2/pkg/sdk/auth`, `tm2/pkg/std`), and the vm storage-
 (`gno.land/pkg/sdk/vm`) in gnolang/gno at the commit pinned in this repo's go.mod; the gnomcp write
 path (`internal/chain/real.go`, `internal/tools/write`); and the gnolang/gno issue tracker (#3805,
 #5086, #3704, #329, #2109, #4279, #5122, #203, #416, #3703). Mechanics verified against the live
-pearl and sapphire deploy-gate flows (note: the CLA gate is currently disabled on both live
+pearl deploy-gate flows (note: the CLA gate is currently disabled on the live
 chains — see sysrealms.md). Flag surface is version-bound — confirm with `gnokey <cmd> -help`.
