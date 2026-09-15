@@ -22,7 +22,7 @@ entirely from which **genesis transactions** were injected at chain birth — re
 a genesis tx flips them on (namespace enforcement enabled, a username set seeded, a concrete validator
 set injected, chain params set). So "is namespace enforcement on?", "which usernames exist?", "who are
 the validators?" are **per-network, answerable only live** — never from source. The same `r/sys` code
-behaves differently on local gnodev, on a public testnet, and on betanet, by design.
+behaves differently on local gnodev, on a public testnet, and on mainnet, by design.
 
 **I3 · Controller architecture (names/users).** Name registration is layered. `r/sys/users` is the
 durable canonical store (name↔address + a confusable-collision index). Policy lives in *controller*
@@ -177,5 +177,5 @@ came from querying pearl, not from this file.
 ## Source
 
 Distilled from `examples/gno.land/r/sys/*` + `gnovm/stdlibs/sys/params` in gnolang/gno, the gnolang/gno
-issue/PR roadmap, per-network genesis configs, and verified against live pearl (ABCI `vm/qfuncs`/`qeval`/`qrender`).
+issue/PR roadmap, per-network genesis configs, and verified against live pearl and mainnet (ABCI `vm/qfuncs`/`qeval`/`qrender`).
 The design above is durable; concrete values are intentionally absent — query the live chain.

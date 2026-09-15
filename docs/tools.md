@@ -47,7 +47,7 @@ These tools require no config — the built-in `local` and `testnet` profiles ar
 ### `gno_profile_list`
 
 - **Args:** none
-- **Returns:** the catalog of loaded profiles — per profile: name, chain-id, kind (`local` | `testnet` | `read-only`), a `sunset` flag (retiring testnet — still fully writable; prefer the current testnet for new work), and the configured endpoints (RPC, gnoweb, tx-indexer, faucet). Plain config, never dialed — use `gno_status` for liveness. This is how an agent maps a chain the user names ("on pearl", "on gno.land") to the profile to pass to other tools.
+- **Returns:** the catalog of loaded profiles — per profile: name, chain-id, kind (`local` | `testnet` | `read-only`), a `sunset` flag (retiring testnet — still fully writable; prefer the current testnet for new work), and the configured endpoints (RPC, gnoweb, tx-indexer, faucet). Plain config, never dialed — use `gno_status` for liveness. This is how an agent maps a chain the user names ("on pearl", "on mainnet") to the profile to pass to other tools.
 
 ## Read-only (discovery)
 

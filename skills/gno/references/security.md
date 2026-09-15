@@ -257,13 +257,15 @@ Three predicates that look interchangeable but aren't:
 | Authority transitions gated at the right boundary | Crossing entrypoints use their runtime-current first `cur`; non-crossing helper methods that accept `_ int, rlm realm` check `rlm.IsCurrent()` before resolving realm identity. |
 | Forgery defended by nominal type assertion | `IsCanonicalTeller(t)` checks `_, ok := t.(*fnTeller)`. Embedding wrappers fail this. |
 | `*PrivateLedger`'s unauthenticated mutators isolated by package privacy | `Mint`/`Burn`/etc. have no `cur` check. They're safe only because no realm exports the `*PrivateLedger` pointer. |
-| Frame-relative tellers confined to their home realm | The `CallerTeller()` write path checks that the invoking realm is the token's own, sub-realms included, so a teller a realm builds and then exports is inert anywhere else. |
+| Frame-relative tellers confined to their home realm | The `CallerTeller()` write path checks that the invoking realm is the token's own, sub-realms included, so a teller a realm builds and then exports is inert anywhere else. **pearl only.** |
 
-**`CallerTeller()` hangs off `*PrivateLedger` on pearl**, not off `*Token`. Only the creating realm
-holds the ledger, so a foreign realm cannot mint a frame-relative teller at all, and the home-realm
-check makes a leaked one useless. Older chains put it on the published `*Token`, where construction
-privacy was the only barrier — so a realm that passes tellers between realms may have passed review
-there and break on pearl. `networks.md` carries the cross-chain drift surface.
+**`CallerTeller()` differs by chain** — `(*PrivateLedger)` on pearl, `(*Token)` on betanet. The
+receiver matters to the argument above: on pearl only the creating realm holds the ledger, so a
+foreign realm cannot mint a frame-relative teller at all, and the home-realm check makes a leaked
+one useless. On betanet any holder of the published `*Token` can construct one, and construction
+privacy is the only barrier. Writing for pearl, use the ledger form; **auditing a betanet realm,
+expect the weaker one** and treat a teller that travels between realms as a finding rather than
+assuming the home guard caught it. `networks.md` carries the full cross-chain drift surface.
 
 Realm authors using GRC20 must:
 

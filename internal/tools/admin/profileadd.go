@@ -37,7 +37,7 @@ func RegisterProfileAdd(s *server.Server, gnowebClient *http.Client, verify Chai
 			"profile list, e.g. after gno_connect discovers one. Two input forms (exactly one): " +
 			"rpc_url + chain_id (explicit), or gnoweb_url (discovers them from the page's gnoconnect " +
 			"meta-tags; treated as a hint — the node is dialed and must report the same chain-id either way). " +
-			"dev and known testnets (test*, pearl-*) are write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is " +
+			"dev and known testnets (test*, pearl-*) are write-capable; any other chain (mainnet gnoland-1, betanet gnoland1) is " +
 			"admitted READ-ONLY — readable via the read tools, but with no agent key, faucet, or write path, " +
 			"which is exactly what auditing deployed source on gno.land needs. " +
 			"Profiles loaded at startup cannot be overridden; re-adding a profile created by this tool replaces it. " +

@@ -19,7 +19,7 @@ func RegisterProfileList(s *server.Server) {
 		Name: "gno_profile_list",
 		Description: "Lists every loaded chain profile with its chain-id, endpoints, and lifecycle status — " +
 			"the map between profile names and the chains they reach (e.g. profile 'testnet' -> chain pearl-1). " +
-			"Use when the user names a chain or network ('on pearl', 'on gno.land') to resolve which profile to pass " +
+			"Use when the user names a chain or network ('on pearl', 'on mainnet') to resolve which profile to pass " +
 			"to the other tools, or to see which chains are configured at all. " +
 			"Returns one entry per profile: name, chain-id, kind (local | testnet | read-only), a sunset flag " +
 			"(a retiring testnet — still fully writable, but prefer the current testnet for new work), " +

@@ -145,6 +145,12 @@ func (c *Config) Validate() (warn error, err error) {
 			if f.val == "" {
 				continue
 			}
+			// A read-only chain has no fundable agent key, so the faucet tools
+			// skip it whatever this says. Refusing the field keeps the catalog
+			// from advertising a faucet the chain does not have.
+			if !ChainIDWritable(p.ChainID) {
+				return nil, fmt.Errorf("profile %q: %s is set but chain-id %q is read-only (mainnet/betanet) — read-only chains have no faucet; remove %s or target a dev/testnet chain", name, f.name, p.ChainID, f.name)
+			}
 			if u, err := url.Parse(f.val); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 				return nil, fmt.Errorf("profile %q: invalid %s %q (want an absolute http(s) URL)", name, f.name, f.val)
 			}

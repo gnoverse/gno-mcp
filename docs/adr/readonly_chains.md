@@ -29,7 +29,7 @@ A format-safe but non-writable chain-id (betanet `gnoland1`, `staging`, mainnet)
 
 **Named read-tier allowlist** (only blessed mainnet ids admitted read-only). Rejected: a list to maintain; betanet RPCs and ids move; format-safety plus capability-by-chain-id is general and self-healing.
 
-**Built-in `gnoland1` read-only profile.** Rejected for now: it hardcodes an external betanet RPC that moves; connect-driven resolution (`gno_profile_add` from the URL's `gnoconnect` meta-tags) self-heals.
+**Built-in `gnoland1` read-only profile.** Rejected: betanet's RPC moved and its chain later stopped producing blocks, which a hardcoded profile would have kept offering as current. A built-in **`mainnet`** read-only profile does ship, on the same read-only terms — its endpoints are the project's own and its chain is live. Anything else resolves through `gno_profile_add` from a gnoweb URL's `gnoconnect` meta-tags, which self-heals.
 
 ## Consequences
 

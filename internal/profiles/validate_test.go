@@ -187,12 +187,15 @@ chain-id = "dev"
 func TestChainIDWritable(t *testing.T) {
 	cases := map[string]bool{
 		"dev": true, "test5": true, "test-13": true, "pearl-1": true, "pearl1": true,
-		"gnoland1": false, "staging": false, "mychain": false, "portal-loop": false,
+		"staging": false, "mychain": false, "portal-loop": false,
 		"devnet": false,
 		// A codename leaves the list in the change that deletes its builtin,
 		// so a retired chain is no longer admitted as writable.
 		"topaz-1": false, "topaz1": false,
 		"sapphire-1": false, "sapphire": false,
+		// One hyphen apart and neither is writable: gnoland-1 is mainnet,
+		// gnoland1 is betanet.
+		"gnoland-1": false, "gnoland1": false,
 	}
 	for id, want := range cases {
 		assert.Equal(t, want, ChainIDWritable(id), "ChainIDWritable(%q)", id)

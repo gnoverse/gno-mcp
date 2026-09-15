@@ -139,8 +139,8 @@ func Load(r io.Reader) (*Config, error) {
 // testnetChainNames in validate.go and demote the previous chain to a sunset
 // builtin named after its codename). The chain reports its chain-id with a
 // version suffix ("pearl-1") while its hosts use the bare codename
-// ("pearl.testnets.gno.land"). Builtins carry at most the current testnet
-// and its immediate predecessor: a chain drops out once its hosts stop
+// ("pearl.testnets.gno.land"). The writable builtins carry at most the current
+// testnet and its immediate predecessor: a chain drops out once its hosts stop
 // resolving, since a profile pointing at dead infrastructure only offers the
 // agent a chain every call fails against. Verify a satellite endpoint against
 // the chain-id in its own data before shipping it — a host may answer while
@@ -154,13 +154,22 @@ const (
 	builtinTestnetGnoweb  = "https://pearl.testnets.gno.land"
 	builtinTestnetIndexer = "https://indexer.pearl.testnets.gno.land/graphql/query"
 	builtinTestnetFaucet  = "https://faucet-agent.pearl.testnets.gno.land"
+
+	// mainnet carries value and is never writable, so it ships the read paths
+	// and no faucet. Its chain-id sits one hyphen from betanet's "gnoland1"
+	// and they are different chains.
+	builtinMainnetRPC     = "https://rpc.gno.land:443"
+	builtinMainnetChain   = "gnoland-1"
+	builtinMainnetGnoweb  = "https://gno.land"
+	builtinMainnetIndexer = "https://indexer.gno.land/graphql/query"
 )
 
 // BuiltinProfiles returns the zero-config default profiles: the current
-// testnet under the rolling name "testnet" and "local", joined by a sunset
-// predecessor under its codename while its infrastructure lives. All are read-only for sessions (no master-address);
-// the user opts into session writes by setting one. Returned as a fresh map
-// each call so callers may mutate it.
+// testnet under the rolling name "testnet", "mainnet" for reading gnoland-1,
+// and "local". A sunset predecessor joins them under its codename while its
+// infrastructure lives. None carries a master-address, so none can open a
+// write session until the user sets one, and mainnet cannot at all. Returned
+// as a fresh map each call so callers may mutate it.
 func BuiltinProfiles() map[string]Profile {
 	return map[string]Profile{
 		"local": {
@@ -173,6 +182,12 @@ func BuiltinProfiles() map[string]Profile {
 			GnowebURL:        builtinTestnetGnoweb,
 			TxIndexerURL:     builtinTestnetIndexer,
 			FaucetServiceURL: builtinTestnetFaucet,
+		},
+		"mainnet": {
+			RPCURL:       builtinMainnetRPC,
+			ChainID:      builtinMainnetChain,
+			GnowebURL:    builtinMainnetGnoweb,
+			TxIndexerURL: builtinMainnetIndexer,
 		},
 	}
 }
