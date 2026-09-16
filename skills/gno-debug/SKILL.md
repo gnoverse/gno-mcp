@@ -1,6 +1,6 @@
 ---
 name: gno-debug
-description: Diagnose and fix failed Gno transactions and calls. Use whenever a gno.land transaction failed, a gnomcp write tool returned an error (insufficient_funds, authentication_required, scope_mismatch, invalid sequence, panic, out of gas), a gno_call/gno_run/gno_addpkg result looks wrong, or the user pastes a chain error message — even if they never say "debug".
+description: Use when a gno.land transaction failed, when a gnomcp write tool returned an error (insufficient_funds, authentication_required, scope_mismatch, invalid sequence, panic, out of gas), when a gno_call/gno_run/gno_addpkg result looks wrong, or when a chain error message is pasted — even if "debug" is never said. Entered BEFORE you retry, re-sign or re-broadcast anything, since a blind retry costs the fee again and hides the cause.
 ---
 
 # Debugging a failed Gno transaction

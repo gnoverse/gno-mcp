@@ -38,7 +38,7 @@ Other clients (Cursor, Claude Desktop, …), manual install, building from sourc
 
 ## What you can do
 
-gnomcp ships pointed at the public testnet and a local gnodev node — nothing to configure:
+gnomcp ships pointed at mainnet, the public testnet and a local gnodev node — nothing to configure:
 
 | Profile | Chain-id | RPC |
 |---------|----------|-----|
@@ -95,7 +95,7 @@ Full catalog → [docs/tools.md](docs/tools.md).
 
 gnomcp can reach any gno.land chain. Dev and testnet chains are read/write; mainnet and betanet are read-only — inspect and audit deployed code, but no signing on real-funds chains.
 
-Beyond the built-in `testnet` and `local` defaults, save the chains you use as named **profiles** with `gnomcp profile add` (written to `profiles.toml`), so gnomcp remembers them between runs. A profile can also carry an indexer URL, or a master address for user-session writes (dev/testnet only).
+Beyond the built-in `mainnet`, `testnet` and `local` defaults, save the chains you use as named **profiles** with `gnomcp profile add` (written to `profiles.toml`), so gnomcp remembers them between runs. A profile can also carry an indexer URL, or a master address for user-session writes (dev/testnet only).
 
 Profile fields and the signing model → [Configuration](docs/gnomcp.md#configuration) · [Write authorization](docs/gnomcp.md#write-authorization).
 

@@ -21,22 +21,32 @@ this file is only the per-chain snapshot and the differences between chains.
 | gnoweb | `pearl.testnets.gno.land` | `gno.land` |
 | node version | `v1.0.0-rc.0` | `v1.0.0-rc.0` |
 | gas price (`auth/gasprice`) | `1ugnot/1000gas` | same |
+| block max gas | 3,000,000,000 | same |
 | storage deposit (`params/vm:p:storage_price`) | 100 ugnot | same |
+| deposit cap (`params/vm:p:default_deposit`) | 100 GNOT | same |
+| code submission (`params/vm:p:code_submission_policy`) | `permissionless` | **`inert`** — see below |
+| `MsgRun` (`params/vm:p:run_submitters`) | unrestricted | **allowlisted** — query the param for the current set |
 | CLA deploy gate (`r/sys/cla`) | **OFF** | **OFF** |
 | namespace gate (`r/sys/names.IsEnabled`) | `true`; personal-address path free | `true` |
-| name registration | `r/sys/namereg/v1`, not paused; format `nym-<stem><digits>` (stem 5–13 lowercase letters, exactly 3 digits, 12–20 chars) | — |
+| name registration | `r/sys/namereg/v1`, not paused | `r/sys/namereg/v0` — same realm renumbered, not paused, identical exported surface |
+| validator set | `r/sys/validators/v3` holds it (`/v2` also deployed, empty) | `r/sys/validators/v0` holds it (`/v2` also deployed, empty) |
 | faucet | 10 GNOT/grant, 1/addr/24h | none — mainnet ships without one |
-| tx indexer | `indexer.pearl…/graphql/query`, serves `getSupply` | `indexer.gno.land/graphql/query` |
-| toolchain tag | `chain/pearl` at `c4c72fdd2`, matching `heads/chain/pearl` | — |
-| packages | a curated genesis set, plus whatever has been deployed since — query, never assume | same, and a different set: no `p/demo/tokens/grc20`, no `r/sys/namereg/v1` |
+| tx indexer | `indexer.pearl…/graphql/query` | `indexer.gno.land/graphql/query` — same query root, `getSupply` on both |
+| toolchain tag | `chain/pearl` at `c4c72fdd2`, commit-only | `chain/mainnet` at `9c8eb132`, **semver twin `v1.2.0`** |
+| sub-package path scheme | version at the **root** (`p/nt/avl/v0/rotree`) | version at the **leaf** (`p/nt/avl/rotree/v0`) |
 
 The minimum fee for a 10M-gas write on pearl is 10,000 ugnot (0.01 GNOT); gnomcp offers ×2 over
-the floor (`gnokey.md`). Fees do not arise on mainnet.
+the floor (`gnokey.md`). Mainnet runs the same gas price, so a write there would cost the same —
+gnomcp simply never signs one.
 
-Toolchain tags use the short chain **name**, never the chain-id (`chain/pearl`, not `chain/pearl-1`).
-Both refs contain a `/`, so neither is a valid `go install @` ref and both install by commit SHA —
-see `toolchain.md`. No node reports a build sha (`/status` carries a release `version` and an empty
-`software`), so the tag is the only anchor the repo offers.
+Toolchain tags use the short chain **name**, never the chain-id (`chain/pearl`, not `chain/pearl-1`;
+`chain/mainnet`, not `chain/gnoland-1`). Globbing a chain-id finds nothing. The two live chains fall
+in different install cases: `chain/pearl` has no semver twin, so it installs by commit sha, while
+`chain/mainnet` shares its sha with the annotated tag `v1.2.0`, which is the ref to install — see
+`toolchain.md`. A tag can also lag its branch: `heads/chain/pearl` equals its tag, while
+`heads/chain/mainnet` carries commits pushed after launch. No node reports a build sha (`/status`
+carries a release `version` and an empty `software`), and both chains report the same one, so the
+tag is the only anchor the repo offers.
 
 ## Mainnet — `gnoland-1`
 
@@ -46,13 +56,30 @@ the faucet fields refused at config time. A forced write stops at the keystore, 
 give for a read-only chain-id. Reads and audits are the whole surface, which is what auditing
 deployed code needs. It ships as the built-in `mainnet` profile, so reading it needs no config.
 
+**Code submission is `inert`.** `params/vm:p:code_submission_policy` reads `"inert"` on mainnet
+against `"permissionless"` on pearl. Under that policy the chain accepts a `MsgAddPackage` from any
+address but **stores the package without typechecking or executing it**; it becomes callable only
+once approved. So a deploy that reached mainnet would not run — the chain itself is a second barrier
+behind gnomcp's read-only gate. The submission charge is empty today, so parking a package is free;
+query `params/vm:p:inert_submission_charge` rather than assuming that holds.
+
+**`MsgRun` is allowlisted.** `params/vm:p:run_submitters` carries a non-empty address list on
+mainnet and is unset on pearl. `MsgRun` executes arbitrary source immediately under *every* policy,
+including `inert`, which is why it gets its own gate. Query the param for the current set.
+
+**No transfer restriction is active.** `params/bank:p:restricted_denoms` reads empty on both chains.
+Read it rather than inferring a lock from launch tooling.
+
 **`gnoland-1` and `gnoland1` are one hyphen apart and are different chains.** `gnoland-1` is
 mainnet; `gnoland1` is betanet. Neither is writable, so confusing them cannot produce a write, but
 it does decide which chain an audit reads.
 
 **`gno.land` names mainnet.** It served betanet before mainnet launched, so a profile pinned to
 that domain changed chains under a name that said otherwise. Read a chain-id rather than inferring
-one from a hostname, and pin a chain's own hostnames when one exists.
+one from a hostname, and pin a chain's own hostnames when one exists. The same trap reaches the
+toolchain: the dependency fetcher derives its remote from the **import path's domain**, so a
+`gno.land/...` import resolves to `rpc.gno.land` — mainnet — whichever chain you are building for
+(`toolchain.md`).
 
 ## Retired and halted chains
 
@@ -61,8 +88,7 @@ still serve its final state, which makes it the one retired chain a host check a
 the height simply no longer moves. gnomcp ships no builtin for it, because a zero-config profile
 would offer frozen state to read as if it were current. Reading its archive is still possible by
 adding it deliberately with `gno_profile_add`. Its CLA gate was ENABLED, unlike pearl's and
-mainnet's, so a realm deployed there was signed for; its `r/sys/namereg/v1` never existed, and its
-`p/demo/tokens/grc20` carries the older `CallerTeller()` form described below.
+mainnet's, and its `p/demo/tokens/grc20` carries the older `CallerTeller()` form described below.
 
 **sapphire (`sapphire-1`)** is gone: its RPC, gnoweb, indexer and faucet hostnames no longer
 resolve, so gnomcp ships no builtin profile for it and `sapphire-1` is no longer a writable
@@ -75,42 +101,66 @@ because it also covers the e2e simnet's `test-9999`.
 
 ## Cross-chain drift — same import path, different source
 
-A shared import path is not a shared implementation: chains cut from different masters carry
-different sources under the same name. The one API split found in the packages these references
-teach, between pearl and the halted betanet:
+A shared import path is not a shared implementation, and a shared package is not a shared path.
+Three drifts matter between the live chains:
 
-**`p/demo/tokens/grc20` — `CallerTeller()` hangs off a different type per chain.**
+**1. The version segment sits in a different place on sub-packages.** Top-level packages share a
+spelling: `p/nt/avl/v0` and `p/nt/mux/v0` resolve on both. Below the root they diverge, because
+pearl hangs sub-packages under the version and mainnet gives each leaf its own.
 
 ```go
-teller := ledger.CallerTeller()  // pearl: func (ledger *PrivateLedger) CallerTeller() Teller
+gno.land/p/nt/avl/v0/rotree                  // pearl
+gno.land/p/nt/avl/rotree/v0                  // mainnet
+gno.land/p/nt/ownable/v0/exts/authorizable   // pearl
+gno.land/p/nt/ownable/exts/authorizable/v0   // mainnet
+```
+
+An import block that stays on root packages carries across; one that reaches a sub-package does
+not. Resolve every import against the target chain with `gno_packages`.
+
+**2. The GRC20 standard lives at a different path.** pearl carries it at
+`p/demo/tokens/grc20`; mainnet has no `p/demo` tree at all and carries the standard at
+`p/nt/grc20/v0`. The deployed sources are otherwise the same package.
+
+**3. `grc20.TransferFrom` guards self-transfer on mainnet only.** mainnet's `token.gno` rejects
+`owner == to` with `ErrCannotTransferToSelf`; pearl's does not, and the guard exists there only on
+`Transfer`. A self-directed `TransferFrom` succeeds on pearl and fails on mainnet. The rest of the
+package, `tellers.gno` included, is identical between them.
+
+**`CallerTeller()` hangs off a different type on the halted betanet.**
+
+```go
+teller := ledger.CallerTeller()  // pearl and mainnet: func (ledger *PrivateLedger) CallerTeller() Teller
 teller := tok.CallerTeller()     // betanet: func (tok *Token) CallerTeller() Teller
 ```
 
-pearl also carries a `guardHome` check that confines a frame-relative teller to the token's own
-realm, so a teller a realm builds and then exports is inert elsewhere. betanet has neither the
+Both live chains also carry a `guardHome` check that confines a frame-relative teller to the token's
+own realm, so a teller a realm builds and then exports is inert elsewhere. betanet has neither the
 receiver change nor the guard, so a realm archived there may pass tellers between realms in a way
-pearl would reject — worth knowing when reading that code, not when writing new code.
+both live chains would reject — worth knowing when reading that code, not when writing new code.
 
-The package sets differ as well as the sources: `r/sys/namereg/v1` exists on pearl and not on
-betanet, `p/nt/commondao/v0` the other way round. Read the **target chain's** deployed source
-(`gno_read` / `vm/qfile`) before relying on any package this file does not cover.
+The package sets differ too, and not only by path: the NFT standard is in mainnet's genesis set
+(under the `p/nt` tree with a `/v0` leaf) and resolves on neither pearl nor betanet, while
+`p/nt/commondao/v0` resolves on betanet and on neither live chain. `p/demo/tokens/grc721` resolves
+nowhere. Read the **target chain's** deployed source (`gno_read` / `vm/qfile`) before relying on any
+package this file does not cover.
 
 ## Deploying — pearl is the only public target
 
 1. **Confirm the target** — `gno_status` (chain-id) or `gno_profile_list` (name ↔ chain-id map).
    A read-only chain has no deploy path at all, so a deploy that "should" go to gno.land is a
-   pearl deploy or nothing.
+   pearl deploy or nothing. Mainnet would park the package inert even if one reached it.
 2. **Gates** — the personal-address path is free (namespace gate on, address paths always allowed).
    CLA enforcement is off on pearl today, so no `Sign` step is needed, but it is a chain setting:
    confirm with `gno_cla_info` rather than trusting this line.
 3. **Fund** — the faucet grants 10 GNOT, once per address per 24h.
 4. **Fees** — `1ugnot/1000gas`; still query `auth/gasprice`, since this is the value most likely to
    drift next.
-5. **Imports** — `p/demo/tokens/grc721` and `p/nt/commondao/v0` are in no genesis set, so neither
-   is there to import unless someone has deployed it. Verify every import against the target chain
-   with `gno_packages`, never against master or this file.
+5. **Imports** — resolve every import against the target chain with `gno_packages`, never against
+   master or this file. Sub-package paths and the GRC20 path are spelled differently on the two
+   live chains, so a working import block does not transfer unchecked.
 6. **Transaction history** — `gno_activity`/`gno_history` work on pearl and mainnet. To enumerate
    what is deployed, `gno_packages` reads the chain directly and needs no indexer.
 7. **Local tests** — use the chain-matched toolchain and vendor on-chain deps from the matching
-   source tree; a develop-HEAD toolchain can refuse to compile deps auto-fetched from a chain
-   (`toolchain.md`).
+   source tree; a develop-HEAD toolchain can refuse to compile deps auto-fetched from a chain, and
+   the fetcher's default remote is mainnet's whatever you are targeting (`toolchain.md`).

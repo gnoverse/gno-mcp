@@ -26,7 +26,7 @@ fallbacks below — never block on the MCP.
 | Read on-chain state / evaluate an expression | `gno_eval` | — |
 | Check an address's balance / sequence (nonce) | `gno_account` (`exists:false` = never funded, not an error) | gnoweb |
 | Verify which chain a profile points at / node freshness | `gno_status` (flags chain-id mismatch) | — |
-| Map a chain the user names ("on pearl", "on mainnet") to a profile / see all configured chains | `gno_profile_list` (name, chain-id, endpoints, current vs sunset; config only, no dial) | — |
+| Map a chain the user names ("on pearl", "on mainnet") to a profile / see all configured chains | `gno_profile_list` (name, chain-id, endpoints, and whether each chain is writable or read-only; config only, no dial) | — |
 
 Both `/r/` realms and `/p/` pure packages are readable — don't assume realm-only.
 

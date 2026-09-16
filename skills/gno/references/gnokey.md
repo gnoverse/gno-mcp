@@ -82,7 +82,7 @@ and its comment flags that it must change for a chain with a different `min_gas_
 gates exist and BOTH run, in this order: the adaptive EIP-1559-style **block price** first (skipped
 only when it is zero or invalid), then the node's static config floor. What `auth/gasprice` returns
 is the *block* price — `LastGasPrice`, the price of the last block — not `min_gas_prices`. On both
-live testnets it reads `1ugnot/1000gas`, i.e. nonzero, so the block-price gate is active and is the
+live chains it reads `1ugnot/1000gas`, i.e. nonzero, so the block-price gate is active and is the
 one a tx hits first; the two happen to coincide there, which is why the numbers agree even though
 the mechanism differs.
 
@@ -110,11 +110,12 @@ Persisting bytes on-chain **locks** a deposit = `bytes × storage_price` (defaul
 the tx lock**, not an amount spent. Key facts:
 
 - An **empty** `--max-deposit` does *not* mean unbounded — it falls back to the `DefaultDeposit`
-  chain param (**600 GNOT** cap), so a deploy can lock far more than you expect if the realm is large.
+  chain param (`params/vm:p:default_deposit`, **100 GNOT** on both live chains), so a deploy can lock
+  far more than you expect if the realm is large. Query the param; GovDAO can move it.
 - The deposit is **refundable**: when a realm frees storage (state deleted), the proportional locked
   amount is returned. It's a deposit, not a fee.
 - gnomcp pins `DefaultMaxDepositUgnot = 10_000_000` (10 GNOT) on **`gno_addpkg` only**; `gno_call`
-  and `gno_run` leave it unset (the 600 GNOT param cap applies). A deploy rejected for
+  and `gno_run` leave it unset (the `default_deposit` param cap applies). A deploy rejected for
   `not enough deposit` is the signal to raise the cap.
 - This is distinct from the gas fee and goes to a **different collector** (`vm:p:storage_fee_collector`,
   not the gas `auth:p:fee_collector`). The "insufficient coins" you hit on a starved account is the
@@ -149,7 +150,7 @@ keep margins small). This is exactly what gnomcp's write pipeline does automatic
 | `--gas-wanted` | execution ceiling (gas units); required, no default | measured × 1.5, floored at `10_000_000` |
 | `--gas-fee` | flat total fee offered (e.g. `10000ugnot`); required | live price × 2 for the offered gas-wanted, floored at `10_000ugnot` |
 | `--send` | coins attached to the msg (→ realm as `OriginSend`), separate from the fee | user-supplied (`send` arg) |
-| `--max-deposit` | cap on storage deposit locked (empty → 600 GNOT param) | pinned `10_000_000` on addpkg only |
+| `--max-deposit` | cap on storage deposit locked (empty → `default_deposit` param) | pinned `10_000_000` on addpkg only |
 | `--memo` | free text in the signed tx (≤ 64 KB; costs gas by size) | not set |
 | `--pkgpath` `--func` `--args` (call) · `--pkgdir` (addpkg) · `--to` (send) | the message payload | the tool's own params |
 
@@ -238,5 +239,5 @@ and fee/gas-price logic (`tm2/pkg/sdk/auth`, `tm2/pkg/std`), and the vm storage-
 (`gno.land/pkg/sdk/vm`) in gnolang/gno at the commit pinned in this repo's go.mod; the gnomcp write
 path (`internal/chain/real.go`, `internal/tools/write`); and the gnolang/gno issue tracker (#3805,
 #5086, #3704, #329, #2109, #4279, #5122, #203, #416, #3703). Mechanics verified against the live
-pearl deploy-gate flows (note: the CLA gate is currently disabled on pearl; on the live
-chains — see sysrealms.md). Flag surface is version-bound — confirm with `gnokey <cmd> -help`.
+pearl deploy-gate flows; the CLA gate is disabled on both live chains today, so confirm it live
+rather than reading it off this line (see sysrealms.md). Flag surface is version-bound — confirm with `gnokey <cmd> -help`.

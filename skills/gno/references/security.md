@@ -248,7 +248,7 @@ Three predicates that look interchangeable but aren't:
 
 ## The encapsulation pattern (GRC20 reference)
 
-`gno.land/p/demo/tokens/grc20` is the canonical example of *safe* `/p/`-declared data. It violates (A) — `Token`, `PrivateLedger`, and `fnTeller` are all `/p/`-declared — but compensates with airtight encapsulation:
+The GRC20 standard is the canonical example of *safe* `/p/`-declared data. It lives at `gno.land/p/demo/tokens/grc20` on pearl and `gno.land/p/nt/grc20/v0` on mainnet; the sources below are the same package. It violates (A) — `Token`, `PrivateLedger`, and `fnTeller` are all `/p/`-declared — but compensates with airtight encapsulation:
 
 | Defense | How |
 |---|---|
@@ -257,15 +257,21 @@ Three predicates that look interchangeable but aren't:
 | Authority transitions gated at the right boundary | Crossing entrypoints use their runtime-current first `cur`; non-crossing helper methods that accept `_ int, rlm realm` check `rlm.IsCurrent()` before resolving realm identity. |
 | Forgery defended by nominal type assertion | `IsCanonicalTeller(t)` checks `_, ok := t.(*fnTeller)`. Embedding wrappers fail this. |
 | `*PrivateLedger`'s unauthenticated mutators isolated by package privacy | `Mint`/`Burn`/etc. have no `cur` check. They're safe only because no realm exports the `*PrivateLedger` pointer. |
-| Frame-relative tellers confined to their home realm | The `CallerTeller()` write path checks that the invoking realm is the token's own, sub-realms included, so a teller a realm builds and then exports is inert anywhere else. **pearl only.** |
+| Frame-relative tellers confined to their home realm | The `CallerTeller()` write path checks that the invoking realm is the token's own, sub-realms included, so a teller a realm builds and then exports is inert anywhere else. Present on both live chains. |
 
-**`CallerTeller()` differs by chain** — `(*PrivateLedger)` on pearl, `(*Token)` on betanet. The
-receiver matters to the argument above: on pearl only the creating realm holds the ledger, so a
-foreign realm cannot mint a frame-relative teller at all, and the home-realm check makes a leaked
-one useless. On betanet any holder of the published `*Token` can construct one, and construction
-privacy is the only barrier. Writing for pearl, use the ledger form; **auditing a betanet realm,
-expect the weaker one** and treat a teller that travels between realms as a finding rather than
-assuming the home guard caught it. `networks.md` carries the full cross-chain drift surface.
+**`CallerTeller()` differs by chain** — `(*PrivateLedger)` on both live chains, `(*Token)` on the
+halted betanet. The receiver matters to the argument above: where the ledger holds it, only the
+creating realm can mint a frame-relative teller at all, and the home-realm check makes a leaked one
+useless. On betanet any holder of the published `*Token` can construct one, and construction
+privacy is the only barrier. Writing for pearl or mainnet, use the ledger form; **auditing a betanet
+realm, expect the weaker one** and treat a teller that travels between realms as a finding rather
+than assuming the home guard caught it.
+
+**`TransferFrom` guards self-transfer on mainnet only.** mainnet's copy rejects `owner == to` with
+`ErrCannotTransferToSelf`; pearl's carries that guard on `Transfer` alone, so a self-directed
+`TransferFrom` succeeds there. Auditing a realm that wraps `TransferFrom`, read the guard off the
+target chain rather than assuming the standard supplies it. `networks.md` carries the full
+cross-chain drift surface.
 
 Realm authors using GRC20 must:
 

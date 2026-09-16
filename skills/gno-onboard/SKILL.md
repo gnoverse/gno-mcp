@@ -1,6 +1,6 @@
 ---
 name: gno-onboard
-description: Teach gno.land from first contact, adapting to the user's background. Use when someone asks "what is gno", "how do I start with gno.land", "explain gno to me", says they are new to Gno or coming from another stack (Solidity, Solana, web2, anything), or asks beginner questions about realms, gnokey, or testnets — even without the word "onboard".
+description: Use when someone asks "what is gno", "how do I start with gno.land", "explain gno to me", says they are new to Gno or coming from another stack (Solidity, Solana, web2, anything), or asks beginner questions about realms, gnokey, mainnet, or the testnet — even without the word "onboard". Entered at the start of the conversation, BEFORE you explain anything or generate a key, since the first step is finding out what they already know.
 ---
 
 # Onboarding to gno.land
@@ -44,8 +44,11 @@ their answers, not on the initial label.
 
 ## Step 3 — Hands-on (see before do; one new concept per step; checkpoint after each)
 
-1. **Observe:** `gno_render` a live realm (`gno.land/r/gnoland/blog` is deployed on both
-   public testnets; confirm with `gno_packages` rather than trusting this path), then
+Run this flow on pearl or a local gnodev. The `mainnet` builtin ships read-only: it has no agent
+key and no faucet, so steps 2 to 4 fail there rather than degrading. Step 1 works on any chain.
+
+1. **Observe:** `gno_render` a live realm (`gno.land/r/gnoland/blog` is deployed on pearl and
+   mainnet; confirm with `gno_packages` rather than trusting this path), then
    `gno_read` it (the default outline shows every file's API surface) — "this is a contract,
    and you can read all of it". If the client elides resource previews, hand over the gnoweb
    URL instead.

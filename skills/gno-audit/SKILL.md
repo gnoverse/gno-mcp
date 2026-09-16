@@ -1,6 +1,6 @@
 ---
 name: gno-audit
-description: Run an explicit security audit of a Gno realm or pure package. Use when the user asks to audit a contract, asks "is this realm safe", wants a review before sending funds to or authorizing a session for a realm, or pastes Gno source asking what could go wrong.
+description: Use when asked to audit a Gno realm or pure package, when a deployed realm is named or pasted for review (a `gno.land/r/...` path, a gnoweb URL on gno.land or pearl.testnets.gno.land, a realm on mainnet `gnoland-1` or pearl `pearl-1`), when asked "is this realm safe", when a review is wanted before sending funds to or authorizing a session for a realm, or when Gno source is pasted with "what could go wrong" — BEFORE you read the source or form any verdict. Entered at the start of the review, not after a first pass.
 ---
 
 # Auditing a Gno realm
