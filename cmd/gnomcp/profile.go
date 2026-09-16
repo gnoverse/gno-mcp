@@ -16,9 +16,18 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 )
 
-// reservedNames cannot be redefined by the user — local/testnet are built-in
-// defaults; "default" is reserved to avoid ambiguity with config conventions.
-var reservedNames = map[string]bool{"local": true, "testnet": true, "default": true}
+// isReservedName reports whether a profile name is one the user cannot define:
+// any built-in, plus "default", which config conventions give its own meaning.
+// A user profile that took a built-in's name would keep the name and change the
+// chain, and capability follows the chain-id: a profile named "mainnet" pointing
+// at a testnet signs for real.
+func isReservedName(name string) bool {
+	if name == "default" {
+		return true
+	}
+	_, ok := profiles.BuiltinProfiles()[name]
+	return ok
+}
 
 type profileAddOpts struct {
 	FromGnoweb string
@@ -54,7 +63,7 @@ func loadGlobal(path string) (map[string]profiles.Profile, error) {
 }
 
 func profileAdd(path, name string, opts profileAddOpts) error {
-	if reservedNames[name] {
+	if isReservedName(name) {
 		return fmt.Errorf("%q is a reserved built-in profile name", name)
 	}
 	rpc, chainID := opts.RPC, opts.ChainID
@@ -82,7 +91,7 @@ func profileAdd(path, name string, opts profileAddOpts) error {
 }
 
 func profileRemove(path, name string) error {
-	if reservedNames[name] {
+	if isReservedName(name) {
 		return fmt.Errorf("%q is a built-in profile and cannot be removed", name)
 	}
 	cur, err := loadGlobal(path)

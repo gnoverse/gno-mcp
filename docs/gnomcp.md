@@ -163,7 +163,7 @@ Profiles are written to `~/.config/gnomcp/profiles.toml`. A project-local `./pro
 
 A profile entry in a config file is a whole-profile replacement — an overlay redefining a built-in must re-supply `rpc-url` and `chain-id`, not just `master-address`.
 
-To permanently customize a built-in profile — say, point `testnet` at your own indexer — write the whole profile under the same name in `~/.config/gnomcp/profiles.toml` by hand (`gnomcp profile add` refuses the names `local`, `testnet` and `default`; `mainnet` is not reserved, so a profile saved under that name shadows the read-only built-in and may point at any chain, including a writable one — read the chain-id from `gno_status` rather than the profile name): copy every current built-in value (`gno_profile_list` prints each profile's full endpoint set), then change the field you care about. Nothing merges field-by-field: omitting an optional field drops it (an override without `faucet-service-url` loses the faucet for that profile), and omitting a required one fails at startup (`missing required rpc-url`).
+To permanently customize a built-in profile — say, point `testnet` at your own indexer — write the whole profile under the same name in `~/.config/gnomcp/profiles.toml` by hand (`gnomcp profile add` refuses every built-in name — `local`, `testnet`, `mainnet` — and `default`): copy every current built-in value (`gno_profile_list` prints each profile's full endpoint set), then change the field you care about. Nothing merges field-by-field: omitting an optional field drops it (an override without `faucet-service-url` loses the faucet for that profile), and omitting a required one fails at startup (`missing required rpc-url`).
 
 ```toml
 [testnet]
