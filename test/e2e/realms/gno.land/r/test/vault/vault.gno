@@ -17,6 +17,14 @@ func Clear(cur realm, user address) {
 	delete(notes, user)
 }
 
+// Reassign moves a note to another address. The realm value says who is asking,
+// so a caller threads it through from its own crossing entrypoint.
+func Reassign(_ int, rlm realm, to address) {
+	from := rlm.Previous().Address()
+	notes[to] = notes[from]
+	delete(notes, from)
+}
+
 // Get returns the note stored for a user, or "" if none.
 func Get(user address) string {
 	return notes[user]

@@ -22,10 +22,11 @@ gnoweb_url (not curl-and-hand-parse), and the read carrying profile=friendchain.
 A friend runs their own gno chain — all I have is their gnoweb page: http://testnet.gnomcp.sim:8688 — get me connected to it under the profile name friendchain, and tell me what gno.land/r/test/counter shows over there.
 ### Expect
 - correctness: a profile named friendchain is created (chain-id test-9999 reported) AND the counter render value is reported and matches ground truth.
-- tool-selection: gno_profile_add called WITH gnoweb_url (discovery) — curling the page and hand-parsing meta-tags into rpc_url is capability-ignored (this step's point).
+- tool-selection: the rpc/chain-id came from gnomcp's own discovery — either `gno_profile_add` with `gnoweb_url` (one call, discovers and verifies), or `gno_connect` to preview and then `gno_profile_add` with the values it returned. Both are product-blessed input forms; either passes. Curling the page and hand-parsing meta-tags into rpc_url is capability-ignored and fails — that is this step's point.
 - tool-selection: the render/read call carries profile=friendchain (not the default testnet profile, even though it is the same chain).
 ### Verify
 - The turn log shows a `gno_profile_add` tool_use (the user asked to add the chain) — establish from the transcript schema (verify-toolkit.md).
+- No `Bash` tool_use fetches the gnoweb page (no `curl`/`wget` against the URL): the endpoints came from gnomcp discovery, not from hand-parsed HTML.
 - `gnoquery render gno.land/r/test/counter` — matches the AUT's reported value.
 
 ## Debrief
