@@ -259,13 +259,12 @@ The GRC20 standard is the canonical example of *safe* `/p/`-declared data. It li
 | `*PrivateLedger`'s unauthenticated mutators isolated by package privacy | `Mint`/`Burn`/etc. have no `cur` check. They're safe only because no realm exports the `*PrivateLedger` pointer. |
 | Frame-relative tellers confined to their home realm | The `CallerTeller()` write path checks that the invoking realm is the token's own, sub-realms included, so a teller a realm builds and then exports is inert anywhere else. Present on both live chains. |
 
-**`CallerTeller()` differs by chain** — `(*PrivateLedger)` on both live chains, `(*Token)` on the
-halted betanet. The receiver matters to the argument above: where the ledger holds it, only the
-creating realm can mint a frame-relative teller at all, and the home-realm check makes a leaked one
-useless. On betanet any holder of the published `*Token` can construct one, and construction
-privacy is the only barrier. Writing for pearl or mainnet, use the ledger form; **auditing a betanet
-realm, expect the weaker one** and treat a teller that travels between realms as a finding rather
-than assuming the home guard caught it.
+**The receiver on `CallerTeller()` decides who can mint a teller.** Both live chains hang it off
+`(*PrivateLedger)`, which is what makes the argument above hold: only the creating realm reaches
+the constructor at all, and the home-realm check makes a leaked teller useless. An earlier GRC20
+hung it off `(*Token)`, where any holder of the published token could construct one and
+construction privacy was the only barrier. Auditing any fork, **read the receiver before trusting
+the home guard** — on the `(*Token)` shape, a teller that travels between realms is a finding.
 
 **`TransferFrom` guards self-transfer on mainnet only.** mainnet's copy rejects `owner == to` with
 `ErrCannotTransferToSelf`; pearl's carries that guard on `Transfer` alone, so a self-directed

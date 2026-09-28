@@ -104,8 +104,8 @@ including `inert`, which is why it gets its own gate. Query the param for the cu
 Read it rather than inferring a lock from launch tooling.
 
 **`gnoland-1` and `gnoland1` are one hyphen apart and are different chains.** `gnoland-1` is
-mainnet; `gnoland1` is betanet. Neither is writable, so confusing them cannot produce a write, but
-it does decide which chain an audit reads.
+mainnet; `gnoland1` was betanet, whose hosts are gone. Neither is writable, so confusing them
+cannot produce a write — a `gnoland1` profile fails to connect at all.
 
 **`gno.land` names mainnet.** It served betanet before mainnet launched, so a profile pinned to
 that domain changed chains under a name that said otherwise. Read a chain-id rather than inferring
@@ -114,20 +114,17 @@ toolchain: the dependency fetcher derives its remote from the **import path's do
 `gno.land/...` import resolves to `rpc.gno.land` — mainnet — whichever chain you are building for
 (`toolchain.md`).
 
-## Retired and halted chains
+## Retired chains
 
-**betanet (`gnoland1`)** has stopped producing blocks. Its RPC, gnoweb and indexer still answer and
-still serve its final state, which makes it the one retired chain a host check alone will not catch:
-the height simply no longer moves. gnomcp ships no builtin for it, because a zero-config profile
-would offer frozen state to read as if it were current. Reading its archive is still possible by
-adding it deliberately with `gno_profile_add`. Its CLA gate was ENABLED, unlike pearl's and
-mainnet's, and its `p/demo/tokens/grc20` carries the older `CallerTeller()` form described below.
+**betanet (`gnoland1`), sapphire (`sapphire-1`) and topaz (`topaz-1`) are gone.** Their RPC, gnoweb
+and indexer hostnames do not resolve, so gnomcp ships no builtin for any of them, nothing archived
+on them is readable from the chain, and `sapphire-1` is not a writable chain-id. topaz's tag
+`chain/topaz` (`fc40526`) sits behind `heads/chain/topaz` (`63c2673`), which is why a tag is worth
+comparing against its branch head before pinning.
 
-**sapphire (`sapphire-1`)** is gone: its RPC, gnoweb, indexer and faucet hostnames no longer
-resolve, so gnomcp ships no builtin profile for it and `sapphire-1` is no longer a writable
-chain-id. **topaz (`topaz-1`)** went the same way before it; its tag `chain/topaz` (`fc40526`) sits
-behind `heads/chain/topaz` (`63c2673`), which is why a tag is worth comparing against its branch
-head before pinning.
+**A host that answers does not prove a chain is live.** betanet spent its last stretch resolving,
+replying to every read, and serving a height that never moved — a retirement no host check catches.
+Sample the height from `gno_status` twice before treating a chain as current.
 
 Earlier numbered testnets (`test1`–`test13`) are likewise dead; the `test` name stays writable
 because it also covers the e2e simnet's `test-9999`.
@@ -176,23 +173,21 @@ not. Resolve every import against the target chain with `gno_packages`.
 `Transfer`. A self-directed `TransferFrom` succeeds on pearl and fails on mainnet. The rest of the
 package, `tellers.gno` included, is identical between them.
 
-**`CallerTeller()` hangs off a different type on the halted betanet.**
+**`CallerTeller()` hangs off `*PrivateLedger` on both live chains.**
 
 ```go
-teller := ledger.CallerTeller()  // pearl and mainnet: func (ledger *PrivateLedger) CallerTeller() Teller
-teller := tok.CallerTeller()     // betanet: func (tok *Token) CallerTeller() Teller
+teller := ledger.CallerTeller()  // func (ledger *PrivateLedger) CallerTeller() Teller
 ```
 
-Both live chains also carry a `guardHome` check that confines a frame-relative teller to the token's
-own realm, so a teller a realm builds and then exports is inert elsewhere. betanet has neither the
-receiver change nor the guard, so a realm archived there may pass tellers between realms in a way
-both live chains would reject — worth knowing when reading that code, not when writing new code.
+Both also carry a `guardHome` check that confines a frame-relative teller to the token's own realm,
+so a teller a realm builds and then exports is inert elsewhere. An older GRC20 hung the same method
+off `*Token` with no guard; `security.md` reads what that receiver decides, and a fork can still
+carry it.
 
 The package sets differ too, and not only by path: the NFT standard is in mainnet's genesis set
-(under the `p/nt` tree with a `/v0` leaf) and resolves on neither pearl nor betanet, while
-`p/nt/commondao/v0` resolves on betanet and on neither live chain. `p/demo/tokens/grc721` resolves
-nowhere. Read the **target chain's** deployed source (`gno_read` / `vm/qfile`) before relying on any
-package this file does not cover.
+(under the `p/nt` tree with a `/v0` leaf) and does not resolve on pearl, while `p/nt/commondao/v0`
+resolves on neither live chain. `p/demo/tokens/grc721` resolves nowhere. Read the **target chain's**
+deployed source (`gno_read` / `vm/qfile`) before relying on any package this file does not cover.
 
 ## Deploying — pearl is the only public target
 
