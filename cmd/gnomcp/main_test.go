@@ -165,7 +165,7 @@ chain-id = "gnoland-1"
 			"write tool %q offers profile(s) %v although every profile is read-only",
 			tool.Name, tool.InputSchema.Properties.Profile.Enum)
 	}
-	assert.Len(t, want, seen, "not every write tool under test appeared in tools/list")
+	assert.Equal(t, len(want), seen, "not every write tool under test appeared in tools/list")
 }
 
 // readResponse drains stdout until a line containing marker arrives, and fails

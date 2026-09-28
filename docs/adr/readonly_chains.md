@@ -33,7 +33,7 @@ A format-safe but non-writable chain-id (betanet `gnoland1`, `staging`, mainnet)
 
 ## Consequences
 
-- gnomcp can read — and audit — mainnet/betanet. It still cannot write to them: the agent key, faucet, sessions, and `master-address` remain `ChainIDWritable`-gated and re-checked at the keystore. The original threat model holds where it matters — the signer cannot sign for a real-funds chain; it can only read one.
+- gnomcp can read — and audit — mainnet, and any other chain outside the writable set. It still cannot write to one: the agent key, faucet, sessions, and `master-address` remain `ChainIDWritable`-gated and re-checked at the keystore. The original threat model holds where it matters — the signer cannot sign for a real-funds chain; it can only read one.
 - The `multichain_via_profiles.md` consequence "mainnet interaction is structurally impossible" and its "out of scope entirely" framing are narrowed to **writes**.
 - The chain-id format gate replaces the allowlist's admission role; the error code `chain_forbidden` is replaced by `chain_id_malformed` (format violations only).
 - `master-address` on a read-only chain fails validation loud — sessions remain a writable-chain-only path.

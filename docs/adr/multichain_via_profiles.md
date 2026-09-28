@@ -18,7 +18,7 @@ gnomcp runs as a single binary with a single instance, loading multiple chain pr
 
 **Chain-id allowlist.** Originally: config validation rejected any profile whose `chain-id` did not match `^(dev|test-?\d+)$`. Betanet, staging, and mainnet ids cannot enter the config; there is no override flag. Locality derives from the chain-id (`dev` = local, recognized testnet name = testnet) — there is no separate `chain-type` field.
 
-> **Superseded in part by [readonly_chains.md](readonly_chains.md).** The allowlist is now a *capability* gate, not an *admission* gate: chain-ids outside the writable set are admitted **read-only** (no agent key, faucet, session, or `master-address`), so deployed source on mainnet/betanet can be audited. A format check on `chain-id` remains, and writes stay confined to dev/testnet. Codenamed testnets (`topaz-1`) also ended the `test<N>` regex: the writable set is now `dev` plus a release-time testnet name list (`test`, `pearl`, … — see readonly_chains.md).
+> **Superseded in part by [readonly_chains.md](readonly_chains.md).** The allowlist is now a *capability* gate, not an *admission* gate: chain-ids outside the writable set are admitted **read-only** (no agent key, faucet, session, or `master-address`), so deployed source on mainnet can be audited. A format check on `chain-id` remains, and writes stay confined to dev/testnet. Codenamed testnets (`topaz-1`) also ended the `test<N>` regex: the writable set is now `dev` plus a release-time testnet name list (`test`, `pearl`, … — see readonly_chains.md).
 
 **Profile fields** (`profiles.toml`):
 
@@ -63,7 +63,7 @@ faucet-service-url  = "<url>"         # optional; automatic faucet service gno_f
 
 - Single MCP entry in the host config; per-call chain selection; cross-chain reads in one session.
 - Mainnet interaction is structurally impossible — there is nothing to misconfigure, confirm, or bypass. The trade-off: gnomcp cannot read mainnet either; lifting that for reads would be a deliberate future decision.
-  > **Superseded by [readonly_chains.md](readonly_chains.md):** that future decision was made. Mainnet/betanet is now **readable** (read-only) so deployed source can be audited; it remains **unwritable** — no path signs for it. "Structurally impossible" now applies to writes.
+  > **Superseded by [readonly_chains.md](readonly_chains.md):** that future decision was made. Mainnet is now **readable** (read-only) so deployed source can be audited; it remains **unwritable** — no path signs for it. "Structurally impossible" now applies to writes.
 - Mid-session tool-list growth is supported: `gno_profile_add` can summon gated tools (faucet, indexer) without a restart via `tools/list_changed`.
 - Testnet resets require updating the built-in `testnet` profile (a release) or overriding it locally.
 - Discovery probing adds bounded startup cost (one HTTP request with a short timeout).
