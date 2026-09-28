@@ -24,7 +24,7 @@ func RegisterProfileList(s *server.Server) {
 			"Returns one entry per profile: name, chain-id, kind (local | testnet | read-only), a sunset flag " +
 			"(a retiring testnet — still fully writable, but prefer the current testnet for new work), " +
 			"and the configured endpoints (RPC, gnoweb, tx-indexer, agent-faucet). " +
-			"Mainnet/betanet profiles are read-only: no agent key, faucet, or session. " +
+			"A read-only profile (mainnet, and any chain outside the writable set) has no agent key, faucet, or session. " +
 			"Does NOT dial any node — for a live height/chain-id check use gno_status; " +
 			"to reach a chain not listed here use gno_connect and gno_profile_add. Takes no arguments.",
 		InputSchema: map[string]any{"type": "object", "additionalProperties": false},
@@ -47,7 +47,7 @@ func profileStatus(p profiles.Profile) string {
 	case p.IsTestnet():
 		return "current testnet, writable"
 	default:
-		return "read-only (mainnet/betanet)"
+		return "read-only — no agent key, faucet, or session"
 	}
 }
 

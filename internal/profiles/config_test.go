@@ -97,19 +97,18 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	assert.Empty(t, main.MasterAddress, "built-in mainnet must carry no master-address")
 
 	// A chain leaves the builtins when reaching it stops being useful: the
-	// hosts for sapphire, topaz and test13 no longer resolve, and betanet's
-	// still answer while its chain has stopped producing blocks, so a
-	// zero-config profile would hand the agent frozen state to read as current.
+	// hosts for betanet, sapphire, topaz and test13 no longer resolve, so a
+	// zero-config profile would offer a chain every call fails against.
 	for _, name := range []string{"betanet", "sapphire", "topaz", "test13"} {
 		_, ok = cfg.Profiles[name]
 		assert.False(t, ok, "%q must not ship as a builtin", name)
 	}
 }
 
-// gnoland-1 is mainnet and gnoland1 is betanet — one hyphen apart, different
-// chains. Neither may ever reach a write path, and this pins that rather than
-// leaving it to the prefix gate happening not to match.
-func TestMainnetAndBetanetStayReadOnly(t *testing.T) {
+// gnoland-1 is mainnet; gnoland1, one hyphen away, is a retired chain. Neither
+// may ever reach a write path, and this pins that rather than leaving it to the
+// prefix gate happening not to match.
+func TestGnolandChainIDsStayReadOnly(t *testing.T) {
 	for _, id := range []string{"gnoland-1", "gnoland1"} {
 		t.Run(id, func(t *testing.T) {
 			p := Profile{RPCURL: "https://rpc.example:443", ChainID: id}

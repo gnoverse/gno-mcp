@@ -12,7 +12,8 @@ import (
 // given order, for embedding in profile-arg descriptions — the model resolves
 // a chain the user names ("on pearl", "on mainnet") to a profile from this map.
 // Labels: sunset (retiring testnet, still writable — prefer the current one
-// for new work) and read-only (mainnet/betanet, no write path).
+// for new work) and read-only (mainnet and any chain outside the writable
+// set, no write path).
 func ProfileChainList(cfg *profiles.Config, names []string) string {
 	parts := make([]string, 0, len(names))
 	for _, n := range names {

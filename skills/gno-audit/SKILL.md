@@ -15,7 +15,7 @@ description: Use when asked to audit a Gno realm or pure package, when a deploye
    it carries the trust model (genesis activation, controller whitelist, GovDAO as bypass/trust-root,
    single-writer gates) that a generic-realm audit will otherwise miss. Resolve it from the URL with
    `gno_profile_add(gnoweb_url=…)` before reading, not on whatever profile is connected
-   (mainnet/betanet is admitted read-only, which is all an audit needs). The default `gno_read`
+   (mainnet is admitted read-only, which is all an audit needs). The default `gno_read`
    is an **outline** (bodies elided) — navigation only, never evidence; audit evidence is whole
    files, fetched per file with `full=true`. Say which realm/chain you audited.
    - If the named realm's chain cannot be reached or added, **STOP** — never substitute repo,

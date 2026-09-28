@@ -194,7 +194,7 @@ func TestChainIDWritable(t *testing.T) {
 		"topaz-1": false, "topaz1": false,
 		"sapphire-1": false, "sapphire": false,
 		// One hyphen apart and neither is writable: gnoland-1 is mainnet,
-		// gnoland1 is betanet.
+		// gnoland1 a retired chain.
 		"gnoland-1": false, "gnoland1": false,
 	}
 	for id, want := range cases {
@@ -214,7 +214,7 @@ func TestChainIDValid(t *testing.T) {
 	}
 }
 
-// A non-test chain-id (betanet/mainnet/staging) is admitted, but read-only:
+// A non-test chain-id (mainnet, staging, …) is admitted, but read-only:
 // auditing deployed source on gno.land requires reaching its chain.
 func TestValidate_admitsReadOnlyChains(t *testing.T) {
 	for _, id := range []string{"gnoland1", "staging", "mychain"} {

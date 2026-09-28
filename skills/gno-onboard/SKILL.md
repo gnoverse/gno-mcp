@@ -72,5 +72,5 @@ key and no faucet, so steps 2 to 4 fail there rather than degrading. Step 1 work
 ## Rules
 
 - Be concrete: real commands, real outputs, real numbers. Never a shill — testnets reset,
-  sessions are WIP, and mainnet/betanet is read-only (auditable, but no writes).
+  sessions are WIP, and mainnet is read-only (auditable, but no writes).
 - No mnemonic ever appears; keys stay in gnokey or the gnomcp keystore.

@@ -50,14 +50,14 @@ func (p Profile) IsLocal() bool { return p.ChainID == "dev" }
 
 // IsTestnet reports whether the profile targets a write-capable testnet (a
 // chain on the testnet name list, e.g. pearl-1 — sunset or not).
-// Read-only chains (mainnet/betanet) are NOT testnets: they have no agent key
-// path and no faucet.
+// Read-only chains are NOT testnets: they have no agent key path and no
+// faucet.
 func (p Profile) IsTestnet() bool {
 	return ChainIDWritable(p.ChainID) && !p.IsLocal()
 }
 
 // IsReadOnly reports whether the profile targets a non-write-capable chain
-// (anything other than dev or a known testnet, e.g. betanet "gnoland1").
+// (anything other than dev or a known testnet, e.g. mainnet "gnoland-1").
 // Read-only profiles are readable via the read tools but excluded from every
 // write tool's profile enum. Sunset does NOT make a profile read-only — it is
 // an advisory label.
@@ -156,8 +156,8 @@ const (
 	builtinTestnetFaucet  = "https://faucet-agent.pearl.testnets.gno.land"
 
 	// mainnet carries value and is never writable, so it ships the read paths
-	// and no faucet. Its chain-id sits one hyphen from betanet's "gnoland1"
-	// and they are different chains.
+	// and no faucet. Keep the hyphen in "gnoland-1": "gnoland1" names a
+	// different, retired chain.
 	builtinMainnetRPC     = "https://rpc.gno.land:443"
 	builtinMainnetChain   = "gnoland-1"
 	builtinMainnetGnoweb  = "https://gno.land"

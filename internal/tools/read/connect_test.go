@@ -58,8 +58,8 @@ func TestConnect_RejectsInjectionInDiscoveredRPC(t *testing.T) {
 	require.Error(t, err, "expected a shell-unsafe discovered RPC to be rejected")
 }
 
-// A non-test chain (betanet gnoland1) is admitted read-only — auditing deployed
-// source on gno.land requires reaching its chain. The result flags it read-only.
+// A non-test chain is admitted read-only — auditing deployed source on gno.land
+// requires reaching its chain. The result flags it read-only.
 func TestConnect_AdmitsReadOnlyChain(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<meta name="gnoconnect:rpc" content="https://rpc.betanet.testnets.gno.land" />` +
@@ -70,7 +70,7 @@ func TestConnect_AdmitsReadOnlyChain(t *testing.T) {
 	s := server.NewServer(&profiles.Config{Profiles: profiles.BuiltinProfiles()}, "")
 	RegisterConnect(s, srv.Client())
 	res, err := s.Registry().Call(context.Background(), "gno_connect", map[string]any{"gnoweb_url": srv.URL})
-	require.NoError(t, err, "betanet chain-id (gnoland1) must be admitted read-only")
+	require.NoError(t, err, "a non-testnet chain-id must be admitted read-only")
 	assert.Equal(t, true, res.StructuredContent["read_only"])
 	assert.Contains(t, res.Text, "read-only")
 }
