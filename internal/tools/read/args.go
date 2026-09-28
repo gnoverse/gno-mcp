@@ -14,7 +14,7 @@ import (
 // schema rules. Shared across all chain-bound tools in this package.
 //
 // Read tools take a free-form string, not an enum: reads reach any configured
-// chain (including the read-only mainnet/betanet a connect adds at runtime), so
+// chain (including a read-only one a connect adds at runtime), so
 // a profile added mid-session is usable immediately, without the client
 // refetching a regenerated enum. An unknown name errors cleanly at call time.
 // The configured profiles are listed in the server instructions; write tools,

@@ -62,6 +62,22 @@ func sessionProposeHandler(
 		return server.Result{}, err
 	}
 
+	// A session is signing authority on the user's own account: once they
+	// authorize it, gnomcp signs and broadcasts under it with no further
+	// confirmation. The schema enum hides read-only profiles from this tool, but
+	// arguments are never validated against the schema before dispatch, so the
+	// same predicate gates the handler.
+	if !profileSessionEligible(profile) {
+		return server.Result{}, &server.ToolError{
+			Code: "chain_read_only",
+			Message: fmt.Sprintf(
+				"profile %q targets chain-id %q, which is read-only — no session can be opened on it; propose against a dev or testnet profile instead",
+				profileName, profile.ChainID,
+			),
+			Extra: map[string]any{"profile": profileName, "chain_id": profile.ChainID},
+		}
+	}
+
 	allowPaths, err := server.StringSliceArg(args, "allow_paths")
 	if err != nil {
 		return server.Result{}, err

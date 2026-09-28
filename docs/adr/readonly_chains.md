@@ -12,7 +12,7 @@ That allowlist did double duty — it gated *write capability* and it *admitted*
 
 **Chain-id decides capability, not admission.** The single allowlist splits in two:
 
-- `ChainIDWritable(id)` — `dev`, or an id starting with a known testnet name (the release-time `testnetChainNames` list: `test`, `sapphire`, `pearl`; bare or hyphenated — `test5`, `sapphire-1`, `pearl-1`). Codenamed testnets cannot be recognized by a `test<N>` pattern, so the gate is a name list, not a regex. Write-capable: agent key path, faucet, sessions, `master-address`, and presence in every write tool's `profile` enum.
+- `ChainIDWritable(id)` — `dev`, or an id starting with a known testnet name (the release-time `testnetChainNames` list: `test`, `pearl`; bare or hyphenated — `test5`, `pearl-1`). Codenamed testnets cannot be recognized by a `test<N>` pattern, so the gate is a name list, not a regex. Write-capable: agent key path, faucet, sessions, `master-address`, and presence in every write tool's `profile` enum.
 - `ChainIDValid(id)` — a format-safety gate, `^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$`, ≤64 chars. Any chain-id passing it may enter config. It still refuses whitespace and shell metacharacters, because the chain-id is interpolated into the `gnomcp profile add` / `gnokey` commands the user pastes into a terminal.
 
 A format-safe but non-writable chain-id (betanet `gnoland1`, `staging`, mainnet) is admitted **read-only**: the read tools list it; every write tool excludes it from its `profile` enum; the keystore refuses to derive an agent key for it (defense in depth); no faucet; and `master-address` on a read-only chain is a config error. **No code path signs for a read-only chain.**
@@ -29,11 +29,11 @@ A format-safe but non-writable chain-id (betanet `gnoland1`, `staging`, mainnet)
 
 **Named read-tier allowlist** (only blessed mainnet ids admitted read-only). Rejected: a list to maintain; betanet RPCs and ids move; format-safety plus capability-by-chain-id is general and self-healing.
 
-**Built-in `gnoland1` read-only profile.** Rejected for now: it hardcodes an external betanet RPC that moves; connect-driven resolution (`gno_profile_add` from the URL's `gnoconnect` meta-tags) self-heals.
+**Built-in `gnoland1` read-only profile.** Rejected: betanet's RPC moved and its chain later stopped producing blocks, which a hardcoded profile would have kept offering as current. A built-in **`mainnet`** read-only profile does ship, on the same read-only terms — its endpoints are the project's own and its chain is live. Anything else resolves through `gno_profile_add` from a gnoweb URL's `gnoconnect` meta-tags, which self-heals.
 
 ## Consequences
 
-- gnomcp can read — and audit — mainnet/betanet. It still cannot write to them: the agent key, faucet, sessions, and `master-address` remain `ChainIDWritable`-gated and re-checked at the keystore. The original threat model holds where it matters — the signer cannot sign for a real-funds chain; it can only read one.
+- gnomcp can read — and audit — mainnet, and any other chain outside the writable set. It still cannot write to one: the agent key, faucet, sessions, and `master-address` remain `ChainIDWritable`-gated and re-checked at the keystore. The original threat model holds where it matters — the signer cannot sign for a real-funds chain; it can only read one.
 - The `multichain_via_profiles.md` consequence "mainnet interaction is structurally impossible" and its "out of scope entirely" framing are narrowed to **writes**.
 - The chain-id format gate replaces the allowlist's admission role; the error code `chain_forbidden` is replaced by `chain_id_malformed` (format violations only).
 - `master-address` on a read-only chain fails validation loud — sessions remain a writable-chain-only path.

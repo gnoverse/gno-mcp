@@ -8,3 +8,12 @@ faucet-service-url = "http://testnet.gnomcp.sim:8590"
 # Where the user (on the host) views realms: gnoweb is published to the host by
 # `make sim`. Default GNOWEB_PORT=8688; a non-default override makes this stale.
 gnoweb-url         = "http://localhost:8688"
+
+# A second view of the same simnet under a chain-id outside the writable set
+# (dev, test*, pearl*), so gnomcp admits it read-only: no agent key, no faucet,
+# no session, and no place in any write tool's profile enum. Reads resolve
+# because the RPC behind it is the simnet, which lets a scenario exercise both
+# halves. gno_status reports the chain-id mismatch that setup implies.
+[staging]
+rpc-url  = "http://testnet.gnomcp.sim:26687"
+chain-id = "staging"

@@ -354,3 +354,27 @@ func TestSessionPropose_addsPendingSession(t *testing.T) {
 	require.Len(t, sessions, 1, "expected 1 pending session")
 	assert.Equal(t, session.StatePending, sessions[0].State)
 }
+
+func TestSessionPropose_refusesReadOnlyChain(t *testing.T) {
+	// A session on a read-only chain would be a real session on a real account:
+	// the tool hands the user a gnokey command to sign, and once the chain
+	// confirms it gnomcp signs and broadcasts under it. The schema enum that
+	// hides read-only profiles is advisory — nothing validates arguments against
+	// it before the handler runs — so the handler refuses the chain-id itself.
+	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
+		"mainnet": {RPCURL: "https://rpc.gno.land:443", ChainID: "gnoland-1"},
+	}}
+	_, err := cfg.Validate()
+	require.NoError(t, err, "validate")
+	s := server.NewServer(cfg, "")
+	RegisterSessionPropose(s, noSessionMgr(t), constChainResolver(proposeFake(1_000_000)))
+
+	_, err = s.Registry().Call(context.Background(), "gno_session_propose", map[string]any{
+		"profile":        "mainnet",
+		"allow_paths":    []any{"gno.land/r/demo/counter"},
+		"master_address": "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3",
+	})
+	require.Error(t, err, "propose must refuse a read-only chain-id")
+	assert.Contains(t, err.Error(), "gnoland-1", "error should name the chain-id")
+	assert.Contains(t, err.Error(), "read-only", "error should say why")
+}

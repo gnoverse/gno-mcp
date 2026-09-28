@@ -81,22 +81,60 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
 
-	old, ok := cfg.Profiles["sapphire"]
-	require.True(t, ok, "sunset predecessor testnet missing from builtins")
-	assert.Equal(t, "sapphire-1", old.ChainID, "sapphire chain-id")
-	assert.True(t, old.Sunset, "sapphire must be marked sunset")
-	assert.True(t, old.IsTestnet(), "sunset builtin must stay a writable testnet")
-	assert.Equal(t, "https://rpc.sapphire.testnets.gno.land:443", old.RPCURL, "sapphire rpc-url")
-	assert.Equal(t, "https://sapphire.testnets.gno.land", old.GnowebURL, "sapphire gnoweb-url")
-	assert.Equal(t, "https://faucet-agent.sapphire.testnets.gno.land", old.FaucetServiceURL, "sapphire faucet (live) must be configured so deploys can fund")
-	assert.Equal(t, "https://indexer.sapphire.testnets.gno.land/graphql/query", old.TxIndexerURL, "sapphire indexer (live) must be configured")
+	// mainnet carries real value. It ships the read paths and nothing that
+	// could sign.
+	main, ok := cfg.Profiles["mainnet"]
+	require.True(t, ok, "mainnet default missing")
+	assert.Equal(t, "gnoland-1", main.ChainID, "mainnet chain-id")
+	assert.True(t, main.IsReadOnly(), "mainnet must be read-only")
+	assert.False(t, main.IsTestnet(), "mainnet must not count as a writable testnet")
+	assert.False(t, main.Sunset, "read-only is not a sunset label")
+	assert.Equal(t, "https://rpc.gno.land:443", main.RPCURL, "mainnet rpc-url")
+	assert.Equal(t, "https://gno.land", main.GnowebURL, "mainnet gnoweb-url")
+	assert.Equal(t, "https://indexer.gno.land/graphql/query", main.TxIndexerURL, "mainnet indexer serves gnoland-1 and is current")
+	assert.Empty(t, main.FaucetServiceURL, "mainnet ships with no faucet")
+	assert.Empty(t, main.FaucetURL, "mainnet ships with no faucet")
+	assert.Empty(t, main.MasterAddress, "built-in mainnet must carry no master-address")
 
-	// A retired chain's builtin goes away with its infrastructure: the hosts
-	// for topaz and test13 no longer resolve, so shipping either profile would
-	// only hand the agent a chain every call fails against.
-	for _, name := range []string{"topaz", "test13"} {
+	// A chain leaves the builtins when reaching it stops being useful: the
+	// hosts for betanet, sapphire, topaz and test13 no longer resolve, so a
+	// zero-config profile would offer a chain every call fails against.
+	for _, name := range []string{"betanet", "sapphire", "topaz", "test13"} {
 		_, ok = cfg.Profiles[name]
-		assert.False(t, ok, "retired testnet %q must not ship as a builtin", name)
+		assert.False(t, ok, "%q must not ship as a builtin", name)
+	}
+}
+
+// gnoland-1 is mainnet; gnoland1, one hyphen away, is a retired chain. Neither
+// may ever reach a write path, and this pins that rather than leaving it to the
+// prefix gate happening not to match.
+func TestGnolandChainIDsStayReadOnly(t *testing.T) {
+	for _, id := range []string{"gnoland-1", "gnoland1"} {
+		t.Run(id, func(t *testing.T) {
+			p := Profile{RPCURL: "https://rpc.example:443", ChainID: id}
+			assert.False(t, ChainIDWritable(id), "must not be writable")
+			assert.True(t, p.IsReadOnly(), "must be read-only")
+			assert.False(t, p.IsTestnet(), "must not be a testnet")
+			assert.False(t, p.IsLocal(), "must not be local")
+
+			cfg := &Config{Profiles: map[string]Profile{"m": {
+				RPCURL: "https://rpc.example:443", ChainID: id,
+				MasterAddress: "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5",
+			}}}
+			_, err := cfg.Validate()
+			require.Error(t, err, "master-address must be refused on a read-only chain")
+			assert.Contains(t, err.Error(), "read-only")
+
+			for _, faucet := range []Profile{
+				{RPCURL: "https://rpc.example:443", ChainID: id, FaucetServiceURL: "https://faucet.example"},
+				{RPCURL: "https://rpc.example:443", ChainID: id, FaucetURL: "https://faucet.example/page"},
+			} {
+				cfg := &Config{Profiles: map[string]Profile{"m": faucet}}
+				_, err := cfg.Validate()
+				require.Error(t, err, "a faucet on a read-only chain must be refused, not silently ignored")
+				assert.Contains(t, err.Error(), "read-only")
+			}
+		})
 	}
 }
 

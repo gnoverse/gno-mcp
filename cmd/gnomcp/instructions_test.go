@@ -64,8 +64,8 @@ func TestBuildServerInstructions_listsConfiguredProfiles(t *testing.T) {
 	assert.Contains(t, got, "write-as-user")
 }
 
-// A read-only chain (mainnet/betanet) supports read tools only. The startup
-// listing must flag it so the agent doesn't attempt writes against it.
+// A read-only chain supports read tools only. The startup listing must flag it
+// so the agent doesn't attempt writes against it.
 func TestBuildServerInstructions_flagsReadOnlyProfile(t *testing.T) {
 	got := buildServerInstructions(map[string]profiles.Profile{
 		"betanet": {RPCURL: "https://rpc.betanet.testnets.gno.land", ChainID: "gnoland1"},

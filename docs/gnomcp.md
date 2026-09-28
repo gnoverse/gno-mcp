@@ -138,7 +138,7 @@ For in-repo development register a dev server once: `claude mcp add gnomcp -- go
 
 ## Configuration
 
-Profiles are the source of truth for which chains gnomcp can reach; `testnet` (the current public testnet), its sunset predecessor (e.g. `sapphire` — still writable, labeled sunset), and `local` ship built in — `gno_profile_list` shows the loaded catalog with each profile's chain-id and endpoints. Any format-safe chain-id can be added: dev and testnet chains are read/write, while mainnet and betanet are admitted **read-only** — the agent can inspect and audit deployed code, but no code path signs a transaction there, and `master-address` on a read-only chain is rejected.
+Profiles are the source of truth for which chains gnomcp can reach; `testnet` (the current public testnet), `mainnet` (`gnoland-1`, read-only), and `local` ship built in — `gno_profile_list` shows the loaded catalog with each profile's chain-id and endpoints. Any format-safe chain-id can be added: dev and testnet chains are read/write, while every other chain — mainnet included — is admitted **read-only**. The agent can inspect and audit deployed code, but no code path signs a transaction there, and `master-address` on a read-only chain is rejected.
 
 gnomcp can connect to a chain on the fly during a session, but a chain added that way isn't saved. Persist the ones you want it to remember between runs with `gnomcp profile add` (below); a saved profile is also what user-session writes need, since it carries the `master-address`.
 
@@ -163,7 +163,7 @@ Profiles are written to `~/.config/gnomcp/profiles.toml`. A project-local `./pro
 
 A profile entry in a config file is a whole-profile replacement — an overlay redefining a built-in must re-supply `rpc-url` and `chain-id`, not just `master-address`.
 
-To permanently customize a built-in profile — say, point `testnet` at your own indexer — write the whole profile under the same name in `~/.config/gnomcp/profiles.toml` by hand (`gnomcp profile add` refuses the built-in names): copy every current built-in value (`gno_profile_list` prints each profile's full endpoint set), then change the field you care about. Nothing merges field-by-field: omitting an optional field drops it (an override without `faucet-service-url` loses the faucet for that profile), and omitting a required one fails at startup (`missing required rpc-url`).
+To permanently customize a built-in profile — say, point `testnet` at your own indexer — write the whole profile under the same name in `~/.config/gnomcp/profiles.toml` by hand (`gnomcp profile add` refuses every built-in name — `local`, `testnet`, `mainnet` — and `default`): copy every current built-in value (`gno_profile_list` prints each profile's full endpoint set), then change the field you care about. Nothing merges field-by-field: omitting an optional field drops it (an override without `faucet-service-url` loses the faucet for that profile), and omitting a required one fails at startup (`missing required rpc-url`).
 
 ```toml
 [testnet]

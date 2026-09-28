@@ -150,21 +150,22 @@ See `build.md` for filetest layout and authoring patterns.
 
 ## Common community packages (kept in `examples/`)
 
-The packages below survived the test-13 quarantine (`examples/quarantined/` got everything else) — safe to import, but verify against the target chain: neither live testnet deploys every listed package (grc721 and commondao are on neither; pearl carries 85 packages to sapphire's 397):
+The packages below survived the test-13 quarantine (`examples/quarantined/` got everything else). The path is chain-specific: resolve every one against the target chain with `gno_packages` before importing. Where pearl and mainnet spell a package differently, both are given.
 
-| Purpose | Import path |
-|---|---|
-| AVL tree (canonical persisted keyed collection) | `gno.land/p/nt/avl/v0` |
-| B+tree (alternative for ordered keyed state) | `gno.land/p/nt/bptree/v0` |
-| Render-path routing (mux) | `gno.land/p/nt/mux/v0` |
-| Realm-path parsing | `gno.land/p/moul/realmpath` |
-| Ownership / single-owner pattern | `gno.land/p/nt/ownable/v0` |
-| Authorization patterns | `gno.land/p/moul/authz` |
-| Pagination | `gno.land/p/jeronimoalbi/pager` |
-| DAO primitives | `gno.land/p/nt/commondao/v0` — **absent from both live testnets** |
-| Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` |
+| Purpose | pearl | mainnet |
+|---|---|---|
+| AVL tree (canonical persisted keyed collection) | `gno.land/p/nt/avl/v0` | same |
+| B+tree (alternative for ordered keyed state) | `gno.land/p/nt/bptree/v0` | same |
+| Render-path routing (mux) | `gno.land/p/nt/mux/v0` | same |
+| Ownership / single-owner pattern | `gno.land/p/nt/ownable/v0` | same |
+| Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` | `gno.land/p/nt/grc20/v0` |
+| NFTs | not deployed | `gno.land/p/nt/grc721/v0` (+ `enumerable`, `metadata`, `royalty` leaves) |
+| Realm-path parsing | `gno.land/p/moul/realmpath` | `gno.land/p/moul/realmpath/v0` |
+| Authorization patterns | `gno.land/p/moul/authz` | `gno.land/p/moul/authz/v0` |
+| Pagination | `gno.land/p/jeronimoalbi/pager` | `gno.land/p/jeronimoalbi/pager/v0` |
+| DAO primitives | `gno.land/p/nt/commondao/v0` resolves on neither live chain | |
 
-There is no canonical GRC721/NFT package deployed on either live testnet — `gno.land/p/demo/tokens/grc721` does not resolve on-chain (verified on pearl and sapphire). Query the target chain before assuming an NFT import path.
+Sub-packages of these roots are spelled differently on the two chains (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on mainnet). `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split, and authz and realmpath each carry more than one version on at least one chain (`authz` has `/v1` and `/v2` on pearl, `/v1` on mainnet): the table gives one spelling that resolves, which is not always the newest. Enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
 
 **Use `avl.Tree` (or `bptree`) instead of Go's `map`** for growing keyed state — a persisted map rewrites wholesale on every mutation, and its insertion-order iteration is an impl detail, not an ordering contract. (Iteration is deterministic, so it's a gas/design issue, not a consensus risk.) See `patterns.md` and `memory.md` § Map iteration order.
 

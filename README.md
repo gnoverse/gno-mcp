@@ -15,7 +15,7 @@
 > **Work in progress — unaudited and pre-release.**
 >
 > - The tool API can still change, and the session write path will be reworked.
-> - Writes are confined to dev/testnet — no code path signs on mainnet or betanet.
+> - Writes are confined to dev/testnet — no code path signs on mainnet.
 > - Upgrading isn't guaranteed to preserve your configuration: re-running the installer rebuilds the MCP registration.
 >
 > Read [docs/security.md](docs/security.md) and file issues when something looks off.
@@ -38,13 +38,13 @@ Other clients (Cursor, Claude Desktop, …), manual install, building from sourc
 
 ## What you can do
 
-gnomcp ships pointed at the public testnet and a local gnodev node — nothing to configure:
+gnomcp ships pointed at mainnet, the public testnet and a local gnodev node — nothing to configure:
 
 | Profile | Chain-id | RPC |
 |---------|----------|-----|
 | `testnet` | `pearl-1` | `https://rpc.pearl.testnets.gno.land:443` |
 | `local` | `dev` | `http://127.0.0.1:26657` (local [gnodev](https://docs.gno.land/builders/local-dev-with-gnodev) node) |
-| `sapphire` | `sapphire-1` | `https://rpc.sapphire.testnets.gno.land:443` (sunset predecessor — still writable) |
+| `mainnet` | `gnoland-1` | `https://rpc.gno.land:443` (read-only — reads and audits, never writes) |
 
 Then talk to your agent in plain language. New to gno.land? Just ask it to teach you — it gauges your background and gives you a hands-on tour (the `gno-onboard` skill). Otherwise:
 
@@ -93,16 +93,16 @@ Full catalog → [docs/tools.md](docs/tools.md).
 
 ## Configuration
 
-gnomcp can reach any gno.land chain. Dev and testnet chains are read/write; mainnet and betanet are read-only — inspect and audit deployed code, but no signing on real-funds chains.
+gnomcp can reach any gno.land chain. Dev and testnet chains are read/write; every other chain, mainnet included, is read-only — inspect and audit deployed code, but no signing on real-funds chains.
 
-Beyond the built-in `testnet` and `local` defaults, save the chains you use as named **profiles** with `gnomcp profile add` (written to `profiles.toml`), so gnomcp remembers them between runs. A profile can also carry an indexer URL, or a master address for user-session writes (dev/testnet only).
+Beyond the built-in `mainnet`, `testnet` and `local` defaults, save the chains you use as named **profiles** with `gnomcp profile add` (written to `profiles.toml`), so gnomcp remembers them between runs. A profile can also carry an indexer URL, or a master address for user-session writes (dev/testnet only).
 
 Profile fields and the signing model → [Configuration](docs/gnomcp.md#configuration) · [Write authorization](docs/gnomcp.md#write-authorization).
 
 ## Security
 
 - **Keys stay in `gnokey`** — gnomcp never sees a mnemonic; the user signs sessions on their own machine.
-- **No signing on real-funds chains** — writes are gated to dev/testnet; mainnet and betanet are read-only.
+- **No signing on real-funds chains** — writes are gated to dev/testnet; mainnet, like any other chain-id, is read-only.
 - **Chain output can't hijack the agent** — every chain-derived byte is wrapped in an untrusted-content envelope.
 - **Bounded reads** — output is budgeted and summarized, never silently truncated.
 - **Every write is logged** — an append-only audit trail of the tool, profile, result, and signer.

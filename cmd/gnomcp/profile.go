@@ -16,9 +16,18 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 )
 
-// reservedNames cannot be redefined by the user — local/testnet are built-in
-// defaults; "default" is reserved to avoid ambiguity with config conventions.
-var reservedNames = map[string]bool{"local": true, "testnet": true, "default": true}
+// isReservedName reports whether a profile name is one the user cannot define:
+// any built-in, plus "default", which config conventions give its own meaning.
+// A user profile that took a built-in's name would keep the name and change the
+// chain, and capability follows the chain-id: a profile named "mainnet" pointing
+// at a testnet signs for real.
+func isReservedName(name string) bool {
+	if name == "default" {
+		return true
+	}
+	_, ok := profiles.BuiltinProfiles()[name]
+	return ok
+}
 
 type profileAddOpts struct {
 	FromGnoweb string
@@ -54,7 +63,7 @@ func loadGlobal(path string) (map[string]profiles.Profile, error) {
 }
 
 func profileAdd(path, name string, opts profileAddOpts) error {
-	if reservedNames[name] {
+	if isReservedName(name) {
 		return fmt.Errorf("%q is a reserved built-in profile name", name)
 	}
 	rpc, chainID := opts.RPC, opts.ChainID
@@ -81,10 +90,12 @@ func profileAdd(path, name string, opts profileAddOpts) error {
 	return profiles.WriteFile(path, cur)
 }
 
+// profileRemove deletes name from the global config. It does not reserve
+// built-in names: a builtin lives in code, never in that file, so the not-found
+// branch already covers an attempt to delete one — while an entry a user
+// persisted under a name that later became a builtin is theirs, and removing it
+// is the only way to stop it shadowing.
 func profileRemove(path, name string) error {
-	if reservedNames[name] {
-		return fmt.Errorf("%q is a built-in profile and cannot be removed", name)
-	}
 	cur, err := loadGlobal(path)
 	if err != nil {
 		return err
@@ -130,7 +141,7 @@ func parseProfileAddArgs(args []string) (string, profileAddOpts, error) {
 	var o profileAddOpts
 	fs.StringVar(&o.FromGnoweb, "from-gnoweb", "", "gnoweb URL to autofill rpc/chain-id")
 	fs.StringVar(&o.RPC, "rpc", "", "RPC URL")
-	fs.StringVar(&o.ChainID, "chain-id", "", "chain id (dev and known testnets, e.g. pearl-1, are writable; any other id, e.g. gnoland1, is read-only)")
+	fs.StringVar(&o.ChainID, "chain-id", "", "chain id (dev and known testnets, e.g. pearl-1, are writable; any other id — mainnet gnoland-1 included — is read-only)")
 	fs.StringVar(&o.Master, "master", "", "master address g1... (enables writes)")
 	fs.StringVar(&o.IndexerURL, "indexer-url", "", "tx indexer GraphQL URL (optional)")
 	if err := fs.Parse(args[1:]); err != nil {

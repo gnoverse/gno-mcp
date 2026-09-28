@@ -19,12 +19,12 @@ func RegisterProfileList(s *server.Server) {
 		Name: "gno_profile_list",
 		Description: "Lists every loaded chain profile with its chain-id, endpoints, and lifecycle status — " +
 			"the map between profile names and the chains they reach (e.g. profile 'testnet' -> chain pearl-1). " +
-			"Use when the user names a chain or network ('on pearl', 'on sapphire') to resolve which profile to pass " +
+			"Use when the user names a chain or network ('on pearl', 'on mainnet') to resolve which profile to pass " +
 			"to the other tools, or to see which chains are configured at all. " +
 			"Returns one entry per profile: name, chain-id, kind (local | testnet | read-only), a sunset flag " +
 			"(a retiring testnet — still fully writable, but prefer the current testnet for new work), " +
 			"and the configured endpoints (RPC, gnoweb, tx-indexer, agent-faucet). " +
-			"Mainnet/betanet profiles are read-only: no agent key, faucet, or session. " +
+			"A read-only profile (mainnet, and any chain outside the writable set) has no agent key, faucet, or session. " +
 			"Does NOT dial any node — for a live height/chain-id check use gno_status; " +
 			"to reach a chain not listed here use gno_connect and gno_profile_add. Takes no arguments.",
 		InputSchema: map[string]any{"type": "object", "additionalProperties": false},
@@ -37,17 +37,19 @@ func RegisterProfileList(s *server.Server) {
 	})
 }
 
-// profileStatus is the one-line lifecycle label shown per profile.
+// profileStatus is the one-line lifecycle label shown per profile. Read-only is
+// tested first because sunset is an advisory flag a user may set on any profile,
+// and its label promises writability the chain-id gate refuses.
 func profileStatus(p profiles.Profile) string {
 	switch {
+	case p.IsReadOnly():
+		return "read-only — no agent key, faucet, or session"
 	case p.Sunset:
 		return "sunset — retiring chain, still writable; prefer the current testnet for new work"
 	case p.IsLocal():
 		return "local dev chain"
-	case p.IsTestnet():
-		return "current testnet, writable"
 	default:
-		return "read-only (mainnet/betanet)"
+		return "current testnet, writable"
 	}
 }
 

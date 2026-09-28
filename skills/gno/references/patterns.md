@@ -186,7 +186,7 @@ users := make(map[string]User)
 
 **Maps**: O(1) lookup, type-safe values. Use only for **small bounded** in-memory state (e.g. config values). Never for persisted growth state — a persisted map rewrites wholesale on every mutation (gas/storage), and its insertion-order iteration is an impl detail you shouldn't expose as output ordering. (Iteration is deterministic, so this is a gas/design issue, not a consensus risk.)
 
-`gno.land/p/nt/bptree/v0` (B+tree) is an accepted alternative for ordered keyed state — used by `commondao` (in the examples tree, deployed on neither live testnet) and others. Either is fine; pick one and stay consistent.
+`gno.land/p/nt/bptree/v0` (B+tree) is an accepted alternative for ordered keyed state — used by `commondao` (in the examples tree, deployed on neither live chain) and others. Either is fine; pick one and stay consistent.
 
 ### Lazy initialization for heavy state
 
@@ -344,11 +344,17 @@ func SignedByEOA() address {
 
 ### `runtime.AssertOriginCall()` — strict EOA-only gate
 
+Newer releases anchor this to the entry package: exposing it through a function alias
+(`var Deposit = other.Deposit`) panics rather than passing, because the frame that entered the tx
+and the realm credited with the payment are no longer allowed to disagree. Bind the call in the
+realm that owns the entry point instead of re-exporting someone else's. Older chains still accept
+the alias — see `networks.md` § Cross-chain drift.
+
 Panics if anything but a direct `MsgCall` from an EOA reaches this function. Stricter than `IsUserCall()`: rejects all `MsgRun` invocations. Use for governance-only or strictly-no-intermediary functions.
 
 ### Allowlist via `ownable` / `authz`
 
-For multi-admin or rotateable ownership, use the canonical packages: `gno.land/p/nt/ownable/v0` (single-owner pattern) or `gno.land/p/moul/authz` (richer auth schemes).
+For multi-admin or rotateable ownership, use the canonical packages: `gno.land/p/nt/ownable/v0` (single-owner pattern) or `authz` (richer auth schemes), spelled `gno.land/p/moul/authz` on pearl and `gno.land/p/moul/authz/v0` on mainnet.
 
 ## Cost-aware design
 
@@ -383,23 +389,24 @@ Gas is a measure of computational and storage cost. Every read, write, allocatio
 
 ## Common library imports
 
-Packages that survived the `examples/quarantined/` cull — the test-13 safe-list (PR #5726) that moved unaudited/personal-namespace packages to `examples/quarantined/`. Re-verify against the current master tree before relying on an import; the split moves over time, and the live testnet may not carry a listed package at all — neither `p/demo/tokens/grc721` nor `p/nt/commondao/v0` resolves on pearl or sapphire. Verify each import against the target chain, not just master:
+Packages that survived the `examples/quarantined/` cull — the test-13 safe-list (PR #5726) that moved unaudited/personal-namespace packages to `examples/quarantined/`. The path is chain-specific: resolve every one against the target chain with `gno_packages` before importing. Where pearl and mainnet spell a package differently, both are given:
 
-| Need | Canonical import |
-|---|---|
-| AVL trees (ordered keyed state) | `gno.land/p/nt/avl/v0` |
-| B+tree (alternative for ordered keyed state) | `gno.land/p/nt/bptree/v0` |
-| Render-path routing (mux) | `gno.land/p/nt/mux/v0` |
-| Realm-path parsing | `gno.land/p/moul/realmpath` |
-| Ownership / single-owner pattern | `gno.land/p/nt/ownable/v0` |
-| Authorization patterns | `gno.land/p/moul/authz` |
-| Pagination | `gno.land/p/jeronimoalbi/pager` |
-| DAO primitives | `gno.land/p/nt/commondao/v0` — **absent from both live testnets** |
-| Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` |
+| Need | pearl | mainnet |
+|---|---|---|
+| AVL trees (ordered keyed state) | `gno.land/p/nt/avl/v0` | same |
+| B+tree (alternative for ordered keyed state) | `gno.land/p/nt/bptree/v0` | same |
+| Render-path routing (mux) | `gno.land/p/nt/mux/v0` | same |
+| Ownership / single-owner pattern | `gno.land/p/nt/ownable/v0` | same |
+| Fungible tokens (canonical safe example) | `gno.land/p/demo/tokens/grc20` | `gno.land/p/nt/grc20/v0` |
+| NFTs | not deployed | `gno.land/p/nt/grc721/v0` (+ `enumerable`, `metadata`, `royalty` leaves) |
+| Realm-path parsing | `gno.land/p/moul/realmpath` | `gno.land/p/moul/realmpath/v0` |
+| Authorization patterns | `gno.land/p/moul/authz` | `gno.land/p/moul/authz/v0` |
+| Pagination | `gno.land/p/jeronimoalbi/pager` | `gno.land/p/jeronimoalbi/pager/v0` |
+| DAO primitives | `gno.land/p/nt/commondao/v0` resolves on neither live chain | |
 
 Prefer these over re-implementation — they're reviewed, used, and stable.
 
-There is no canonical GRC721/NFT package deployed on either live testnet — `gno.land/p/demo/tokens/grc721` does not resolve on-chain (verified on pearl and sapphire, `InvalidPackageError`). Sapphire does carry several community implementations under personal and `gnoswap` namespaces; pearl carries none. If you need NFTs, query the target chain for an available implementation rather than assuming a path.
+Sub-packages of these roots are spelled differently on the two chains (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on mainnet), and the GRC20 standard sits in a different tree. `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split, and authz and realmpath each carry more than one version on at least one chain: the table gives one spelling that resolves, which is not always the newest. Enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
 
 **Don't** import `gno.land/r/tests/vm/test20` — deliberately insecure test fixture exporting `PrivateLedger`. Using it in production code = instant compromise (see `security.md` § Encapsulation pattern).
 

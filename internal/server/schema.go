@@ -10,19 +10,20 @@ import (
 
 // ProfileChainList renders "name (chain id[, label])" for each name, in the
 // given order, for embedding in profile-arg descriptions — the model resolves
-// a chain the user names ("on pearl", "on sapphire") to a profile from this map.
+// a chain the user names ("on pearl", "on mainnet") to a profile from this map.
 // Labels: sunset (retiring testnet, still writable — prefer the current one
-// for new work) and read-only (mainnet/betanet, no write path).
+// for new work) and read-only (mainnet and any chain outside the writable
+// set, no write path).
 func ProfileChainList(cfg *profiles.Config, names []string) string {
 	parts := make([]string, 0, len(names))
 	for _, n := range names {
 		p := cfg.Profiles[n]
 		label := ""
 		switch {
-		case p.Sunset:
-			label = ", sunset"
 		case p.IsReadOnly():
 			label = ", read-only"
+		case p.Sunset:
+			label = ", sunset"
 		}
 		parts = append(parts, fmt.Sprintf("%s (chain %s%s)", n, p.ChainID, label))
 	}

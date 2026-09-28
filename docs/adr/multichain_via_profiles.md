@@ -14,18 +14,18 @@ gnomcp runs as a single binary with a single instance, loading multiple chain pr
 
 > **Superseded for read tools.** Read tools (`gno_render`, `gno_eval`, `gno_read`, `gno_packages`, `gno_account`, `gno_status`) now declare `profile` as a **free-form string**, not an enum (still validated against the loaded set — an unknown name errors cleanly with no chain client). Two reasons the read enum stopped earning its place: (1) once read-only chains became reachable ([readonly_chains.md](readonly_chains.md)), the enum's mainnet-protection rationale (see the rejected free-form alternative below) no longer applies to reads; (2) the enum actively blocked a runtime-added profile — a client caches the tool schema, so a profile added via `gno_profile_add` was rejected against the *stale* cached enum until the schema was refetched, which is not a reliable client action. A wrong read profile errors at call time, so the enum bought no safety reads still needed. **Write tools keep the filtered enum**: there it gates on chain writability, and no read-only chain may be named in a write call.
 
-**Built-in zero-config profiles.** `testnet` (the current public testnet), its sunset predecessor under its codename (e.g. `sapphire` — marked `sunset = true`: an advisory label steering new work to the current testnet; the chain stays fully writable while its infra runs), and `local` (`dev` chain at `http://127.0.0.1:26657`) ship built in. Reads work with no config file; writes work via the agent identity (see the session-authorization ADR).
+**Built-in zero-config profiles.** `testnet` (the current public testnet), `mainnet` (`gnoland-1` — read-only, so reads and audits work with no config), and `local` (`dev` chain at `http://127.0.0.1:26657`) ship built in. A retired testnet may also ship under its codename while its infrastructure runs, marked `sunset = true` — an advisory label steering new work to the current testnet, never a capability gate; no builtin carries it today. Reads work with no config file; writes work via the agent identity (see the session-authorization ADR).
 
 **Chain-id allowlist.** Originally: config validation rejected any profile whose `chain-id` did not match `^(dev|test-?\d+)$`. Betanet, staging, and mainnet ids cannot enter the config; there is no override flag. Locality derives from the chain-id (`dev` = local, recognized testnet name = testnet) — there is no separate `chain-type` field.
 
-> **Superseded in part by [readonly_chains.md](readonly_chains.md).** The allowlist is now a *capability* gate, not an *admission* gate: chain-ids outside the writable set are admitted **read-only** (no agent key, faucet, session, or `master-address`), so deployed source on mainnet/betanet can be audited. A format check on `chain-id` remains, and writes stay confined to dev/testnet. Codenamed testnets (`topaz-1`) also ended the `test<N>` regex: the writable set is now `dev` plus a release-time testnet name list (`test`, `sapphire`, `pearl`, … — see readonly_chains.md).
+> **Superseded in part by [readonly_chains.md](readonly_chains.md).** The allowlist is now a *capability* gate, not an *admission* gate: chain-ids outside the writable set are admitted **read-only** (no agent key, faucet, session, or `master-address`), so deployed source on mainnet can be audited. A format check on `chain-id` remains, and writes stay confined to dev/testnet. Codenamed testnets (`topaz-1`) also ended the `test<N>` regex: the writable set is now `dev` plus a release-time testnet name list (`test`, `pearl`, … — see readonly_chains.md).
 
 **Profile fields** (`profiles.toml`):
 
 ```toml
 [<profile_name>]
 rpc-url             = "<url>"
-chain-id            = "<id>"          # writable: dev or a known testnet name (test*, sapphire-*, pearl-*); anything else read-only
+chain-id            = "<id>"          # writable: dev or a known testnet name (test*, pearl-*); anything else read-only
 master-address      = "g1..."         # optional; enables session writes (bech32 address only)
 tx-indexer-url      = "<url>"         # optional; gates gno_history/gno_activity
 default-spend-limit = "<coins>"       # optional; per-session default, clamped to hard limits
@@ -63,7 +63,7 @@ faucet-service-url  = "<url>"         # optional; automatic faucet service gno_f
 
 - Single MCP entry in the host config; per-call chain selection; cross-chain reads in one session.
 - Mainnet interaction is structurally impossible — there is nothing to misconfigure, confirm, or bypass. The trade-off: gnomcp cannot read mainnet either; lifting that for reads would be a deliberate future decision.
-  > **Superseded by [readonly_chains.md](readonly_chains.md):** that future decision was made. Mainnet/betanet is now **readable** (read-only) so deployed source can be audited; it remains **unwritable** — no path signs for it. "Structurally impossible" now applies to writes.
+  > **Superseded by [readonly_chains.md](readonly_chains.md):** that future decision was made. Mainnet is now **readable** (read-only) so deployed source can be audited; it remains **unwritable** — no path signs for it. "Structurally impossible" now applies to writes.
 - Mid-session tool-list growth is supported: `gno_profile_add` can summon gated tools (faucet, indexer) without a restart via `tools/list_changed`.
 - Testnet resets require updating the built-in `testnet` profile (a release) or overriding it locally.
 - Discovery probing adds bounded startup cost (one HTTP request with a short timeout).

@@ -185,7 +185,7 @@ func TestProfileAdd_rejectsBadNames(t *testing.T) {
 
 // ---- profile validation
 
-// A non-test chain-id (betanet/mainnet/staging) is admitted read-only: the
+// A non-test chain-id (mainnet, staging, …) is admitted read-only: the
 // profile is added, flagged read-only, with no agent key/faucet/write path.
 func TestProfileAdd_admitsReadOnlyChain(t *testing.T) {
 	for _, chainID := range []string{"gnoland1", "staging", "mychain"} {

@@ -22,7 +22,7 @@ entirely from which **genesis transactions** were injected at chain birth — re
 a genesis tx flips them on (namespace enforcement enabled, a username set seeded, a concrete validator
 set injected, chain params set). So "is namespace enforcement on?", "which usernames exist?", "who are
 the validators?" are **per-network, answerable only live** — never from source. The same `r/sys` code
-behaves differently on local gnodev, on a public testnet, and on betanet, by design.
+behaves differently on local gnodev, on a public testnet, and on mainnet, by design.
 
 **I3 · Controller architecture (names/users).** Name registration is layered. `r/sys/users` is the
 durable canonical store (name↔address + a confusable-collision index). Policy lives in *controller*
@@ -65,11 +65,18 @@ absence is itself an answer (the feature isn't active on that network), not a to
 error on *one* path is not proof of absence: see versioning, next.
 
 **Versioned realms — the path is part of the identity.** Several sys realms carry a version segment
-(`r/sys/namereg/v1`, `r/sys/validators/v2` *and* `/v3`). Querying the unversioned path (`r/sys/validators`)
-returns "not found" even when the feature is very much live at `/v3`. When versions coexist, **query the
-specific version, and confirm which one the chain actually uses — don't assume the newest from source,
-and don't conclude a feature is gone because the bare or older path is empty.** A wrong-version query
-that returns nothing is the most common way to answer "doesn't exist" when the truth is "exists at /vN."
+(`r/sys/namereg`, `r/sys/validators`). Querying the unversioned path returns "not found" even when the
+feature is very much live at `/vN`. When versions coexist, **query the specific version, and confirm
+which one the chain actually uses — don't assume the newest from source, and don't conclude a feature
+is gone because the bare or older path is empty.** A wrong-version query that returns nothing is the
+most common way to answer "doesn't exist" when the truth is "exists at /vN."
+
+**The version number does not rank across chains.** Name registration is `namereg/v1` on pearl and
+`namereg/v0` on mainnet, with the same exported surface; the validator set is held by
+`validators/v3` on pearl and `validators/v0` on mainnet, and both chains also deploy a `validators/v2`
+that holds nothing. A higher number on one chain does not mean newer, and a version present on one
+chain need not exist on the other. Enumerate with `gno_packages` on the prefix, then ask each
+deployed version which one answers.
 
 ## The system realms — role (durable) + what to query for the live truth
 
@@ -78,12 +85,12 @@ that returns nothing is the most common way to answer "doesn't exist" when the t
 | Realm | Durable role | Query live for… |
 |---|---|---|
 | `r/sys/users` | Canonical name↔address store + collision index. Source of truth; holds no policy. | `IsNameTaken(n)`, `ResolveName(n)`, `ResolveAddress(a)`, `Controllers()` (which controllers it trusts) |
-| `r/sys/namereg/v1` | A *controller*: public registration policy (format/price/blacklist) writing through `users`. May or may not be loaded per network; may be superseded by a later `/vN`. | `qfuncs` first (is it deployed?); then `ValidateNymFormat(s)`, `IsPaused()`, and `Render("")` for the price + rules |
+| `r/sys/namereg/vN` | A *controller*: public registration policy (format/price/blacklist) writing through `users`. Its version segment differs per chain (`/v1` on pearl, `/v0` on mainnet) and it may not be loaded at all. | enumerate the `r/sys/namereg` prefix first, then `ValidateNymFormat(s)`, `IsPaused()`, and `Render("")` for the price + rules |
 | `r/sys/names` | Read-only verifier the chain consults to gate package deploys; reads `users`. | `IsEnabled()` (is namespace enforcement on at all?), `IsPaused()`, `IsAuthorizedAddressForNamespace(addr, ns)` |
 | `r/sys/params` | GovDAO-facing **writer** of native chain params (sole privileged caller of native `sys/params`); exposes getters for only a handful (`GetValoperRegisterFee()`, valset getters). **Not** the read surface for arbitrary params. | its own getters for the few it exposes; **raw param values live in the keeper, not this realm** — read them via the param path (see "Reading a chain param value" below) |
 | `sys/params` (native stdlib) | The Go-side params keeper `r/sys/params` writes through; frame-gated to that one realm. | Not a realm — observed indirectly via `r/sys/params` and the params query surface |
-| `r/sys/validators/v3` | Current params-backed validator-set design (valoper operator/signing-key model with key rotation). | `GetValidators()`, `GetValidator(a)`, `IsValidator(a)`, `RotateValoperSigningKey`, `NotifyValoperChanged` — the rotation knobs are NOT here: fee and period live on `r/sys/params` (`GetValoperRotationFee()`, `GetValoperRotationPeriodBlocks()`). **`qfuncs` the realm and report live values; `master` may have changed since this chain deployed** |
-| `r/sys/validators/v2` | Earlier version (PoA-based). Coexists with `/v3` on some chains. | `qfuncs`/`GetValidators()` — but **don't assume which version drives a given chain's set from source; confirm live which one holds the active valset** |
+| `r/sys/validators/vN` | Params-backed validator-set design (valoper operator/signing-key model with key rotation). The live set sits at `/v3` on pearl and `/v0` on mainnet. | `GetValidators()`, `GetValidator(a)`, `IsValidator(a)`, `RotateValoperSigningKey`, `NotifyValoperChanged` — the rotation knobs are NOT here: fee and period live on `r/sys/params` (`GetValoperRotationFee()`, `GetValoperRotationPeriodBlocks()`). **`qfuncs` the realm and report live values; `master` may have changed since this chain deployed** |
+| `r/sys/validators/v2` | PoA-based version. Deployed on both live chains and holding the set on neither — `GetValidators()` returns empty there. | `GetValidators()` on **every** deployed version; the one returning a non-empty set is the live one. Cross-check against the node's own `/validators`. |
 | `p/sys/validators` | Pure types/interface shared by the validator realms. No state. | — |
 | `r/sys/cla` | Contributor License Agreement gate the chain consults before deploys. | `Render("")` (enabled? required hash? URL?), `HasValidSignature(addr)` |
 | `r/sys/txfees` | Reserved fee-bucket realm; a stub today — real fee collectors are `auth`/`vm` params, not this realm. | `Render(cur)` (its balance); don't infer fee routing from it |
@@ -101,7 +108,7 @@ assume**, and prefer checking both *before* deploying rather than reading it off
    whose current owner is you (register via the live controller, e.g. `r/sys/namereg/v1`, if it's
    deployed). Check: `IsAuthorizedAddressForNamespace(addr, ns)`.
 2. **CLA** (`r/sys/cla`). Enforced when a required hash is set. As of the last check, CLA enforcement
-   is **off on both live testnets** (no required hash — no `Sign` step needed to deploy) —
+   is **off on both live chains** (no required hash — no `Sign` step needed to deploy) —
    always confirm live via `gno_cla_info` or the render's `Required Hash` field. The signer must have
    signed the current agreement. Check: `HasValidSignature(addr)`. To clear it, **sign once from the same key**. With a Gno
    MCP connected, use its `gno_cla_info` / `gno_cla_sign` pair — info reports the required hash and the
@@ -177,5 +184,5 @@ came from querying pearl, not from this file.
 ## Source
 
 Distilled from `examples/gno.land/r/sys/*` + `gnovm/stdlibs/sys/params` in gnolang/gno, the gnolang/gno
-issue/PR roadmap, per-network genesis configs, and verified against live pearl and sapphire (ABCI `vm/qfuncs`/`qeval`/`qrender`).
+issue/PR roadmap, per-network genesis configs, and verified against live pearl and mainnet (ABCI `vm/qfuncs`/`qeval`/`qrender`).
 The design above is durable; concrete values are intentionally absent — query the live chain.

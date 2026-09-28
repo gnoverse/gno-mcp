@@ -173,9 +173,9 @@ There is **no enforced routing framework**. Each realm parses `path` itself. Thr
 
 | Pattern | Used in | Shape |
 |---|---|---|
-| **No routing** | `r/gnoland/home`, `r/sys/users`, `r/sys/cla` | Ignores `path`; always renders the same content |
+| **No routing** | `r/sys/users`, `r/sys/cla` | Ignores `path`; always renders the same content |
 | **`p/nt/mux/v0` router** | `r/gnoland/boards2/v1`, `r/gnoland/coins`, `r/demo/profile`, `r/gnoland/blog` | mux-style segment dispatch |
-| **`p/moul/realmpath` parse** | `r/sys/namereg/v1` | single-segment dispatch |
+| **`p/moul/realmpath` parse** | `r/sys/namereg` (`/v1` on pearl, `/v0` on mainnet) | single-segment dispatch |
 
 For agents: pick mux for any realm with more than 2 distinct views. Static home + a handful of detail views → static is fine.
 

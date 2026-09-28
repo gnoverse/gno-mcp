@@ -20,7 +20,7 @@ var (
 	// Codenamed testnets (pearl-1) cannot be told apart from other chains
 	// syntactically, so this is a release-time list: append the codename when a
 	// new testnet rolls. A name admits both the bare and hyphenated forms
-	// (test5, test-13, pearl-1). Anything else (betanet "gnoland1", "staging",
+	// (test5, test-13, pearl-1). Anything else (mainnet "gnoland-1", "staging",
 	// ...) is admitted read-only, not writable — it has no agent key path and
 	// is excluded from every write tool's profile enum.
 	//
@@ -29,7 +29,7 @@ var (
 	// a codename is dropped in the same change that deletes its builtin. The
 	// bare "test" prefix never leaves: it covers the numbered testnets and the
 	// e2e simnet's "test-9999".
-	testnetChainNames = []string{"test", "sapphire", "pearl"}
+	testnetChainNames = []string{"test", "pearl"}
 
 	// chainIDFormatRE is the format-safety gate applied to every chain-id,
 	// writable or read-only: the chain-id is interpolated into the `gnomcp
@@ -131,7 +131,7 @@ func (c *Config) Validate() (warn error, err error) {
 		}
 		if p.MasterAddress != "" {
 			if !ChainIDWritable(p.ChainID) {
-				return nil, fmt.Errorf("profile %q: master-address is set but chain-id %q is read-only (mainnet/betanet) — read-only chains cannot perform writes; remove master-address or target a dev/testnet chain", name, p.ChainID)
+				return nil, fmt.Errorf("profile %q: master-address is set but chain-id %q is read-only — read-only chains cannot perform writes; remove master-address or target a dev/testnet chain", name, p.ChainID)
 			}
 			if _, err := crypto.AddressFromBech32(p.MasterAddress); err != nil {
 				return nil, fmt.Errorf("profile %q: invalid master-address %q: %w", name, p.MasterAddress, err)
@@ -144,6 +144,12 @@ func (c *Config) Validate() (warn error, err error) {
 		} {
 			if f.val == "" {
 				continue
+			}
+			// A read-only chain has no fundable agent key, so the faucet tools
+			// skip it whatever this says. Refusing the field keeps the catalog
+			// from advertising a faucet the chain does not have.
+			if !ChainIDWritable(p.ChainID) {
+				return nil, fmt.Errorf("profile %q: %s is set but chain-id %q is read-only — read-only chains have no faucet; remove %s or target a dev/testnet chain", name, f.name, p.ChainID, f.name)
 			}
 			if u, err := url.Parse(f.val); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 				return nil, fmt.Errorf("profile %q: invalid %s %q (want an absolute http(s) URL)", name, f.name, f.val)

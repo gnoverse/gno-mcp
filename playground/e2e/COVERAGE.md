@@ -81,7 +81,10 @@ listed).
 | profile.selection | right profile chosen without prompting | 01 | covered |
 | profile.read-attribution | reads name the profile they used | 03 | covered |
 | misc.gnoweb-metadata | gnoconnect meta-tags drive discovery | 03 | covered |
-| misc.chain-allowlist | betanet/mainnet chain-ids refused | — | gap: needs a node reporting a mainnet id; not worth faking locally |
+| readonly.reads-resolve | a chain-id outside the writable set is admitted read-only — every read tool reaches it | 14 | covered (the `staging` profile in `profiles.e2e.toml`: the simnet RPC under a non-writable chain-id) |
+| readonly.write-refused | a write asked for on a read-only profile is refused, and the AUT ties the refusal to the chain rather than to a missing key or funds | 14 | covered |
+| readonly.session-refused | no session can be opened on a read-only profile, and the agent says so rather than printing an authorize command | 14 | covered at the surface: the AUT reads `enum: [local, testnet]` off `gno_session_propose` and answers without calling. The handler's `chain_read_only` guard stays unit-tested only (`session_propose_test.go`) — it catches a caller that ignores the schema, which a compliant client never is, so no scenario can reach it |
+| readonly.no-silent-retarget | a refused write is not quietly performed on a writable profile instead | 14 | covered |
 | misc.output-budget | truncation is explicit, never silent | — | gap: needs a deterministic huge-output fixture realm |
 
 ## gno skill family (routing + triggering)
@@ -163,7 +166,7 @@ or chain is unreachable or rate-limits.
 |---|---|---|---|
 | external.faucet-live | gno_faucet_fund tier-2 against the LIVE pearl agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
 | external.testnet-key-cycle | built-in `testnet` profile end to end on the live network: generate agent key → faucet fund → balance | 13 | covered |
-| external.cla-sign | agent signs the live CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | **not currently exercisable** — CLA enforcement reads DISABLED on both live chains (2026-08-09), so 14 records this `blocked`. The tool pair itself stays covered by 12 on the `e2e-clagate` image |
+| external.cla-sign | agent signs the live CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | **not currently exercisable** — CLA enforcement reads DISABLED on pearl and mainnet (2026-09-15), so 14 records this `blocked`. The tool pair itself stays covered by 12 on the `e2e-clagate` image |
 | external.session-spend | session flow against LIVE pearl gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, and the chain's spend_used tracks the right-sized fee | 15 | covered |
 
 ## Known harness constraints (not feature gaps)

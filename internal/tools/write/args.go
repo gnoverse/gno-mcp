@@ -59,8 +59,8 @@ func profileSessionEligible(p profiles.Profile) bool { return !p.IsReadOnly() }
 
 // profileWritableByAgent reports whether the agent has or can have its own
 // signing key for p: local (test1 key) and testnet (generated key) chains.
-// Read-only chains (mainnet/betanet) have no agent key path, so they are
-// excluded from every write tool's profile enum.
+// Read-only chains have no agent key path, so they are excluded from every
+// write tool's profile enum.
 func profileWritableByAgent(p profiles.Profile) bool { return !p.IsReadOnly() }
 
 // addProfileArgFiltered populates props["profile"] with an enum filtered by keep.

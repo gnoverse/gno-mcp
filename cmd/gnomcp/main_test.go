@@ -82,10 +82,22 @@ func TestAuditGrep(t *testing.T) {
 }
 
 func TestMain_writeToolsAbsent_whenAllReadOnly(t *testing.T) {
+	// LoadResolved starts from BuiltinProfiles and layers config over it, so a
+	// config that merely ADDS a profile leaves the writable builtins in place.
+	// Every builtin is redefined here under its own name with a read-only
+	// chain-id, which is the only way to reach a catalog with no writable chain.
 	toml := `
-[testnet5]
-rpc-url = "https://rpc.test5.gno.land:443"
-chain-id = "test5"
+[local]
+rpc-url = "https://rpc.gno.land:443"
+chain-id = "gnoland-1"
+
+[testnet]
+rpc-url = "https://rpc.gno.land:443"
+chain-id = "gnoland-1"
+
+[mainnet]
+rpc-url = "https://rpc.gno.land:443"
+chain-id = "gnoland-1"
 `
 	cfg := t.TempDir()
 	cfgFile := filepath.Join(cfg, "profiles.toml")
@@ -94,16 +106,104 @@ chain-id = "test5"
 
 	cmd := exec.Command("go", "run", ".", "-config", cfgFile, "-sessions-path", sessDir)
 	cmd.Dir = srcDir()
-	cmd.Stdin = strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}` + "\n")
-	out, err := cmd.Output()
-	if err != nil {
+	// Same stdin discipline as the writable-profile test: closing stdin early
+	// races the server's response dispatch, and a server that exits before
+	// answering leaves stdout empty — which would pass every NotContains below
+	// while proving nothing.
+	stdin, err := cmd.StdinPipe()
+	require.NoError(t, err, "stdin pipe")
+	stdout, err := cmd.StdoutPipe()
+	require.NoError(t, err, "stdout pipe")
+	require.NoError(t, cmd.Start(), "start")
+
+	const (
+		initMsg = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}` + "\n"
+		listMsg = `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}` + "\n"
+	)
+	_, err = stdin.Write([]byte(initMsg + listMsg))
+	require.NoError(t, err, "write init+list")
+
+	listResp := readResponse(t, stdout, `"id":2`)
+	stdin.Close()
+	if err := cmd.Wait(); err != nil {
 		var ee *exec.ExitError
 		require.ErrorAs(t, err, &ee)
 	}
 
-	for _, tool := range []string{"gno_call", "gno_run", "gno_auth_status", "gno_session_propose", "gno_session_revoke"} {
-		assert.NotContains(t, string(out), tool,
-			"write tool %q should not be in initialize response for read-only profile (no master-address)", tool)
+	// The write tools register unconditionally; what a read-only catalog removes
+	// is every profile they can act on. Assert that, not their absence — and not
+	// the initialize reply, whose static instructions name them in prose whatever
+	// the catalog holds.
+	var listed struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				InputSchema struct {
+					Properties struct {
+						Profile struct {
+							Enum []string `json:"enum"`
+						} `json:"profile"`
+					} `json:"properties"`
+				} `json:"inputSchema"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(listResp), &listed), "decode tools/list")
+	require.NotEmpty(t, listed.Result.Tools, "tools/list returned no tools")
+
+	want := map[string]bool{
+		"gno_call": true, "gno_run": true, "gno_addpkg": true,
+		"gno_session_propose": true, "gno_key_generate": true,
+	}
+	seen := 0
+	for _, tool := range listed.Result.Tools {
+		if !want[tool.Name] {
+			continue
+		}
+		seen++
+		assert.Empty(t, tool.InputSchema.Properties.Profile.Enum,
+			"write tool %q offers profile(s) %v although every profile is read-only",
+			tool.Name, tool.InputSchema.Properties.Profile.Enum)
+	}
+	assert.Equal(t, len(want), seen, "not every write tool under test appeared in tools/list")
+}
+
+// readResponse drains stdout until a line containing marker arrives, and fails
+// the test if none does. A fixed sleep races a cold `go run` build, and an empty
+// read would let every assertion below pass while proving nothing.
+func readResponse(t *testing.T, stdout io.Reader, marker string) string {
+	t.Helper()
+	found := make(chan string, 1)
+	go func() {
+		var buf strings.Builder
+		tmp := make([]byte, 4096)
+		for {
+			n, readErr := stdout.Read(tmp)
+			if n > 0 {
+				buf.Write(tmp[:n])
+				// Only whole lines are parseable: a read can land mid-line, and
+				// the trailing fragment is not JSON yet.
+				lines := strings.Split(buf.String(), "\n")
+				for _, line := range lines[:len(lines)-1] {
+					if strings.Contains(line, marker) {
+						found <- line
+						return
+					}
+				}
+			}
+			if readErr != nil {
+				found <- ""
+				return
+			}
+		}
+	}()
+	select {
+	case line := <-found:
+		require.NotEmpty(t, line, "no response matching %s before the server closed", marker)
+		return line
+	case <-time.After(90 * time.Second):
+		t.Fatalf("no response matching %s within 90s", marker)
+		return ""
 	}
 }
 
@@ -140,33 +240,8 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 	_, err = stdin.Write([]byte(initMsg + listMsg))
 	require.NoError(t, err, "write init+list")
 
-	// Read all stdout in a goroutine; the server will not write after stdin
-	// closes, so draining stdout first is safe.
-	outCh := make(chan []byte, 1)
-	go func() {
-		var buf strings.Builder
-		tmp := make([]byte, 4096)
-		for {
-			n, readErr := stdout.Read(tmp)
-			if n > 0 {
-				buf.Write(tmp[:n])
-			}
-			if readErr != nil {
-				break
-			}
-		}
-		outCh <- []byte(buf.String())
-	}()
-
-	// Give the server enough time to respond to both requests, then close
-	// stdin so it exits cleanly.  500 ms is generous; a cached go run
-	// typically responds in <100 ms.
-	timer := time.NewTimer(500 * time.Millisecond)
-	<-timer.C
+	out := readResponse(t, stdout, `"id":2`)
 	stdin.Close()
-
-	out := string(<-outCh)
-
 	if err := cmd.Wait(); err != nil {
 		var ee *exec.ExitError
 		require.ErrorAs(t, err, &ee)
@@ -174,7 +249,7 @@ master-address = "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3"
 
 	for _, tool := range []string{"gno_call", "gno_run", "gno_session_propose", "gno_session_revoke", "gno_auth_status", "gno_faucet_fund"} {
 		assert.Contains(t, out, tool,
-			"write tool %q missing from initialize response for writable profile (master-address set)", tool)
+			"write tool %q missing from tools/list for writable profile (master-address set)", tool)
 	}
 }
 

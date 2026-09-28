@@ -1,6 +1,6 @@
 ---
 name: gno-audit
-description: Run an explicit security audit of a Gno realm or pure package. Use when the user asks to audit a contract, asks "is this realm safe", wants a review before sending funds to or authorizing a session for a realm, or pastes Gno source asking what could go wrong.
+description: Use when asked to audit a Gno realm or pure package, when a deployed realm is named or pasted for review (a `gno.land/r/...` path, a gnoweb URL on gno.land or pearl.testnets.gno.land, a realm on mainnet `gnoland-1` or pearl `pearl-1`), when asked "is this realm safe", when a review is wanted before sending funds to or authorizing a session for a realm, or when Gno source is pasted with "what could go wrong" — BEFORE you read the source or form any verdict. Entered at the start of the review, not after a first pass.
 ---
 
 # Auditing a Gno realm
@@ -15,7 +15,7 @@ description: Run an explicit security audit of a Gno realm or pure package. Use 
    it carries the trust model (genesis activation, controller whitelist, GovDAO as bypass/trust-root,
    single-writer gates) that a generic-realm audit will otherwise miss. Resolve it from the URL with
    `gno_profile_add(gnoweb_url=…)` before reading, not on whatever profile is connected
-   (mainnet/betanet is admitted read-only, which is all an audit needs). The default `gno_read`
+   (mainnet is admitted read-only, which is all an audit needs). The default `gno_read`
    is an **outline** (bodies elided) — navigation only, never evidence; audit evidence is whole
    files, fetched per file with `full=true`. Say which realm/chain you audited.
    - If the named realm's chain cannot be reached or added, **STOP** — never substitute repo,
