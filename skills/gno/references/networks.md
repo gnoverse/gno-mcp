@@ -5,6 +5,13 @@
 below was verified live on **2026-09-28**; re-query anything load-bearing (`gno_status`,
 `auth/gasprice`, a realm's render, whether a package resolves) before relying on it.
 
+**Run `gno_status` before quoting anything here.** This file covers exactly two chain-ids,
+`pearl-1` and `gnoland-1`. A local gnodev, an e2e simnet, a staging chain and any newer testnet are
+none of them, and nothing below describes them — their gas price, faucet policy, package set and
+gate states are their own. Confirm the chain-id you are actually connected to first; if it is
+neither of the two, read the value off that chain instead of this page, and say which chain your
+answer is about.
+
 **This file describes genesis sets only.** A chain's genesis is fixed at launch and safe to write
 down; everything deployed after it belongs to whoever deployed it and changes without notice, so no
 package count, no namespace and no third-party package is recorded here. To find out what a chain
@@ -31,7 +38,7 @@ this file is only the per-chain snapshot and the differences between chains.
 | namespace gate (`r/sys/names.IsEnabled`) | `true`; personal-address path free | `true` |
 | name registration | `r/sys/namereg/v1`, not paused | `r/sys/namereg/v0` — same realm renumbered, not paused, identical exported surface |
 | validator set | `r/sys/validators/v3` holds it (`/v2` also deployed, empty) | `r/sys/validators/v0` holds it (`/v2` also deployed, empty) |
-| faucet | 10 GNOT/grant, 1/addr/24h | none — mainnet ships without one |
+| faucet | present — read the grant size and per-address cap from `gno_status`'s `faucet` block, never from this row | none — mainnet ships without one |
 | tx indexer | `indexer.pearl…/graphql/query` | `indexer.gno.land/graphql/query` — same query root, `getSupply` on both |
 | toolchain tag | `chain/pearl` at `c4c72fdd2`, commit-only | `chain/mainnet` at `9c8eb132`, **semver twin `v1.2.0`** |
 | sub-package path scheme | version at the **root** (`p/nt/avl/v0/rotree`) | version at the **leaf** (`p/nt/avl/rotree/v0`) |
@@ -195,7 +202,9 @@ package this file does not cover.
 2. **Gates** — the personal-address path is free (namespace gate on, address paths always allowed).
    CLA enforcement is off on pearl today, so no `Sign` step is needed, but it is a chain setting:
    confirm with `gno_cla_info` rather than trusting this line.
-3. **Fund** — the faucet grants 10 GNOT, once per address per 24h.
+3. **Fund** — `gno_faucet_fund`. The grant size and the per-address cooldown are operator settings:
+   `gno_status` carries them in its `faucet` block, and the refusal message names the cap it hit. A
+   capped address is not a broken faucet — a fresh key has its own allowance.
 4. **Fees** — `1ugnot/1000gas`; still query `auth/gasprice`, since this is the value most likely to
    drift next.
 5. **Imports** — resolve every import against the target chain with `gno_packages`, never against
