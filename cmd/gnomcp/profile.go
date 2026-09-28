@@ -90,10 +90,12 @@ func profileAdd(path, name string, opts profileAddOpts) error {
 	return profiles.WriteFile(path, cur)
 }
 
+// profileRemove deletes name from the global config. It does not reserve
+// built-in names: a builtin lives in code, never in that file, so the not-found
+// branch already covers an attempt to delete one — while an entry a user
+// persisted under a name that later became a builtin is theirs, and removing it
+// is the only way to stop it shadowing.
 func profileRemove(path, name string) error {
-	if isReservedName(name) {
-		return fmt.Errorf("%q is a built-in profile and cannot be removed", name)
-	}
 	cur, err := loadGlobal(path)
 	if err != nil {
 		return err
