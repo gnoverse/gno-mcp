@@ -90,6 +90,15 @@ Inside a crossing function body, the `cur realm` parameter is a **typed capabili
 
 **`IsCurrent()` is the guard for secondary realm parameters.** The resources guide describes `IsCurrent()` as the authentication primitive for public APIs that derive caller identity from `cur`; read that as broad checklist guidance, then apply the ADR distinction at the exact call shape. The official ADR notes that `rlm.IsCurrent()` is often required when a non-crossing helper accepts `_ int, rlm realm`; otherwise the caller can pass `cur.Previous()` or another realm value and change the meaning. Crossing functions do **not** require `cur.IsCurrent()` for their first `cur realm` because the runtime ensures that value is current. Without the check on secondary/helper realm parameters, a stale or attacker-supplied realm value's `Address()` and `PkgPath()` still resolve numerically — they just no longer refer to the live caller. This is the **designation-forgery** class (see `security.md`).
 
+### `cur` is a fixed binding
+
+Newer releases reject, at preprocess, every attempt to move a crossing function's `cur` off the
+value the runtime handed it: reassigning it, taking `&cur`, and range-assigning to it in non-DEFINE
+form. Passing `cur` unchanged into a non-crossing helper, writing `helper(cross(cur))`, and
+`for _, cur := range …` in DEFINE form all stay legal, as does a non-realm variable that happens to
+be named `cur`. Older chains accept the rejected forms, so a realm relying on one compiles on one
+live chain and not the other — `networks.md` § Cross-chain drift.
+
 ### Realm values are ephemeral
 
 Captured realm values must not survive past the transaction. Storing a `realm`-typed value in a top-level var, struct field, map value, slice element, or closure capture panics:

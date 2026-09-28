@@ -2,7 +2,7 @@
 
 **pearl** (chain-id `pearl-1`) is the one public chain gnomcp can write to. **mainnet**
 (`gnoland-1`) is read-only: reads and audits work, no code path signs anything there. Every value
-below was verified live on **2026-09-15**; re-query anything load-bearing (`gno_status`,
+below was verified live on **2026-09-28**; re-query anything load-bearing (`gno_status`,
 `auth/gasprice`, a realm's render, whether a package resolves) before relying on it.
 
 **This file describes genesis sets only.** A chain's genesis is fixed at launch and safe to write
@@ -19,7 +19,8 @@ this file is only the per-chain snapshot and the differences between chains.
 | writes through gnomcp | deploys, calls, sessions, faucet | **none** — read tools only |
 | RPC | `rpc.pearl.testnets.gno.land:443` | `rpc.gno.land:443` |
 | gnoweb | `pearl.testnets.gno.land` | `gno.land` |
-| node version | `v1.0.0-rc.0` | `v1.0.0-rc.0` |
+| release | `chain/pearl` build | read `misc/deployments/mainnet.gno.land/upgrades.json` for the current one — `chain/mainnet`'s tag names only its genesis build |
+| `/status` version | `v1.0.0-rc.0` | `v1.0.0-rc.0` — **the same string on every chain; it identifies no release** |
 | gas price (`auth/gasprice`) | `1ugnot/1000gas` | same |
 | block max gas | 3,000,000,000 | same |
 | storage deposit (`params/vm:p:storage_price`) | 100 ugnot | same |
@@ -44,9 +45,14 @@ Toolchain tags use the short chain **name**, never the chain-id (`chain/pearl`, 
 in different install cases: `chain/pearl` has no semver twin, so it installs by commit sha, while
 `chain/mainnet` shares its sha with the annotated tag `v1.2.0`, which is the ref to install — see
 `toolchain.md`. A tag can also lag its branch: `heads/chain/pearl` equals its tag, while
-`heads/chain/mainnet` carries commits pushed after launch. No node reports a build sha (`/status`
-carries a release `version` and an empty `software`), and both chains report the same one, so the
-tag is the only anchor the repo offers.
+`heads/chain/mainnet` carries commits pushed after launch.
+
+**A chain tag names its genesis build, not what it runs today.** `chain/mainnet` is mainnet's
+`v1.2.0` genesis; the chain has since been halted and restarted on newer binaries by governance.
+`misc/deployments/mainnet.gno.land/upgrades.json` is the ledger of those upgrades and
+is the only place the current release is written down. The node will not tell you: `/status` reports
+`v1.0.0-rc.0` with an empty `software` on every chain, mainnet and pearl alike, so it identifies
+neither the release nor a build sha. Read the ledger, or ask the operator.
 
 ## Mainnet — `gnoland-1`
 
@@ -57,11 +63,31 @@ give for a read-only chain-id. Reads and audits are the whole surface, which is 
 deployed code needs. It ships as the built-in `mainnet` profile, so reading it needs no config.
 
 **Code submission is `inert`.** `params/vm:p:code_submission_policy` reads `"inert"` on mainnet
-against `"permissionless"` on pearl. Under that policy the chain accepts a `MsgAddPackage` from any
-address but **stores the package without typechecking or executing it**; it becomes callable only
-once approved. So a deploy that reached mainnet would not run — the chain itself is a second barrier
-behind gnomcp's read-only gate. The submission charge is empty today, so parking a package is free;
-query `params/vm:p:inert_submission_charge` rather than assuming that holds.
+against `"permissionless"` on pearl. Anyone may submit — `params/vm:p:code_submitters` is unset —
+but the chain **parks** the package instead of running it: no typecheck, no `init()`, stored in a
+key space of its own. An address in `params/vm:p:pkg_approvers` then sends `MsgEnablePackage`, which
+typechecks the source and runs `init()` on *its* transaction and gas, with the submitter as
+`OriginCaller`. Only then does the package exist. Either side can abandon a parked submission with
+`MsgRejectPackage`; nothing expires one, and the submission charge is not refunded.
+
+Mainnet is therefore not a museum: packages deployed after genesis do run there, once approved.
+Treat "submitted" and "live" as different states with an unpredictable gap between them.
+
+**A parked package is invisible to every ordinary read.** `vm/qpaths` skips it, and `vm/qfile`,
+`vm/qfuncs`, `vm/qeval` and `vm/qrender` all answer `package not found` — the *same* answer a path
+that was never submitted gets. Its source cannot be read back at all; only the submitting
+transaction carries it. Two queries exist for this and nothing else:
+
+```bash
+gnokey query vm/qpkgmeta_json -data "gno.land/r/x/y"    # status: "live" | "inert" | "absent"
+gnokey query "vm/qinertpaths?limit=100" -data "gno.land/r/"   # everything awaiting approval
+```
+
+`qpkgmeta_json` is the only way to tell a parked package from one that does not exist, and it also
+carries the reason a parked one is not live yet. Reach for it before reporting that a path is
+missing on a chain running `inert`. Never probe a path's existence with a call: a call into a
+parked path returns an internal error rather than a clean not-found (look for `unexpected node
+with location` in the log), so a read answers the question more cheaply and more legibly.
 
 **`MsgRun` is allowlisted.** `params/vm:p:run_submitters` carries a non-empty address list on
 mainnet and is unset on pearl. `MsgRun` executes arbitrary source immediately under *every* policy,
@@ -102,7 +128,23 @@ because it also covers the e2e simnet's `test-9999`.
 ## Cross-chain drift — same import path, different source
 
 A shared import path is not a shared implementation, and a shared package is not a shared path.
-Three drifts matter between the live chains:
+The two live chains also run different VM releases, so the *language* differs between them too.
+Four drifts matter:
+
+**0. The language itself. mainnet rejects code pearl accepts.** mainnet has been upgraded past its
+genesis build while pearl still runs the release it launched on, and the two have diverged
+substantially. Three rules exist on mainnet and not on pearl:
+
+| | pearl | mainnet |
+|---|---|---|
+| `iota` as an ordinary identifier (a parameter, a range variable, `iota := 5`) | accepted | **rejected at preprocess** — `iota` is reserved everywhere, unlike Go, where it is free outside a `const` block |
+| reassigning `cur`, taking `&cur`, range-assigning to `cur` | accepted | **rejected at preprocess** — a crossing `cur` is a fixed binding |
+| `AssertOriginCall()` reached through a function alias (`var Deposit = other.Deposit`) | passes | **panics** — the origin call is anchored to the entry package |
+
+A realm that compiles and tests green against pearl can therefore fail to deploy on mainnet, and the
+failure arrives as a preprocess error at submit rather than anything a local `gno test` showed. Build
+against the target chain's own release (`toolchain.md`) rather than assuming one binary serves both.
+This list holds for today's releases; it grows whenever one chain upgrades and the other does not.
 
 **1. The version segment sits in a different place on sub-packages.** Top-level packages share a
 spelling: `p/nt/avl/v0` and `p/nt/mux/v0` resolve on both. Below the root they diverge, because

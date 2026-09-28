@@ -344,6 +344,12 @@ func SignedByEOA() address {
 
 ### `runtime.AssertOriginCall()` — strict EOA-only gate
 
+Newer releases anchor this to the entry package: exposing it through a function alias
+(`var Deposit = other.Deposit`) panics rather than passing, because the frame that entered the tx
+and the realm credited with the payment are no longer allowed to disagree. Bind the call in the
+realm that owns the entry point instead of re-exporting someone else's. Older chains still accept
+the alias — see `networks.md` § Cross-chain drift.
+
 Panics if anything but a direct `MsgCall` from an EOA reaches this function. Stricter than `IsUserCall()`: rejects all `MsgRun` invocations. Use for governance-only or strictly-no-intermediary functions.
 
 ### Allowlist via `ownable` / `authz`
