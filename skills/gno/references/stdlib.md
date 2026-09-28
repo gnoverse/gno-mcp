@@ -165,7 +165,7 @@ The packages below survived the test-13 quarantine (`examples/quarantined/` got 
 | Pagination | `gno.land/p/jeronimoalbi/pager` | `gno.land/p/jeronimoalbi/pager/v0` |
 | DAO primitives | `gno.land/p/nt/commondao/v0` resolves on neither live chain | |
 
-Sub-packages of these roots are spelled differently on the two chains (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on mainnet). `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split, and authz and realmpath each carry more than one version on at least one chain (`authz` has `/v1` and `/v2` on pearl, `/v1` on mainnet): the table gives one spelling that resolves, never the newest. Enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
+Sub-packages of these roots are spelled differently on the two chains (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on mainnet). `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split, and authz and realmpath each carry more than one version on at least one chain (`authz` has `/v1` and `/v2` on pearl, `/v1` on mainnet): the table gives one spelling that resolves, which is not always the newest. Enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
 
 **Use `avl.Tree` (or `bptree`) instead of Go's `map`** for growing keyed state — a persisted map rewrites wholesale on every mutation, and its insertion-order iteration is an impl detail, not an ordering contract. (Iteration is deterministic, so it's a gas/design issue, not a consensus risk.) See `patterns.md` and `memory.md` § Map iteration order.
 

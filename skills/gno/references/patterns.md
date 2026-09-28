@@ -406,7 +406,7 @@ Packages that survived the `examples/quarantined/` cull — the test-13 safe-lis
 
 Prefer these over re-implementation — they're reviewed, used, and stable.
 
-Sub-packages of these roots are spelled differently on the two chains (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on mainnet), and the GRC20 standard sits in a different tree. `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split, and authz and realmpath each carry more than one version on at least one chain: the table gives one spelling that resolves, never the newest. Enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
+Sub-packages of these roots are spelled differently on the two chains (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on mainnet), and the GRC20 standard sits in a different tree. `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split, and authz and realmpath each carry more than one version on at least one chain: the table gives one spelling that resolves, which is not always the newest. Enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
 
 **Don't** import `gno.land/r/tests/vm/test20` — deliberately insecure test fixture exporting `PrivateLedger`. Using it in production code = instant compromise (see `security.md` § Encapsulation pattern).
 

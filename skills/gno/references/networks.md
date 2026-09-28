@@ -27,7 +27,7 @@ this file is only the per-chain snapshot and the differences between chains.
 | RPC | `rpc.pearl.testnets.gno.land:443` | `rpc.gno.land:443` |
 | gnoweb | `pearl.testnets.gno.land` | `gno.land` |
 | release | `chain/pearl` build | read `misc/deployments/mainnet.gno.land/upgrades.json` for the current one — `chain/mainnet`'s tag names only its genesis build |
-| `/status` version | `v1.0.0-rc.0` | `v1.0.0-rc.0` — **the same string on every chain; it identifies no release** |
+| `/status` | `node_info.version` is `v1.0.0-rc.0` and `software` empty on every chain — neither identifies a release. `build_version` does: read it | same |
 | gas price (`auth/gasprice`) | `1ugnot/1000gas` | same |
 | block max gas | 3,000,000,000 | same |
 | storage deposit (`params/vm:p:storage_price`) | 100 ugnot | same |
@@ -55,10 +55,13 @@ fall back to the tag only when it has no entry (`toolchain.md`).
 
 **A chain tag names its genesis build, not what it runs today.** `chain/mainnet` is mainnet's
 `v1.2.0` genesis; the chain has since been halted and restarted on newer binaries by governance.
-`misc/deployments/mainnet.gno.land/upgrades.json` is the ledger of those upgrades and
-is the only place the current release is written down. The node will not tell you: `/status` reports
-`v1.0.0-rc.0` with an empty `software` on every chain, mainnet and pearl alike, so it identifies
-neither the release nor a build sha. Read the ledger, or ask the operator.
+
+**Two places say what a chain runs, and they agree.** `/status` carries a `build_version` naming
+the branch, commit depth and short sha of the running binary — mainnet's resolves to the same
+commit as the newest entry in `misc/deployments/mainnet.gno.land/upgrades.json`, the ledger of
+those restarts. Ask the node for what it is running and the ledger for what was agreed; a
+disagreement is worth chasing rather than averaging. Do not read `node_info.version` for this —
+it is `v1.0.0-rc.0` with an empty `software` on every chain and identifies nothing.
 
 ## Mainnet — `gnoland-1`
 
@@ -79,8 +82,9 @@ typechecks the source and runs `init()` on *its* transaction and gas, with the s
 Mainnet is therefore not a museum: packages deployed after genesis do run there, once approved.
 Treat "submitted" and "live" as different states with an unpredictable gap between them.
 
-**A parked package is invisible to every ordinary read.** `vm/qpaths` skips it, and `vm/qfile`,
-`vm/qfuncs`, `vm/qeval` and `vm/qrender` all answer `package not found` — the *same* answer a path
+**A parked package is invisible to every ordinary read.** `vm/qpaths` skips it; `vm/qfuncs`,
+`vm/qeval` and `vm/qrender` answer `package not found` and `vm/qfile` answers
+`package … is not available` — in each case the *same* answer a path
 that was never submitted gets. Its source cannot be read back at all; only the submitting
 transaction carries it. Two queries exist for this and nothing else:
 
@@ -135,15 +139,22 @@ The two live chains also run different VM releases, so the *language* differs be
 Four drifts matter:
 
 **0. The language itself. mainnet rejects code pearl accepts.** mainnet has been upgraded past its
-genesis build while pearl still runs the release it launched on. One rule is measured to differ:
+genesis build while pearl still runs the release it launched on. Two rules are measured to differ:
 
-**A crossing `cur` is a fixed binding on mainnet.** Reassigning `cur`, taking `&cur`, or
-range-assigning to it compiles on pearl and fails at preprocess on mainnet —
-`cannot reassign the crossing 'cur' parameter`.
+**A crossing `cur` is a fixed binding on mainnet.** Reassigning it, taking `&cur`, or
+range-assigning to it all compile on pearl and fail at preprocess on mainnet, each with its own
+message — `cannot reassign the crossing 'cur' parameter`, `cannot take the address of a
+realm-typed 'cur'`, `cannot assign to a realm-typed 'cur' in a range clause`.
 
-A realm that compiles and tests green against pearl can therefore fail to deploy on mainnet, and the
-failure arrives as a preprocess error at submit rather than anything a local `gno test` showed. Build
-against the target chain's own release (`toolchain.md`) rather than assuming one binary serves both.
+**`AssertOriginCall()` reached through a re-export panics on mainnet.** Where one realm exposes
+another's crossing function as `var Deposit = other.Deposit`, calling the alias satisfies the check
+on pearl and panics on mainnet with `invalid non-origin call`. mainnet anchors the origin call to
+the entry package; pearl counts frames. Calling the original directly succeeds on both.
+
+A realm that compiles and tests green against pearl can therefore fail on mainnet — at submit for
+the first rule, and at call time for the second, which no local `gno test` against the wrong release
+will show. Build against the target chain's own release (`toolchain.md`) rather than assuming one
+binary serves both.
 
 **Measure a suspected difference; never infer one from a changelog.** Whether an upstream PR is an
 ancestor of a chain's build says nothing about whether the behaviour is present: a release that
