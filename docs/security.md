@@ -22,7 +22,7 @@ Writes sign with one of two identities — never with the user's key.
 - **Local profiles** use the built-in **test1** account (the well-known *public* test mnemonic). Structurally confined to dev chains by the chain-id capability gate.
 - **Testnet profiles** use keys generated and persisted by `gno_key_generate`. Each profile may hold up to `GNOMCP_AGENT_MAX_KEYS` (default 5) named keys, stored one file per key at `~/.local/share/gnomcp/agent-keys/<profile>/<name>.key` (mode `0600`); when `GNOMCP_SESSION_PASSPHRASE` is set they are encrypted at rest with scrypt+AES-256-GCM. `gno_key_send` moves ugnot only between a profile's own keys (the destination is a key name, never an arbitrary address).
 
-Both tiers are confined to dev/testnet by the chain-id capability gate (the testnet name list above); no path creates an agent key for a read-only chain (mainnet/betanet).
+Both tiers are confined to dev/testnet by the chain-id capability gate (the testnet name list above); no path creates an agent key for a read-only chain (mainnet/betanet), and `gno_session_propose` refuses one outright (`chain_read_only`). The write tools' schema enums also omit read-only profiles, but a schema is advisory: arguments are not validated against it before dispatch, so each write path re-checks the chain-id itself rather than relying on the enum.
 
 **Session — opt-in (`identity=session`), WIP.** The session path is functional end-to-end but young and will be reworked — use with caution: keep `allow_paths` tight, `spend_limit` low, and `expires_in` short. On any writable chain the agent can act *as the user* via a chain-bound session:
 
@@ -80,6 +80,7 @@ Errors are JSON-encoded payloads with `code`, `message`, and (where useful) extr
 | Code | Trigger |
 |---|---|
 | `chain_id_malformed` | A chain-id carrying shell metacharacters/whitespace was rejected (gno_connect or gno_profile_add) |
+| `chain_read_only` | `gno_session_propose` was called on a read-only chain-id (mainnet/betanet), which can hold no session |
 | `authentication_required` | A session-signed write was attempted with no active session |
 | `scope_mismatch` | The call's realm is not covered by any active session's `allow_paths` |
 | `insufficient_funds` | The agent's testnet account is unfunded (run `gno_faucet_fund`) |

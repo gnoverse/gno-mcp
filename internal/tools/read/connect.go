@@ -19,7 +19,7 @@ func RegisterConnect(s *server.Server, client *http.Client) {
 			"gnoconnect:rpc and gnoconnect:chainid meta-tags and returns both follow-up paths — " +
 			"gno_profile_add to use the chain in this session (in-memory), and a ready-to-run " +
 			"'gnomcp profile add' command for the user to persist it. dev and known testnets (test*, pearl-*) are " +
-			"write-capable; any other chain (mainnet/betanet, e.g. gnoland1) is admitted read-only " +
+			"write-capable; any other chain (mainnet gnoland-1, betanet gnoland1) is admitted read-only " +
 			"(read tools only) — which is exactly what auditing deployed source needs. Use to PREVIEW " +
 			"a chain's connection info without changing gnomcp state; to discover AND add in one step, " +
 			"call gno_profile_add with gnoweb_url directly instead. Does NOT modify any config itself. " +
