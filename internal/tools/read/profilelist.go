@@ -37,17 +37,19 @@ func RegisterProfileList(s *server.Server) {
 	})
 }
 
-// profileStatus is the one-line lifecycle label shown per profile.
+// profileStatus is the one-line lifecycle label shown per profile. Read-only is
+// tested first because sunset is an advisory flag a user may set on any profile,
+// and its label promises writability the chain-id gate refuses.
 func profileStatus(p profiles.Profile) string {
 	switch {
+	case p.IsReadOnly():
+		return "read-only — no agent key, faucet, or session"
 	case p.Sunset:
 		return "sunset — retiring chain, still writable; prefer the current testnet for new work"
 	case p.IsLocal():
 		return "local dev chain"
-	case p.IsTestnet():
-		return "current testnet, writable"
 	default:
-		return "read-only — no agent key, faucet, or session"
+		return "current testnet, writable"
 	}
 }
 

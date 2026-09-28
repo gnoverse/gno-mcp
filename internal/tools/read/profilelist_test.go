@@ -78,3 +78,22 @@ func TestProfileList_noArgs(t *testing.T) {
 	assert.Contains(t, res.Text, "testnet5")
 	assert.Contains(t, res.Text, "test5")
 }
+
+// A sunset label promises the chain is still writable. On a read-only chain-id
+// that is false, and gno_profile_list is what an agent reads to decide where it
+// may write, so the read-only classification has to win.
+func TestProfileList_readOnlyBeatsSunset(t *testing.T) {
+	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
+		"archive": {RPCURL: "https://rpc.archive.example:443", ChainID: "staging", Sunset: true},
+	}}
+	_, err := cfg.Validate()
+	require.NoError(t, err)
+	s := server.NewServer(cfg, "")
+	RegisterProfileList(s)
+
+	res, err := s.Registry().Call(context.Background(), "gno_profile_list", map[string]any{})
+	require.NoError(t, err)
+
+	assert.Contains(t, res.Text, "read-only")
+	assert.NotContains(t, res.Text, "still writable")
+}

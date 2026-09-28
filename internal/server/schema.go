@@ -20,10 +20,10 @@ func ProfileChainList(cfg *profiles.Config, names []string) string {
 		p := cfg.Profiles[n]
 		label := ""
 		switch {
-		case p.Sunset:
-			label = ", sunset"
 		case p.IsReadOnly():
 			label = ", read-only"
+		case p.Sunset:
+			label = ", sunset"
 		}
 		parts = append(parts, fmt.Sprintf("%s (chain %s%s)", n, p.ChainID, label))
 	}

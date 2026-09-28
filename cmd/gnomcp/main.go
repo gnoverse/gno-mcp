@@ -79,10 +79,10 @@ func buildServerInstructions(profs map[string]profiles.Profile) string {
 			b.WriteString(" — write-as-user enabled (master-address set)")
 		}
 		switch {
-		case p.Sunset:
-			b.WriteString(" — sunset: retiring chain, still fully writable; prefer the current testnet for new work")
 		case p.IsReadOnly():
 			b.WriteString(" — read-only (read tools only; no agent key, faucet, or writes)")
+		case p.Sunset:
+			b.WriteString(" — sunset: retiring chain, still fully writable; prefer the current testnet for new work")
 		}
 		b.WriteByte('\n')
 	}
