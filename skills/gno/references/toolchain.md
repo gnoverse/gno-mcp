@@ -15,13 +15,13 @@ Scope: live chain targets. For a **local gnodev** target, use the `gno` already 
    ```sh
    git ls-remote --tags https://github.com/gnolang/gno "chain/*" "v*"
    ```
-3. Pick the **latest `chain/<short-name>` tag**. The tag uses the chain's short **name**, never its chain-id: pearl's is `chain/pearl`, not `chain/pearl-1`, and mainnet's is `chain/mainnet`, not `chain/gnoland-1`. Globbing the chain-id matches nothing. The store key is the tag name minus the `chain/` prefix. Two install-ref shapes, and the two live chains take one each:
-   - **Semver twin** — a `v*` tag listing the same sha: use the semver tag as the ref. `chain/mainnet` shares its sha with the annotated `v1.2.0`, so mainnet installs at `@v1.2.0`.
+3. **Read `misc/deployments/<chain>/upgrades.json` before reaching for a tag.** A chain tag names the *genesis* build; a chain halted and restarted by governance runs a later release, and the difference is real language semantics rather than packaging. That ledger records the restarts and is the only written record of the release a chain runs. Its newest entry is the install ref. The node will not tell you — `/status` reports the same `version` string with an empty `software` on every chain, so it identifies neither the release nor a build sha. mainnet has a ledger and runs several releases past its genesis tag; building against that tag green-lights code mainnet refuses at submit.
+4. **No ledger, or no entry for this chain — fall back to the latest `chain/<short-name>` tag**, which is the genesis build. The tag uses the chain's short **name**, never its chain-id: pearl's is `chain/pearl`, not `chain/pearl-1`, and mainnet's is `chain/mainnet`, not `chain/gnoland-1`. Globbing the chain-id matches nothing. The store key is the tag name minus the `chain/` prefix. Two install-ref shapes:
+   - **Semver twin** — a `v*` tag listing the same sha: use the semver tag as the ref.
    - **Commit-only** — tags containing `/` are not valid `go install @` refs, so use the commit sha. In `ls-remote` output that is the tag's `^{}` (peeled) line when one exists, else the tag's own line. `chain/pearl` has no semver twin and installs by sha.
    - Resolve the chain tag's sha first, then look for a `v*` tag listing that same sha before falling back to the raw sha.
    - A tag can lag its branch, so compare it against `refs/heads/chain/<name>` before pinning. `chain/pearl` equals its branch head; `chain/mainnet` sits behind one carrying post-launch commits; retired `chain/topaz` sits behind its own.
-   - **A chain tag names the genesis build, not what the chain runs now.** A chain that has been halted and restarted by governance runs a later release than its `chain/*` tag, and the difference is real language semantics, not packaging. Check `misc/deployments/<chain>/upgrades.json` in the repo — it is the ledger of those restarts and the only written record of the current release. The node will not tell you: `/status` reports the same `version` string with an empty `software` on every chain, so it identifies neither the release nor a build sha. Where the ledger is absent or stale, ask the chain's operator which sha is deployed, and say in your answer which one you built against.
-4. No matching chain tag (unreleased or dev chain): ask the user which ref tracks their chain; if they operate the node themselves, their local `gno` is the answer.
+5. No ledger entry and no matching chain tag (unreleased or dev chain): ask the chain's operator which ref is deployed; if the user runs the node themselves, their local `gno` is the answer. Say in your answer which ref you built against.
 
 ## Install into the store
 
@@ -29,8 +29,9 @@ One directory per release; the binary keeps its name; releases coexist. **Never 
 
 ```sh
 release="pearl"        # store key: the chain release name
-ref="c4c72fdd288c757e8da0d93aae867fa479b1b15c"   # install ref: semver twin, or peeled commit sha
-                                                # (mainnet's twin exists: ref="v1.2.0")
+ref="c4c72fdd288c757e8da0d93aae867fa479b1b15c"   # install ref: the release named by the chain's
+                                                # upgrades.json, else its genesis tag's semver
+                                                # twin or peeled commit sha
 store="${XDG_CACHE_HOME:-$HOME/.cache}/gno-toolchains"
 [ -x "$store/$release/gno" ] ||
   GOBIN="$store/$release" go install "github.com/gnolang/gno/gnovm/cmd/gno@$ref"

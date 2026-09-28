@@ -231,7 +231,7 @@ Gno is modeled after Go 1.17. Most Go syntax works; the differences matter when 
 | `chan T` (channels) | missing (after launch) |
 | Generics | not implemented |
 | Type shadowing of built-ins | not allowed (`rune := rune('a')` rejected) |
-| `iota` as an ordinary identifier | reserved on newer releases — `iota := 5`, a parameter, a receiver or a range variable named `iota` all fail at preprocess. Go allows this outside a `const` block; Gno does not. Older chains still accept it, so this is a per-chain fact (`networks.md`) |
+| `iota` as an ordinary identifier | reserved — `iota := 5`, a parameter, a receiver or a range variable named `iota` all fail at preprocess on every live chain. Go allows this outside a `const` block; Gno does not |
 
 No concurrency primitives, no generics. Plan around this.
 

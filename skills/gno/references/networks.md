@@ -40,7 +40,7 @@ this file is only the per-chain snapshot and the differences between chains.
 | validator set | `r/sys/validators/v3` holds it (`/v2` also deployed, empty) | `r/sys/validators/v0` holds it (`/v2` also deployed, empty) |
 | faucet | present — read the grant size and per-address cap from `gno_status`'s `faucet` block, never from this row | none — mainnet ships without one |
 | tx indexer | `indexer.pearl…/graphql/query` | `indexer.gno.land/graphql/query` — same query root, `getSupply` on both |
-| toolchain tag | `chain/pearl` at `c4c72fdd2`, commit-only | `chain/mainnet` at `9c8eb132`, **semver twin `v1.2.0`** |
+| toolchain tag | `chain/pearl` at `c4c72fdd2`, commit-only | `chain/mainnet` at `9c8eb132`, semver twin `v1.2.0` — genesis only, superseded by the upgrade ledger |
 | sub-package path scheme | version at the **root** (`p/nt/avl/v0/rotree`) | version at the **leaf** (`p/nt/avl/rotree/v0`) |
 
 The minimum fee for a 10M-gas write on pearl is 10,000 ugnot (0.01 GNOT); gnomcp offers ×2 over
@@ -48,11 +48,10 @@ the floor (`gnokey.md`). Mainnet runs the same gas price, so a write there would
 gnomcp simply never signs one.
 
 Toolchain tags use the short chain **name**, never the chain-id (`chain/pearl`, not `chain/pearl-1`;
-`chain/mainnet`, not `chain/gnoland-1`). Globbing a chain-id finds nothing. The two live chains fall
-in different install cases: `chain/pearl` has no semver twin, so it installs by commit sha, while
-`chain/mainnet` shares its sha with the annotated tag `v1.2.0`, which is the ref to install — see
-`toolchain.md`. A tag can also lag its branch: `heads/chain/pearl` equals its tag, while
-`heads/chain/mainnet` carries commits pushed after launch.
+`chain/mainnet`, not `chain/gnoland-1`). Globbing a chain-id finds nothing. A tag can also lag its
+branch: `heads/chain/pearl` equals its tag, while `heads/chain/mainnet` carries commits pushed after
+launch. Neither tag is automatically the ref to install — read the chain's `upgrades.json` first and
+fall back to the tag only when it has no entry (`toolchain.md`).
 
 **A chain tag names its genesis build, not what it runs today.** `chain/mainnet` is mainnet's
 `v1.2.0` genesis; the chain has since been halted and restarted on newer binaries by governance.
@@ -136,19 +135,22 @@ The two live chains also run different VM releases, so the *language* differs be
 Four drifts matter:
 
 **0. The language itself. mainnet rejects code pearl accepts.** mainnet has been upgraded past its
-genesis build while pearl still runs the release it launched on, and the two have diverged
-substantially. Three rules exist on mainnet and not on pearl:
+genesis build while pearl still runs the release it launched on. One rule is measured to differ:
 
-| | pearl | mainnet |
-|---|---|---|
-| `iota` as an ordinary identifier (a parameter, a range variable, `iota := 5`) | accepted | **rejected at preprocess** — `iota` is reserved everywhere, unlike Go, where it is free outside a `const` block |
-| reassigning `cur`, taking `&cur`, range-assigning to `cur` | accepted | **rejected at preprocess** — a crossing `cur` is a fixed binding |
-| `AssertOriginCall()` reached through a function alias (`var Deposit = other.Deposit`) | passes | **panics** — the origin call is anchored to the entry package |
+**A crossing `cur` is a fixed binding on mainnet.** Reassigning `cur`, taking `&cur`, or
+range-assigning to it compiles on pearl and fails at preprocess on mainnet —
+`cannot reassign the crossing 'cur' parameter`.
 
 A realm that compiles and tests green against pearl can therefore fail to deploy on mainnet, and the
 failure arrives as a preprocess error at submit rather than anything a local `gno test` showed. Build
 against the target chain's own release (`toolchain.md`) rather than assuming one binary serves both.
-This list holds for today's releases; it grows whenever one chain upgrades and the other does not.
+
+**Measure a suspected difference; never infer one from a changelog.** Whether an upstream PR is an
+ancestor of a chain's build says nothing about whether the behaviour is present: a release that
+rewrites a rule's message or mechanism looks like the rule arriving. `iota` as an ordinary
+identifier reads as exactly that trap — both live chains reject it, and only the wording differs
+(`cannot use iota outside constant declaration` on pearl, `builtin identifiers cannot be shadowed`
+on mainnet). Install both releases (`toolchain.md`) and lint the same file against each.
 
 **1. The version segment sits in a different place on sub-packages.** Top-level packages share a
 spelling: `p/nt/avl/v0` and `p/nt/mux/v0` resolve on both. Below the root they diverge, because
