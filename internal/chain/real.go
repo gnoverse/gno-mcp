@@ -374,7 +374,8 @@ func splitAllowPaths(chainPaths []string) (realmPaths []string, allowRun bool) {
 // keypair, then inject Signature.SessionAddr. Spend pre-checks live in
 // asUserTx, which owns the account lookup.
 func (r *Real) signTxForSession(unsignedTx *std.Tx, signer Signer, acc *gnoland.GnoSessionAccount, sessionAddr crypto.Address) (*std.Tx, error) {
-	signBytes, err := unsignedTx.GetSignBytes(r.chainID, acc.AccountNumber, acc.Sequence)
+	// Legacy payload: chains predating gno v1.5.0 verify no other.
+	signBytes, err := unsignedTx.GetSignBytesLegacy(r.chainID, acc.AccountNumber, acc.Sequence)
 	if err != nil {
 		return nil, fmt.Errorf("get sign bytes: %w", err)
 	}

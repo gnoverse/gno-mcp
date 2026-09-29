@@ -14,6 +14,7 @@ import (
 	"github.com/gnoverse/gno-mcp/faucet"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/keystore"
+	"github.com/gnoverse/gno-mcp/txsign"
 )
 
 // FaucetConfig carries the faucet half of simnet. The dispenser signs as
@@ -35,7 +36,7 @@ func StartFaucet(logger *slog.Logger, cfg FaucetConfig) (string, func(), error) 
 	if err != nil {
 		return "", nil, fmt.Errorf("faucet rpc client: %w", err)
 	}
-	signer, err := gnoclient.SignerFromBip39(keystore.Test1Mnemonic, cfg.ChainID, "", 0, 0)
+	signer, err := txsign.SignerFromBip39(keystore.Test1Mnemonic, cfg.ChainID)
 	if err != nil {
 		return "", nil, fmt.Errorf("faucet signer: %w", err)
 	}

@@ -2,6 +2,7 @@ package chain
 
 import (
 	"context"
+	"crypto/ed25519"
 	"strings"
 	"testing"
 
@@ -13,6 +14,41 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// ---- Session signing payload
+
+type ed25519SessionSigner struct{ priv ed25519.PrivateKey }
+
+func (s ed25519SessionSigner) Address() string { return "" }
+func (s ed25519SessionSigner) Pubkey() []byte  { return s.priv.Public().(ed25519.PublicKey) }
+func (s ed25519SessionSigner) Sign(payload []byte) ([]byte, error) {
+	return ed25519.Sign(s.priv, payload), nil
+}
+
+// Chains predating gno v1.5.0 verify only the legacy payload; v1.5.0 chains
+// verify either, so a session-signed write must use the legacy one to land on
+// every writable chain.
+func TestSignTxForSession_signsLegacyPayload(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	r := &Real{chainID: "test-chain"}
+	acc := &gnoland.GnoSessionAccount{}
+	acc.AccountNumber, acc.Sequence = 5, 7
+	tx := preflightTx(crypto.AddressFromPreimage([]byte("master")), 1_000, 0)
+
+	signed, err := r.signTxForSession(tx, ed25519SessionSigner{priv}, acc, crypto.AddressFromPreimage([]byte("session")))
+	require.NoError(t, err)
+	require.Len(t, signed.Signatures, 1)
+	sig := signed.Signatures[0].Signature
+	pub := priv.Public().(ed25519.PublicKey)
+
+	legacy, err := tx.GetSignBytesLegacy("test-chain", 5, 7)
+	require.NoError(t, err)
+	assert.True(t, ed25519.Verify(pub, legacy, sig), "must verify over the legacy payload")
+	current, err := tx.GetSignBytes("test-chain", 5, 7)
+	require.NoError(t, err)
+	assert.False(t, ed25519.Verify(pub, current, sig), "signed over the v1.5.0 payload, which older chains reject")
+}
 
 // ---- Session spend pre-flight (mirrors the chain ante's Phase 2a)
 

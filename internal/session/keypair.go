@@ -120,7 +120,8 @@ type gnoclientSigner struct {
 // left zero for the caller to populate.
 func (s *gnoclientSigner) Sign(cfg gnoclient.SignCfg) (*std.Tx, error) {
 	tx := cfg.UnsignedTX
-	signBytes, err := tx.GetSignBytes(s.chainID, cfg.AccountNumber, cfg.SequenceNumber)
+	// Legacy payload: chains predating gno v1.5.0 verify no other.
+	signBytes, err := tx.GetSignBytesLegacy(s.chainID, cfg.AccountNumber, cfg.SequenceNumber)
 	if err != nil {
 		return nil, fmt.Errorf("session/gnoclientSigner: build sign bytes: %w", err)
 	}

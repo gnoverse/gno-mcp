@@ -28,6 +28,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 | `internal/profiles/` | profiles.toml loading, validation, chain-id allowlist, hard limits |
 | `internal/untrusted/`, `internal/budget/`, `internal/audit/` | envelope+neutralization, output budget, JSONL audit log |
 | `faucet/`, `cmd/agentfaucet/`, `internal/clientfaucet/` | faucet service + client tiers |
+| `gasprice/`, `txsign/` | toolchain-only helpers shared by `internal/` and the faucet: the live-gas-price fee formula; signing over the legacy payload, which chains older than gno v1.5.0 require |
 | `docker/` | release Dockerfiles (`gnomcp`, `agentfaucet`); built by goreleaser `dockers_v2`, COPY a prebuilt static binary via `$TARGETOS/$TARGETARCH` |
 | `test/integration/` | real-node tests (`-tags=integration`) |
 | `test/e2e/realms/` | gno realm fixtures, baked into the playground e2e image + simnet genesis |

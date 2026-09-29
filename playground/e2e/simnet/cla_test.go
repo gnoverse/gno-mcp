@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -82,12 +83,14 @@ func fundViaFaucet(t *testing.T, c *chain.Real, faucetAddr, dest string, want in
 	}, 15*time.Second, 200*time.Millisecond)
 }
 
-// tallyRealm is a trivial deployable realm (a bump-a-counter "tally board"),
-// mirroring scenario 14's deploy target.
-func tallyRealm() []*std.MemFile {
+// tallyRealm is a trivial deployable realm (a bump-a-counter "tally board") for
+// pkgPath, mirroring scenario 14's deploy target. The chain requires the package
+// name to match the path's last element.
+func tallyRealm(pkgPath string) []*std.MemFile {
+	name := path.Base(pkgPath)
 	return []*std.MemFile{
-		{Name: "gnomod.toml", Body: "module = \"gno.land/r/simcla/tally\"\ngno = \"0.9\"\n"},
-		{Name: "tally.gno", Body: "package tally\n\nvar n int\n\nfunc Bump(cur realm) { n++ }\n"},
+		{Name: "gnomod.toml", Body: "module = \"" + pkgPath + "\"\ngno = \"0.9\"\n"},
+		{Name: name + ".gno", Body: "package " + name + "\n\nvar n int\n\nfunc Bump(cur realm) { n++ }\n"},
 	}
 }
 
@@ -114,7 +117,7 @@ func TestSimnet_claGate_blocksThenAllows(t *testing.T) {
 	deployPath := "gno.land/r/simcla/tally"
 
 	// Before signing: deploy is blocked by the CLA gate.
-	_, err = c.AddPackage(ctx, signer, deployPath, tallyRealm(), false)
+	_, err = c.AddPackage(ctx, signer, deployPath, tallyRealm(deployPath), false)
 	require.Error(t, err, "deploy must be blocked before the CLA is signed")
 	if !errors.Is(err, vm.UnauthorizedUserError{}) {
 		t.Logf("pre-sign deploy error (not typed as UnauthorizedUserError over the wire): %v", err)
@@ -125,7 +128,7 @@ func TestSimnet_claGate_blocksThenAllows(t *testing.T) {
 	require.NoError(t, err, "signing the CLA must succeed")
 
 	// After signing: the same deploy lands.
-	_, err = c.AddPackage(ctx, signer, deployPath, tallyRealm(), false)
+	_, err = c.AddPackage(ctx, signer, deployPath, tallyRealm(deployPath), false)
 	require.NoError(t, err, "deploy must succeed after the CLA is signed")
 }
 
@@ -155,7 +158,7 @@ func TestSimnet_claEconomics(t *testing.T) {
 	t.Logf("ECON after cla.Sign:           %d ugnot  (delta -%d ugnot, gas_used=%d)",
 		afterSign, start-afterSign, signRes.GasUsed)
 
-	deployRes, err := c.AddPackage(ctx, signer, "gno.land/r/simcla/econ", tallyRealm(), false)
+	deployRes, err := c.AddPackage(ctx, signer, "gno.land/r/simcla/econ", tallyRealm("gno.land/r/simcla/econ"), false)
 	require.NoError(t, err)
 	afterDeploy := bal()
 	t.Logf("ECON after gno_addpkg:         %d ugnot  (delta -%d ugnot, gas_used=%d)",
@@ -180,7 +183,7 @@ func TestSimnet_claFlow_10gnot(t *testing.T) {
 
 	_, err := c.Call(ctx, signer, "gno.land/r/sys/cla", "Sign", []string{claHash}, "", false)
 	require.NoError(t, err, "Sign must clear at the minimum fee even on a 10 GNOT drip")
-	_, err = c.AddPackage(ctx, signer, deployPath, tallyRealm(), false)
+	_, err = c.AddPackage(ctx, signer, deployPath, tallyRealm(deployPath), false)
 	require.NoError(t, err, "deploy must clear")
 	_, err = c.Call(ctx, signer, deployPath, "Bump", nil, "", false)
 	require.NoError(t, err, "bump must clear")
