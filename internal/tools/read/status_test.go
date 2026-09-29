@@ -39,6 +39,7 @@ func TestStatus_reportsConfigAndLiveTip(t *testing.T) {
 	assert.Equal(t, "http://127.0.0.1:26657", res.StructuredContent["rpc_url"])
 	assert.Equal(t, int64(4242), res.StructuredContent["height"])
 	assert.Equal(t, "2026-06-10T12:00:00Z", res.StructuredContent["block_time"])
+	assert.Equal(t, false, res.StructuredContent["chain_id_mismatch"])
 }
 
 func TestStatus_flagsChainIDMismatch(t *testing.T) {
@@ -53,6 +54,9 @@ func TestStatus_flagsChainIDMismatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, res.Text, "mismatch", "node reporting a different chain-id than the profile declares must be flagged")
 	assert.Equal(t, "dev", res.StructuredContent["node_chain_id"])
+	// A client may hand the model the structured content alone, so the flag
+	// cannot live only in the text.
+	assert.Equal(t, true, res.StructuredContent["chain_id_mismatch"])
 }
 
 func TestStatus_nodeUnreachableStillReportsConfig(t *testing.T) {

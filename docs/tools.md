@@ -45,7 +45,7 @@ These tools require no config — the built-in `local`, `testnet` and `mainnet` 
 ### `gno_status`
 
 - **Args:** `profile?`
-- **Returns:** the profile's declared chain-id and RPC URL plus the node's live chain-id, latest block height, and block time (RPC `/status`). Flags a mismatch when the node reports a different chain-id than the profile declares. If the node is unreachable, config info is still returned with a `height_error` instead of a tool failure.
+- **Returns:** the profile's declared chain-id and RPC URL plus the node's live chain-id, latest block height, and block time (RPC `/status`). Flags a mismatch (`chain_id_mismatch: true`) when the node reports a different chain-id than the profile declares. If the node is unreachable, config info is still returned with a `height_error` instead of a tool failure.
 
 ### `gno_profile_list`
 
@@ -140,8 +140,8 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
   - `inert` — still parked: the headline says PARKED, the chain's reason arrives in an `<untrusted_content kind="package_reason">` envelope (raw in `package_reason`), and the text carries the recovery. No gnoweb link.
   - `redeploy_parked` — a redeploy parked over a live private realm: reads and calls still reach the previous version, and the result says so.
   - `unknown` — the chain reported the package as neither live nor parked, or never answered; never reported as live.
-  The result also carries `code_submission_policy`. On any other chain the output is unchanged and no status is polled.
-- A simulation on an inert chain does not type-check the code (the chain parks without checking it); the result says so.
+  The result also carries `code_submission_policy`. For `inert`, `redeploy_parked` and `unknown`, `next_steps` repeats the recovery the text carries, for clients that hand the model the structured content alone. On any other chain the output is unchanged and no status is polled.
+- A simulation on an inert chain does not type-check the code (the chain parks without checking it); the result says so, in the text and in `next_steps`.
 
 ### `gno_cla_info`
 

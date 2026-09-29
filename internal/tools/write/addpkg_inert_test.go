@@ -63,6 +63,7 @@ func TestAddPkg_nonInertChainIsUntouched(t *testing.T) {
 	assert.Contains(t, res.Text, "AddPackage succeeded")
 	assert.NotContains(t, res.StructuredContent, "package_status")
 	assert.NotContains(t, res.StructuredContent, "code_submission_policy")
+	assert.NotContains(t, res.StructuredContent, "next_steps")
 	assert.Zero(t, fake.PackageMetaCalls(inertPath), "a chain that runs what it accepts needs no status poll")
 	assert.Equal(t, "ok", entries[0].Result)
 }
@@ -79,6 +80,7 @@ func TestAddPkg_inertReportsLiveOnceEnabled(t *testing.T) {
 	assert.Contains(t, res.Text, "https://test9999.gno.land/r/test/tally", "a live realm gets its view link")
 	assert.Equal(t, chain.PackageLive, res.StructuredContent["package_status"])
 	assert.Equal(t, chain.SubmissionPolicyInert, res.StructuredContent["code_submission_policy"])
+	assert.NotContains(t, res.StructuredContent, "next_steps", "a live package needs no recovery")
 	assert.Equal(t, "ok", entries[0].Result)
 }
 
@@ -101,6 +103,9 @@ func TestAddPkg_inertReportsParkedWhenNotEnabledInTime(t *testing.T) {
 	assert.NotContains(t, res.StructuredContent, "gnoweb_url")
 	assert.Equal(t, chain.PackageInert, res.StructuredContent["package_status"])
 	assert.Equal(t, parkedMeta.Reason, res.StructuredContent["package_reason"])
+	// A client may hand the model the structured content alone, so the
+	// recovery cannot live only in the text.
+	assert.Contains(t, res.StructuredContent["next_steps"], parked.NextSteps)
 	assert.Equal(t, "parked", entries[0].Result)
 }
 
@@ -116,6 +121,7 @@ func TestAddPkg_inertStatusUnknownIsNeverReportedLive(t *testing.T) {
 	assert.Contains(t, res.Text, "status unknown")
 	assert.NotContains(t, res.StructuredContent, "gnoweb_url")
 	assert.Equal(t, "unknown", res.StructuredContent["package_status"])
+	assert.Contains(t, res.StructuredContent["next_steps"], "gno_read")
 	assert.Equal(t, "status_unknown", entries[0].Result)
 }
 
@@ -135,6 +141,8 @@ func TestAddPkg_inertRedeployParkedOverLiveKeepsThePreviousVersion(t *testing.T)
 	assert.NotContains(t, res.Text, "<untrusted_content", "no envelope around an empty reason")
 	assert.NotContains(t, res.StructuredContent, "package_reason")
 	assert.Equal(t, packageStatusRedeployParked, res.StructuredContent["package_status"])
+	assert.Contains(t, res.StructuredContent["next_steps"], "previous version")
+	assert.Contains(t, res.StructuredContent["next_steps"], parked.NextSteps)
 	assert.Equal(t, "parked", entries[0].Result)
 }
 
@@ -176,6 +184,7 @@ func TestAddPkg_inertSimulateSaysTheCodeWasNotTypeChecked(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, res.Text, "did not type-check")
 	assert.Equal(t, chain.SubmissionPolicyInert, res.StructuredContent["code_submission_policy"])
+	assert.Contains(t, res.StructuredContent["next_steps"], "did not type-check")
 	assert.Zero(t, fake.PackageMetaCalls(inertPath), "nothing was deployed, so nothing to poll")
 }
 

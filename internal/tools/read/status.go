@@ -25,7 +25,7 @@ func RegisterStatus(s *server.Server, resolve chain.Resolver, httpClient *http.C
 		Description: "Reports connection status for a chain profile: declared chain-id and RPC URL from config, " +
 			"plus the node's live chain-id, latest block height, and block time. " +
 			"Use to verify which chain a profile points at, whether the node is reachable, and how fresh its tip is. " +
-			"Flags a mismatch when the node reports a different chain-id than the profile declares. " +
+			"Flags a mismatch (chain_id_mismatch true) when the node reports a different chain-id than the profile declares. " +
 			"If the node is unreachable, config info is still returned with a height_error instead of failing. " +
 			"Does NOT report peers, mempool, or validator health, and does NOT add profiles (use gno_connect + gno_profile_add). " +
 			"Backed by the RPC /status endpoint.",
@@ -68,6 +68,7 @@ func statusHandler(s *server.Server, resolve chain.Resolver, httpClient *http.Cl
 			text += fmt.Sprintf(" Live status query FAILED: %v.", err)
 		} else {
 			structured["node_chain_id"] = st.ChainID
+			structured["chain_id_mismatch"] = st.ChainID != p.ChainID
 			structured["height"] = st.Height
 			text += fmt.Sprintf(" Node is up: latest block %d", st.Height)
 			if !st.BlockTime.IsZero() {

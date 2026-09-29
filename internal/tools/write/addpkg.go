@@ -276,11 +276,15 @@ func addpkgHandler(
 		fmt.Fprintf(&b, "Height:  %d\n", res.Height)
 	}
 	fmt.Fprintf(&b, "GasUsed: %d\n", res.GasUsed)
+	// nextSteps also goes into the structured content: a client may hand the
+	// model that alone.
+	var nextSteps string
 	if simulate {
 		fmt.Fprintln(&b, "(simulate=true — transaction was not broadcast)")
 		if inert {
-			fmt.Fprintln(&b, "This chain parks deploys (code submission policy inert) without type-checking them, "+
-				"so this simulation did not type-check the code: lint it against the chain's release before deploying.")
+			nextSteps = "This chain parks deploys (code submission policy inert) without type-checking them, " +
+				"so this simulation did not type-check the code: lint it against the chain's release before deploying."
+			fmt.Fprintln(&b, nextSteps)
 		}
 	}
 	switch status {
@@ -289,17 +293,19 @@ func addpkgHandler(
 	case chain.PackageInert:
 		fmt.Fprintf(&b, "Package: parked. The chain accepted the deploy and had not enabled it after %s.\n", wait.timeout)
 		writeReason(&b, meta.Reason, deployPath)
-		fmt.Fprintln(&b, parked.NextSteps)
-		fmt.Fprintln(&b, "Until it is enabled, every read and call answers it like a package that was never deployed; "+
-			"gno_read on the path reports package_parked while it waits.")
+		nextSteps = parked.NextSteps + " Until it is enabled, every read and call answers it like a package that was never deployed; " +
+			"gno_read on the path reports package_parked while it waits."
+		fmt.Fprintln(&b, nextSteps)
 	case packageStatusRedeployParked:
-		fmt.Fprintf(&b, "Package: the chain accepted this redeploy and had not enabled it after %s. "+
-			"Reads and calls still reach the previous version.\n", wait.timeout)
+		fmt.Fprintf(&b, "Package: the chain accepted this redeploy and had not enabled it after %s.\n", wait.timeout)
 		writeReason(&b, meta.Reason, deployPath)
-		fmt.Fprintln(&b, "Unless the reason says this submission can never be enabled: "+parked.NextSteps)
+		nextSteps = "Reads and calls still reach the previous version. Unless the reason says this submission can never be enabled: " +
+			parked.NextSteps
+		fmt.Fprintln(&b, nextSteps)
 	case packageStatusUnknown:
-		fmt.Fprintln(&b, "Package: status unknown. The chain did not report the package as live or parked; this chain parks deploys "+
-			"until an approver enables them, so read the path with gno_read before calling it.")
+		nextSteps = "The chain did not report the package as live or parked; this chain parks deploys " +
+			"until an approver enables them, so read the path with gno_read before calling it."
+		fmt.Fprintln(&b, "Package: status unknown. "+nextSteps)
 	}
 
 	// Hand the agent the exact gnoweb URL of the deployed realm so it need not
@@ -338,6 +344,9 @@ func addpkgHandler(
 	}
 	if meta.Reason != "" && (status == chain.PackageInert || status == packageStatusRedeployParked) {
 		sc["package_reason"] = meta.Reason
+	}
+	if nextSteps != "" {
+		sc["next_steps"] = nextSteps
 	}
 	return attachGnokeyCmd(server.Result{Text: b.String(), StructuredContent: sc}, gkCmd), nil
 }
