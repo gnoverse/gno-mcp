@@ -7,6 +7,7 @@ package faucet
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -20,9 +21,15 @@ import (
 	"github.com/gnoverse/gno-mcp/gasprice"
 )
 
+// ErrNotGranted marks a Send error that leaves the recipient provably unpaid.
+var ErrNotGranted = errors.New("faucet: grant not sent")
+
 // Dispenser sends a ugnot grant to an address and returns the tx hash. This
 // interface is the seam: gnoclientDispenser uses bank.MsgSend today; a realm
 // dispenser (gnoclient.Call) can replace it later without touching the service.
+//
+// A Send error wraps ErrNotGranted only when the transfer cannot have landed;
+// any other error means it may have.
 type Dispenser interface {
 	Send(ctx context.Context, to string, amountUgnot int64) (txHash string, err error)
 }
@@ -68,7 +75,7 @@ func NewGnoclientDispenser(cli *gnoclient.Client, from crypto.Address, gasWanted
 func (d *gnoclientDispenser) Send(_ context.Context, to string, amountUgnot int64) (string, error) {
 	toAddr, err := crypto.AddressFromBech32(to)
 	if err != nil {
-		return "", fmt.Errorf("faucet: bad recipient %q: %w", to, err)
+		return "", fmt.Errorf("%w: bad recipient %q: %w", ErrNotGranted, to, err)
 	}
 
 	d.mu.Lock()
@@ -76,11 +83,11 @@ func (d *gnoclientDispenser) Send(_ context.Context, to string, amountUgnot int6
 
 	price, err := gasprice.Fetch(d.cli)
 	if err != nil {
-		return "", fmt.Errorf("faucet: gas price: %w", err)
+		return "", fmt.Errorf("%w: gas price: %w", ErrNotGranted, err)
 	}
 	fee, err := gasprice.Compute(price, d.gasWanted, d.floor, dispenseGasFeeMarginNum, dispenseGasFeeMarginDen)
 	if err != nil {
-		return "", fmt.Errorf("faucet: gas price: %w", err)
+		return "", fmt.Errorf("%w: gas price: %w", ErrNotGranted, err)
 	}
 
 	msg := bank.MsgSend{
@@ -88,9 +95,23 @@ func (d *gnoclientDispenser) Send(_ context.Context, to string, amountUgnot int6
 		ToAddress:   toAddr,
 		Amount:      std.Coins{{Denom: ugnot.Denom, Amount: amountUgnot}},
 	}
-	res, err := d.cli.Send(gnoclient.BaseTxCfg{GasFee: fmt.Sprintf("%dugnot", fee), GasWanted: d.gasWanted}, msg)
+	tx, err := gnoclient.NewSendTx(gnoclient.BaseTxCfg{GasFee: fmt.Sprintf("%dugnot", fee), GasWanted: d.gasWanted}, msg)
 	if err != nil {
-		return "", fmt.Errorf("faucet: send: %w", err)
+		return "", fmt.Errorf("%w: build tx: %w", ErrNotGranted, err)
+	}
+	signed, err := d.cli.SignTx(*tx, 0, 0)
+	if err != nil {
+		return "", fmt.Errorf("%w: sign: %w", ErrNotGranted, err)
+	}
+	res, err := d.cli.BroadcastTxCommit(signed)
+	switch {
+	case err != nil && res != nil:
+		// The node answered: it refused the tx at CheckTx, or the tx failed in
+		// its block and the transfer reverted.
+		return "", fmt.Errorf("%w: send: %w", ErrNotGranted, err)
+	case err != nil:
+		// No result: the tx may sit in the mempool or be committed already.
+		return "", fmt.Errorf("faucet: send (outcome unknown): %w", err)
 	}
 	return hex.EncodeToString(res.Hash), nil
 }

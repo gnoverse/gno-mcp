@@ -54,7 +54,7 @@ An optional funding-balance floor gates every grant first, then up to four limit
 
 Behaviors worth knowing when you set these:
 
-- **Limits are refunded on dispense failure.** They're applied *before* the on-chain send. If the send fails, the grant is refunded — a chain hiccup doesn't consume the requester's cooldown, their per-IP count, or the daily budget.
+- **Limits are refunded only when the grant provably failed.** They're applied *before* the on-chain send. They are refunded if the send fails before broadcast, CheckTx rejects the tx, or the tx fails in its block, so those failures don't consume the requester's cooldown, per-IP count, or daily budget. When the broadcast returns no result (a timeout, a dropped connection, a full mempool, an undecodable result), the grant stays counted: the transfer may have landed, and a refund would let a retry pay the address twice.
 - **State is in-memory.** Cooldowns, per-IP windows, and the daily counter live in the process. **Restarting the service clears all of them** — there's no persistence, so a restart resets every cooldown and the day's outflow tally.
 - **Per-IP limiting ignores `X-Forwarded-For` by default.** With `-trusted-proxies 0` (the default) the client IP is the raw connection peer (`r.RemoteAddr`), so a directly-exposed faucet can't be tricked by a forged `X-Forwarded-For`. Behind a reverse proxy, set `-trusted-proxies` to the number of hops you control (e.g. `1` for a single ALB): the client IP is then taken that many entries in from the right of `X-Forwarded-For` — the side proxies append to — so a client still can't forge a left-hand entry to dodge the per-IP limit. Set it too high and everyone collapses into the proxy's bucket; leave it `0` behind a proxy and all traffic shares the proxy IP.
 
@@ -79,7 +79,7 @@ curl -sX POST http://127.0.0.1:8590/fund \
 | `400` | malformed JSON, empty address, or invalid recipient address | plain text |
 | `403` | `chain_id` doesn't match this faucet's chain | plain text (`faucet: chain-id …`) |
 | `429` | a limit tripped (cooldown / per-IP / daily cap / drip) | the limit message above |
-| `502` | the on-chain dispense failed | generic `faucet: dispense failed` (details only in the service logs, to avoid leaking probe signal to anonymous callers) |
+| `502` | the on-chain dispense failed, or its outcome is unknown and the grant may have landed | generic `faucet: dispense failed` (details only in the service logs, to avoid leaking probe signal to anonymous callers) |
 | `503` | the funding wallet is below `-min-funding-balance` | `faucet: funding wallet below minimum balance` |
 
 The request body is capped at 4 KiB.

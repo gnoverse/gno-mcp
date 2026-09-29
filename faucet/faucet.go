@@ -114,8 +114,9 @@ func (f *Faucet) retryAfterSeconds() int {
 // must name it exactly. The recipient is parsed
 // before the limiter is touched so a garbage address cannot burn the daily cap,
 // and the limiter is keyed on the canonical address so case variants share one
-// bucket. A dispense failure refunds the limiter so a chain hiccup doesn't
-// consume the requester's cooldown or the global budget.
+// bucket. A dispense failure refunds the limiter only when the grant provably
+// did not land (ErrNotGranted); any other failure stays counted, since its
+// transfer may have landed.
 func (f *Faucet) Fund(ctx context.Context, address, ip, reqChainID string) (string, error) {
 	if reqChainID != f.chainID {
 		return "", ErrChainMismatch
@@ -145,7 +146,9 @@ func (f *Faucet) Fund(ctx context.Context, address, ip, reqChainID string) (stri
 	}
 	tx, err := f.dispenser.Send(ctx, canonical, f.grantUgnot)
 	if err != nil {
-		f.limiter.Refund(canonical, ip, grantedAt)
+		if errors.Is(err, ErrNotGranted) {
+			f.limiter.Refund(canonical, ip, grantedAt)
+		}
 		return "", fmt.Errorf("faucet: dispense: %w", err)
 	}
 	return tx, nil

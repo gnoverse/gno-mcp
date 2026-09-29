@@ -2,6 +2,7 @@ package write
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -70,6 +71,9 @@ func faucetFundHandler(ctx context.Context, args map[string]any, s *server.Serve
 
 	f := clientfaucet.Resolve(profile, c, httpClient)
 	out, err := f.Fund(ctx, addr, profile.ChainID)
+	if errors.Is(err, clientfaucet.ErrServiceFailed) {
+		return settleFaucetFailure(ctx, f, addr, err)
+	}
 	if err != nil {
 		return server.Result{}, err
 	}
@@ -82,6 +86,22 @@ func faucetFundHandler(ctx context.Context, args map[string]any, s *server.Serve
 		status = fmt.Sprintf("not funded yet (last balance check failed: %v)", pollErr)
 	}
 	return server.Result{Text: fmt.Sprintf("%s\nAgent address %s: %s.", out.Instructions, addr, status)}, nil
+}
+
+// settleFaucetFailure reads the balance after a faucet failure that does not
+// rule out the grant. A success result omits the faucet's body, which would
+// reach the model unneutralized.
+func settleFaucetFailure(ctx context.Context, f clientfaucet.Faucet, addr string, faucetErr error) (server.Result, error) {
+	funded, pollErr := pollFunded(ctx, f, addr, faucetPollTimeout, faucetPollInterval)
+	if funded {
+		return server.Result{Text: fmt.Sprintf("The faucet service did not confirm the grant, but the address holds a balance.\nAgent address %s: funded.", addr)}, nil
+	}
+	state := addr + " holds no balance yet"
+	if pollErr != nil {
+		state += fmt.Sprintf(" (last balance check failed: %v)", pollErr)
+	}
+	// faucetErr goes last: its untrusted label has no closing marker.
+	return server.Result{}, fmt.Errorf("%s, but the grant may still land. Read the balance with gno_account before calling gno_faucet_fund again. Details: %w", state, faucetErr)
 }
 
 // pollFunded polls Funded until true or timeout, returning the funded state and
