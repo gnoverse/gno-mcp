@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gnolang/gno/gno.land/pkg/integration"
-	"github.com/gnolang/gno/gnovm/pkg/gnoenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -27,7 +26,7 @@ import (
 // reports a tcp:// listen address; the dynamic-add path requires http(s)).
 func newDevNodeAddr(t *testing.T) string {
 	t.Helper()
-	cfg := integration.TestingMinimalNodeConfig(gnoenv.RootDir())
+	cfg := minimalNodeConfig()
 	cfg.Genesis.ChainID = "dev"
 
 	node, remoteAddr := integration.TestingInMemoryNode(t, slog.Default(), cfg)

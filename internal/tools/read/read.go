@@ -9,6 +9,7 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/gnosrc"
 	"github.com/gnoverse/gno-mcp/internal/server"
+	"github.com/gnoverse/gno-mcp/internal/tools/parked"
 	"golang.org/x/tools/txtar"
 )
 
@@ -89,18 +90,23 @@ func readHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 			gnowebURL = gnowebURLFor(p, path, "")
 		}
 
+		var res server.Result
 		switch {
 		case len(symbols) > 0:
-			return readSymbols(ctx, c, path, symbols, gnowebURL)
+			res, err = readSymbols(ctx, c, path, symbols, gnowebURL)
 		case full && file != "":
-			return readFullFile(ctx, c, path, file, gnowebURL)
+			res, err = readFullFile(ctx, c, path, file, gnowebURL)
 		case full:
-			return readFullPackage(ctx, c, path, gnowebURL)
+			res, err = readFullPackage(ctx, c, path, gnowebURL)
 		case file != "":
-			return readFileOutline(ctx, c, path, file, gnowebURL)
+			res, err = readFileOutline(ctx, c, path, file, gnowebURL)
 		default:
-			return readPackageOutline(ctx, c, path, gnowebURL)
+			res, err = readPackageOutline(ctx, c, path, gnowebURL)
 		}
+		if err != nil {
+			return server.Result{}, parked.Explain(ctx, c, path, err)
+		}
+		return res, nil
 	}
 }
 

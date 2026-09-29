@@ -55,6 +55,9 @@ type Config struct {
 // we can use an arbitrary ChainID for the running node.
 func Boot(logger *slog.Logger, c Config) (*node.Node, string, error) {
 	cfg := integration.TestingMinimalNodeConfig(gnoenv.RootDir())
+	// A lone node has no peers; with exchange on it writes an address book
+	// under GNOROOT, which is read-only when gno comes from the module cache.
+	cfg.TMConfig.P2P.PeerExchange = false
 	cfg.TMConfig.RPC.ListenAddress = c.RPCListen
 	cfg.Genesis.ChainID = c.ChainID
 	cfg.SkipGenesisSigVerification = true

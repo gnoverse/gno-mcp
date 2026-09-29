@@ -8,6 +8,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/gnolang/gno/gno.land/pkg/gnoclient"
+	"github.com/gnolang/gno/tm2/pkg/crypto"
+	"github.com/gnolang/gno/tm2/pkg/sdk/bank"
+	"github.com/gnolang/gno/tm2/pkg/std"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	secret "github.com/gnoverse/gno-mcp/internal/secret"
 	"github.com/stretchr/testify/require"
@@ -30,6 +34,36 @@ func TestGenerateForProfile_sunsetAllowed(t *testing.T) {
 	addr, err := k.GenerateForProfile("oldnet", DefaultKeyName, p)
 	require.NoError(t, err, "sunset testnet must keep the agent key path")
 	require.NotEmpty(t, addr)
+}
+
+func TestSignerForProfile_signsForTheProfileChain(t *testing.T) {
+	ks := New(t.TempDir(), "", testCap)
+	_, err := ks.GenerateForProfile("tnet", "", testnet9999Profile())
+	require.NoError(t, err)
+
+	for profileName, p := range map[string]profiles.Profile{"tnet": testnet9999Profile(), "dev": devProfile()} {
+		t.Run(profileName, func(t *testing.T) {
+			signer, err := ks.SignerForProfile(profileName, "", p)
+			require.NoError(t, err)
+			info, err := signer.Info()
+			require.NoError(t, err)
+			tx := std.Tx{
+				Msgs: []std.Msg{bank.MsgSend{
+					FromAddress: info.GetAddress(),
+					ToAddress:   crypto.AddressFromPreimage([]byte("recipient")),
+					Amount:      std.NewCoins(std.NewCoin("ugnot", 1)),
+				}},
+				Fee: std.NewFee(100_000, std.NewCoin("ugnot", 1_000)),
+			}
+			signed, err := signer.Sign(gnoclient.SignCfg{UnsignedTX: tx})
+			require.NoError(t, err)
+			require.Len(t, signed.Signatures, 1)
+			sig := signed.Signatures[0]
+			signBytes, err := tx.GetSignBytes(p.ChainID, 0, 0)
+			require.NoError(t, err)
+			require.True(t, sig.PubKey.VerifyBytes(signBytes, sig.Signature), "must verify over the profile chain's sign bytes")
+		})
+	}
 }
 
 func TestAgentAddress_dev_isTest1(t *testing.T) {

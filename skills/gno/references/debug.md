@@ -9,7 +9,8 @@
 1. Collect the failing call verbatim: realm path, function, exact args, profile. Both
    reproduction paths need them — ask if the user didn't provide them.
 2. Reproduce cheaply BEFORE any broadcast: `gno_eval` for read paths, `gno_call`/`gno_run`
-   with `simulate=true` for writes. **Exception — funding-class failures:** even `simulate`
+   with `simulate=true` for writes (a chain that allowlists `MsgRun` refuses `gno_run` with
+   `run_not_allowed`, below). **Exception — funding-class failures:** even `simulate`
    signs, and signing fails on an account the chain has never seen, so for the funding rows
    below the fix comes FIRST and the cheap reproduction second.
 3. Classify against the signature table below.
@@ -37,7 +38,9 @@ Structured codes (left column, exact) come from gnomcp; quoted strings come from
 | `panic: …` in the result | realm-side logic panic | reproduce via `simulate=true` (crossing/write functions cannot be `gno_eval`'d) → `gno_read` with `symbols=[the failing function]` (verbatim body + a `// deps:` list naming what to fetch next) → fix or report upstream |
 | `"out of gas"` (chain) | gas wanted below actual cost | `simulate=true` first and read `gas_used` from the structured result |
 | `chain_unreachable` / timeouts / stale answers | node down, or profile points at the wrong chain | `gno_status` — live height plus the **chain-id mismatch flag** |
-| package/path not found wording from the VM | wrong or undeployed package path | `gno_packages` (prefix or `@namespace`) |
+| package/path not found wording from the VM, or `unexpected node with location` from a call | wrong or undeployed package path; outside gnomcp, also a package parked on an inert chain | `gno_packages` (prefix or `@namespace`); `vm/qpkgmeta_json` tells a parked path from an absent one (`networks.md`) |
+| `package_parked` | the package was deployed to a chain running the `inert` policy and no approver has enabled it; gnomcp's reads and calls return this code where the chain answers as for a missing package | follow the recovery the error carries: if it is still parked a minute after the deploy, lint it against the chain's release, check the deploying key can pay the storage deposit, then redeploy to the same path with the same key |
+| `run_not_allowed` | the chain's `run_submitters` list does not name the signer; gnomcp refused before signing | deploy the logic as a realm and `gno_call` it, or run the script on a chain with no `MsgRun` allowlist |
 | `simulate_unsupported` | the connected chain client cannot dry-run this op | drop `simulate` and decide explicitly whether to broadcast |
 
 ## Postmortem (indexer profiles only)

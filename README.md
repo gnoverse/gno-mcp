@@ -42,7 +42,7 @@ gnomcp ships pointed at mainnet, the public testnet and a local gnodev node — 
 
 | Profile | Chain-id | RPC |
 |---------|----------|-----|
-| `testnet` | `pearl-1` | `https://rpc.pearl.testnets.gno.land:443` |
+| `testnet` | `onyx-1` | `https://rpc.onyx.testnets.gno.land:443` |
 | `local` | `dev` | `http://127.0.0.1:26657` (local [gnodev](https://docs.gno.land/builders/local-dev-with-gnodev) node) |
 | `mainnet` | `gnoland-1` | `https://rpc.gno.land:443` (read-only — reads and audits, never writes) |
 

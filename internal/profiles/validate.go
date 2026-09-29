@@ -17,10 +17,10 @@ var (
 	spendLimitRE = regexp.MustCompile(`^[0-9]+[a-z]+$`)
 
 	// testnetChainNames lists the chain-id names recognized as testnets.
-	// Codenamed testnets (pearl-1) cannot be told apart from other chains
+	// Codenamed testnets (onyx-1) cannot be told apart from other chains
 	// syntactically, so this is a release-time list: append the codename when a
 	// new testnet rolls. A name admits both the bare and hyphenated forms
-	// (test5, test-13, pearl-1). Anything else (mainnet "gnoland-1", "staging",
+	// (test5, test-13, onyx-1). Anything else (mainnet "gnoland-1", "staging",
 	// ...) is admitted read-only, not writable — it has no agent key path and
 	// is excluded from every write tool's profile enum.
 	//
@@ -29,7 +29,7 @@ var (
 	// a codename is dropped in the same change that deletes its builtin. The
 	// bare "test" prefix never leaves: it covers the numbered testnets and the
 	// e2e simnet's "test-9999".
-	testnetChainNames = []string{"test", "pearl"}
+	testnetChainNames = []string{"test", "onyx"}
 
 	// chainIDFormatRE is the format-safety gate applied to every chain-id,
 	// writable or read-only: the chain-id is interpolated into the `gnomcp
@@ -72,7 +72,7 @@ func ValidRPCURL(s string) bool {
 
 // IsTestnetChainID reports whether id names a known testnet chain: it starts
 // with one of the recognized testnet names, bare or hyphenated (test5,
-// test-13, pearl-1).
+// test-13, onyx-1).
 func IsTestnetChainID(id string) bool {
 	return slices.ContainsFunc(testnetChainNames, func(name string) bool {
 		return strings.HasPrefix(id, name)

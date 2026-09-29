@@ -198,6 +198,9 @@ Writes are signed by one of two identities, chosen per call via the `identity` a
 - **Agent identity (default).** Testnet profiles sign with a per-profile key: run
   `gno_key_generate` once, then fund it (`gno_faucet_fund` or send it ugnot). Local
   (gnodev) profiles sign with the built-in `test1` key — no setup.
+  Every signature covers the payload gno v1.5.0 introduced: a chain on an older release,
+  including a gnodev built from an older toolchain, rejects every write with
+  `signature verification failed`.
   A profile can hold several named keys (the optional `key` arg on the write tools,
   default `default`; cap `GNOMCP_AGENT_MAX_KEYS`, default 5). List them with
   `gno_key_list`, remove one with `gno_key_delete` (to replace a key: delete, then

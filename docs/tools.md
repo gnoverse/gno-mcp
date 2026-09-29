@@ -13,6 +13,7 @@ These tools require no config — the built-in `local`, `testnet` and `mainnet` 
 - **Args:** `realm` (required), `path?` (subpath), `profile?`
 - **Returns:** rendered markdown from the realm's `Render()` function, wrapped in an `<untrusted_content>` envelope (realm markdown is the highest-injection-risk content in the system).
 - Output is truncated at ~4 KB. When truncated, a hint points at the canonical gnoweb URL or suggests fetching a narrower subpath.
+- On a chain running the inert code-submission policy, a package that was deployed but not yet enabled answers every read like a path never deployed; the tool then fails with `package_parked`, carrying the chain's reason and the recovery, instead of the chain's bare not-found.
 
 ### `gno_read`
 
@@ -23,11 +24,13 @@ These tools require no config — the built-in `local`, `testnet` and `mainnet` 
   - **`full=true`:** raw source — one whole file (with `file`) or the whole package as txtar.
 - Budget: whole-package raw (`full` without `file`) truncates at ~4 KB; everything else — the outline (bounded by construction: bodies elided), `symbols`, `full` + `file` — gets ~64 KB, a higher ceiling sized for real reads, not a bypass.
 - The outline and dep headers are **navigation, not evidence**: names and docs are realm-authored claims. Audit-grade review reads whole files.
+- On a chain running the inert code-submission policy, a package that was deployed but not yet enabled answers every read like a path never deployed; the tool then fails with `package_parked`, carrying the chain's reason and the recovery, instead of the chain's bare not-found.
 
 ### `gno_eval`
 
 - **Args:** `path` (required), `expr` (required), `profile?`
 - **Returns:** the typed result of evaluating a Gno expression within a package, wrapped in an `<untrusted_content>` envelope.
+- On a chain running the inert code-submission policy, a package that was deployed but not yet enabled answers every read like a path never deployed; the tool then fails with `package_parked`, carrying the chain's reason and the recovery, instead of the chain's bare not-found.
 
 ### `gno_packages`
 
@@ -42,12 +45,12 @@ These tools require no config — the built-in `local`, `testnet` and `mainnet` 
 ### `gno_status`
 
 - **Args:** `profile?`
-- **Returns:** the profile's declared chain-id and RPC URL plus the node's live chain-id, latest block height, and block time (RPC `/status`). Flags a mismatch when the node reports a different chain-id than the profile declares. If the node is unreachable, config info is still returned with a `height_error` instead of a tool failure.
+- **Returns:** the profile's declared chain-id and RPC URL plus the node's live chain-id, latest block height, and block time (RPC `/status`). Flags a mismatch (`chain_id_mismatch: true`) when the node reports a different chain-id than the profile declares. If the node is unreachable, config info is still returned with a `height_error` instead of a tool failure.
 
 ### `gno_profile_list`
 
 - **Args:** none
-- **Returns:** the catalog of loaded profiles — per profile: name, chain-id, kind (`local` | `testnet` | `read-only`), a `sunset` flag (retiring testnet — still fully writable; prefer the current testnet for new work), and the configured endpoints (RPC, gnoweb, tx-indexer, faucet). Plain config, never dialed — use `gno_status` for liveness. This is how an agent maps a chain the user names ("on pearl", "on mainnet") to the profile to pass to other tools.
+- **Returns:** the catalog of loaded profiles — per profile: name, chain-id, kind (`local` | `testnet` | `read-only`), a `sunset` flag (retiring testnet — still fully writable; prefer the current testnet for new work), and the configured endpoints (RPC, gnoweb, tx-indexer, faucet). Plain config, never dialed — use `gno_status` for liveness. This is how an agent maps a chain the user names ("on onyx", "on mainnet") to the profile to pass to other tools.
 
 ## Read-only (discovery)
 
@@ -63,7 +66,7 @@ These tools require no config — the built-in `local`, `testnet` and `mainnet` 
 
 - **Args:** `name` (required), then exactly one form: `rpc_url` + `chain_id` (explicit), or `gnoweb_url` (discovery). Optional: `tx_indexer_url`, `faucet_service_url`, `faucet_url`.
 - **Returns:** confirmation plus the `gnomcp profile add` command to persist the profile.
-- Adds a profile **in-memory only** — it disappears on restart and never touches `profiles.toml`. Init-time profiles cannot be overridden; re-adding a dynamically added name replaces it. Any format-safe chain-id is accepted; `dev` and known-testnet chain-ids (`test*`, `pearl-*`) are added read/write, everything else read-only. The node is dialed to confirm it reports the declared chain-id (gnoweb meta-tags are a hint, not truth; a non-loopback gnoweb advertising a loopback RPC is rejected). No `master-address` field: dynamic profiles support reads and agent-key writes only — sessions require a persisted profile. After a successful add the tool set is re-published (`tools/list_changed`), which can summon gated tools (faucet, indexer) mid-session.
+- Adds a profile **in-memory only** — it disappears on restart and never touches `profiles.toml`. Init-time profiles cannot be overridden; re-adding a dynamically added name replaces it. Any format-safe chain-id is accepted; `dev` and known-testnet chain-ids (`test*`, `onyx-*`) are added read/write, everything else read-only. The node is dialed to confirm it reports the declared chain-id (gnoweb meta-tags are a hint, not truth; a non-loopback gnoweb advertising a loopback RPC is rejected). No `master-address` field: dynamic profiles support reads and agent-key writes only — sessions require a persisted profile. After a successful add the tool set is re-published (`tools/list_changed`), which can summon gated tools (faucet, indexer) mid-session.
 
 ## Read-only (indexer)
 
@@ -98,7 +101,7 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Args:** `profile` (required), `allow_paths?[]`, `allow_run?`, `spend_limit?`, `expires_in?`, `master_address?`
 - **Returns:** a paste-ready `gnokey maketx session create` command the user runs to authorize a chain-bound session.
 - Generates an ephemeral ed25519 keypair locally. The user's `gnokey` signs the session; gnomcp never sees the user's key. At least one of `allow_paths` (non-empty) or `allow_run=true` must be requested.
-- The chain counts each write's **full offered gas fee** against the session spend limit, so the proposal is fee-aware: gnomcp queries the live gas price first; a `spend_limit` (or profile default) below one write's fee is rejected with the minimum to use; when omitted, the limit defaults to ~10 writes at the live fee (clamped to the per-chain cap); the emitted command carries the live `--gas-fee`; and the result spells out the per-write cost math in the text AND as structured fields (`per_write_fee_ugnot`, `writes_budget`) so structured-output clients see it too. The math is priced at the floor gas limit — a light-write upper bound: writes heavy enough to right-size above the floor cost proportionally more, and every write is re-checked against the remaining limit before broadcast.
+- The chain counts each write's **full offered gas fee** against the session spend limit, so the proposal is fee-aware: gnomcp queries the live gas price first; a `spend_limit` (or profile default) below one write's fee is rejected with the minimum to use; when omitted, the limit defaults to ~10 writes at the live fee (clamped to the per-chain cap); the emitted command carries the live `--gas-fee`; and the result spells out the per-write cost math in the text AND as structured fields (`per_write_fee_ugnot`, `writes_budget`, `writes_budget_note`) so structured-output clients see it too. The math is priced at the floor gas limit — a light-write upper bound: writes heavy enough to right-size above the floor cost proportionally more, a write that stores new state also draws the storage deposit it locks from the limit, and every write is re-checked against the remaining limit before broadcast.
 - On a writable profile with no configured `master-address`, pass `master_address` — the user's PUBLIC g1… address — so the session can act as them, with no `profiles.toml` edit. It is public data, never a private key or seed phrase; seed-phrase-shaped input is rejected without being echoed.
 
 ### `gno_session_revoke`
@@ -117,12 +120,14 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
 - Default identity: **agent** (test1 on local, generated key on testnet). Pass `identity=session` to act as the user instead.
 - `send` attaches coins to the call (e.g. `"1000000ugnot"`) for payable functions that read `std.OriginSend()`; under a session, the chain enforces the session spend limit against it.
+- A call into a parked package (deployed on an inert chain, not yet enabled) fails with `package_parked` rather than the chain's opaque internal error.
 
 ### `gno_run`
 
 - **Args:** `profile` (required), `code` (required), `simulate?`, `identity?`, `key?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
 - Default identity: **agent**; pass `identity=session` to act as the user.
+- A chain may accept `MsgRun` only from the addresses in its `run_submitters` param (onyx does). gnomcp reads the param first and refuses a caller not on the list — the agent key, or a session's master — with `run_not_allowed`, before anything is signed.
 
 ### `gno_addpkg`
 
@@ -130,6 +135,14 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Returns:** deploy (or `simulate`) result, prefixed with the signing identity.
 - Deploys a package/realm via `vm/MsgAddPackage`, signed by the agent key (local: test1, testnet: generated key). A `gnomod.toml` is generated automatically if omitted.
 - `deploy_path` accepts a full package path, or a **short name** (no `/`) that expands to the agent's own-address namespace `gno.land/r/<agent-address>/<name>` — always authorized, no registration, gnoweb-safe (no hyphens). A short name cannot be combined with a caller-supplied `gnomod.toml` (its module line cannot be rewritten); pass the full path in that case.
+- Every broadcast deploy reports `package_status`, and the deployed code is callable only when it is `live`. A simulation reports none.
+- The tool reads the chain's code-submission policy before signing. On a chain running `inert` (onyx), the deploy parks until the chain's package approver enables it, so after the broadcast the tool polls `vm/qpkgmeta_json` for up to 30s and reports one of:
+  - `live` — enabled; the result reads as an ordinary success, with the gnoweb link when the profile has a gnoweb host.
+  - `inert` — still parked: the headline says PARKED, the chain's reason arrives in an `<untrusted_content kind="package_reason">` envelope (raw in `package_reason`), and the text carries the recovery. No gnoweb link.
+  - `redeploy_parked` — a redeploy parked over a live private realm: reads and calls still reach the previous version, and the result says so.
+  - `unknown` — the chain reported the package as neither live nor parked, or never answered; never reported as live.
+  The result also carries `code_submission_policy`, which describes the chain, not the package. For `inert`, `redeploy_parked` and `unknown`, `next_steps` repeats the recovery the text carries, for clients that hand the model the structured content alone. Any other chain parks nothing: no status is polled, and a deploy that lands reports `live`.
+- A simulation on an inert chain does not type-check the code (the chain parks without checking it); the result says so, in the text and in `next_steps`.
 
 ### `gno_cla_info`
 

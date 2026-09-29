@@ -20,11 +20,21 @@ import (
 
 const nodeChainID = "tendermint_test"
 
+// minimalNodeConfig is the upstream minimal in-memory node config with peer
+// exchange off: a lone node has no peers, and with exchange on it writes an
+// address book under GNOROOT, which is read-only when gno comes from the module
+// cache.
+func minimalNodeConfig() *gnoland.InMemoryNodeConfig {
+	cfg := integration.TestingMinimalNodeConfig(gnoenv.RootDir())
+	cfg.TMConfig.P2P.PeerExchange = false
+	return cfg
+}
+
 // newNodeBackedRealAddr boots an in-process node, seeds testdata/ realms, and
 // returns the chain.Real client together with the node's RPC address.
 func newNodeBackedRealAddr(t *testing.T) (*chain.Real, string) {
 	t.Helper()
-	cfg := integration.TestingMinimalNodeConfig(gnoenv.RootDir())
+	cfg := minimalNodeConfig()
 
 	loader := integration.NewPkgsLoader()
 	require.NoError(t, loader.LoadAllPackagesFromDir("testdata"))

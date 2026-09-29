@@ -1,11 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/gnoverse/gno-mcp/internal/profiles"
+	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
 // The instructions must steer the model to enumerate the chain before guessing
@@ -15,6 +19,15 @@ func TestServerInstructions_steerDiscoveryBeforeGuessing(t *testing.T) {
 	assert.Contains(t, serverInstructions, "DISCOVER")
 	assert.Contains(t, serverInstructions, "gno_packages")
 	assert.Contains(t, serverInstructions, "guess")
+}
+
+// On a chain that parks deploys, "the deploy tx landed" and "the realm is
+// callable" part ways; the agent must wait for live before calling it, and
+// know that a parked path reads like an absent one.
+func TestServerInstructions_deployIsLiveOnlyWhenReported(t *testing.T) {
+	assert.Contains(t, serverInstructions, "package_status")
+	assert.Contains(t, serverInstructions, "package_parked")
+	assert.Contains(t, serverInstructions, "run_not_allowed")
 }
 
 // Tool errors carry repair instructions; when the user's request already
@@ -79,7 +92,7 @@ func TestBuildServerInstructions_flagsReadOnlyProfile(t *testing.T) {
 func TestBuildServerInstructions_flagsSunsetProfile(t *testing.T) {
 	got := buildServerInstructions(map[string]profiles.Profile{
 		"test13":  {RPCURL: "https://rpc.old.example", ChainID: "test-13", Sunset: true},
-		"testnet": {RPCURL: "https://rpc.new.example", ChainID: "pearl-1"},
+		"testnet": {RPCURL: "https://rpc.new.example", ChainID: "onyx-1"},
 	})
 	assert.Contains(t, got, "sunset")
 	assert.Contains(t, got, "still fully writable")
@@ -108,6 +121,39 @@ func TestServerInstructions_sessionsDoNotCoverDeploy(t *testing.T) {
 func TestServerInstructions_sessionAsksForPublicMaster(t *testing.T) {
 	assert.Contains(t, serverInstructions, "master_address")
 	assert.Contains(t, serverInstructions, "PUBLIC")
+}
+
+// Claude Code sends the model the first 2,048 characters of a server's
+// instructions and drops the rest, so the whole text, profile listing
+// included, must fit.
+func TestBuildServerInstructions_fitsTheClaudeCodeLimit(t *testing.T) {
+	got := buildServerInstructions(profiles.BuiltinProfiles())
+	assert.LessOrEqual(t, utf8.RuneCountInString(got), maxMCPTextLen, "builtin profiles")
+
+	many := profiles.BuiltinProfiles()
+	for i := range 40 {
+		name := fmt.Sprintf("chain%02d", i)
+		many[name] = profiles.Profile{RPCURL: "https://rpc." + name + ".example.org:443", ChainID: "test-" + name, GnowebURL: "https://" + name + ".example.org"}
+	}
+	got = buildServerInstructions(many)
+	assert.LessOrEqual(t, utf8.RuneCountInString(got), maxMCPTextLen, "many profiles")
+	assert.Contains(t, got, "gno_profile_list", "a cut listing points at the full one")
+	assert.Contains(t, got, "chain00", "profiles are listed until the budget runs out")
+}
+
+// The same cut applies to every tool description.
+func TestToolDescriptions_fitTheClaudeCodeLimit(t *testing.T) {
+	cfg := &profiles.Config{Profiles: profiles.BuiltinProfiles()}
+	_, err := cfg.Validate()
+	require.NoError(t, err)
+	s := server.NewServer(cfg, "")
+	registerAllTools(newDynDeps(t, s, buildChainResolver(s)))
+
+	tools := s.Registry().All()
+	require.NotEmpty(t, tools)
+	for _, tl := range tools {
+		assert.LessOrEqual(t, utf8.RuneCountInString(tl.Description), maxMCPTextLen, tl.Name)
+	}
 }
 
 // Deterministic ordering keeps the prompt-cache stable across restarts.

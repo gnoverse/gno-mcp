@@ -1,6 +1,6 @@
 package cla
 
-import "gno.land/p/moul/addrset"
+import "gno.land/p/moul/addrset/v0"
 
 // genesisAdmin is the only caller permitted to flip CLA enforcement through
 // SetRequiredHash. It is the simnet's genesis deployer (test1), so the gate is

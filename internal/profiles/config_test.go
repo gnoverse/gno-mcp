@@ -73,11 +73,13 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	}
 	tn, ok := cfg.Profiles["testnet"]
 	require.True(t, ok, "testnet default missing")
-	assert.Equal(t, "pearl-1", tn.ChainID, "testnet default chain-id")
-	assert.Equal(t, "https://rpc.pearl.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
-	assert.Equal(t, "https://pearl.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
-	assert.Equal(t, "https://indexer.pearl.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
-	assert.Equal(t, "https://faucet-agent.pearl.testnets.gno.land", tn.FaucetServiceURL, "testnet default agent-faucet service url")
+	assert.Equal(t, "onyx-1", tn.ChainID, "testnet default chain-id")
+	assert.Equal(t, "https://rpc.onyx.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
+	assert.Equal(t, "https://onyx.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
+	assert.Equal(t, "https://indexer.onyx.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
+	assert.Equal(t, "https://faucet-agent.onyx.testnets.gno.land", tn.FaucetServiceURL, "testnet default agent-faucet service url")
+	assert.True(t, tn.IsTestnet(), "the default testnet must be writable")
+	assert.False(t, tn.Sunset, "the default testnet is not retiring")
 	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
 
@@ -97,9 +99,9 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	assert.Empty(t, main.MasterAddress, "built-in mainnet must carry no master-address")
 
 	// A chain leaves the builtins when reaching it stops being useful: the
-	// hosts for betanet, sapphire, topaz and test13 no longer resolve, so a
-	// zero-config profile would offer a chain every call fails against.
-	for _, name := range []string{"betanet", "sapphire", "topaz", "test13"} {
+	// hosts for betanet, sapphire, topaz, pearl and test13 no longer resolve,
+	// so a zero-config profile would offer a chain every call fails against.
+	for _, name := range []string{"betanet", "sapphire", "topaz", "pearl", "test13"} {
 		_, ok = cfg.Profiles[name]
 		assert.False(t, ok, "%q must not ship as a builtin", name)
 	}

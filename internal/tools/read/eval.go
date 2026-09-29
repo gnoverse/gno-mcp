@@ -7,6 +7,7 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/budget"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/server"
+	"github.com/gnoverse/gno-mcp/internal/tools/parked"
 )
 
 // RegisterEval wires the gno_eval tool into s. The resolver maps a
@@ -58,7 +59,7 @@ func evalHandler(resolve chain.Resolver) server.Handler {
 		}
 		out, err := c.Eval(ctx, path, expr)
 		if err != nil {
-			return server.Result{}, fmt.Errorf("gno_eval: %w", err)
+			return server.Result{}, parked.Explain(ctx, c, path, fmt.Errorf("gno_eval: %w", err))
 		}
 		text, _ := budget.Wrapped(out, "", "eval", path)
 		return server.Result{Text: text}, nil

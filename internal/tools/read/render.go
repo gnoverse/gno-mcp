@@ -7,6 +7,7 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/budget"
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/server"
+	"github.com/gnoverse/gno-mcp/internal/tools/parked"
 )
 
 // RegisterRender wires the gno_render tool into s. The resolver maps a
@@ -53,7 +54,7 @@ func renderHandler(s *server.Server, resolve chain.Resolver) server.Handler {
 		}
 		body, err := c.Render(ctx, realm, path)
 		if err != nil {
-			return server.Result{}, fmt.Errorf("gno_render: %w", err)
+			return server.Result{}, parked.Explain(ctx, c, realm, fmt.Errorf("gno_render: %w", err))
 		}
 		gnowebURL := ""
 		if p, ok := s.Config().Profiles[profile]; ok {

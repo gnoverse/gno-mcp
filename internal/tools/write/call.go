@@ -13,6 +13,7 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/keystore"
 	"github.com/gnoverse/gno-mcp/internal/server"
 	"github.com/gnoverse/gno-mcp/internal/session"
+	"github.com/gnoverse/gno-mcp/internal/tools/parked"
 	"github.com/gnoverse/gno-mcp/internal/untrusted"
 )
 
@@ -206,7 +207,7 @@ func callHandler(
 		sessionAddr: &sessionAddr,
 	})
 	if err != nil {
-		return server.Result{}, err
+		return server.Result{}, parked.Explain(ctx, c, realm, err)
 	}
 
 	gkCmd := chain.GnokeyCmd{

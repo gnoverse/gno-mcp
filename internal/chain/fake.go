@@ -44,6 +44,14 @@ type Fake struct {
 	sendErr         error                     // when set, Send returns it
 	gasFee          int64                     // GasFeeUgnot result; default DefaultGasFeeUgnot (genesis floor)
 	gasFeeErr       error                     // when set, GasFeeUgnot returns it
+	policy          string                    // SubmissionPolicy result; default "" (unset)
+	policyErr       error
+	runSubmitters   []string
+	runSubmitErr    error
+	pkgMetas        map[string][]PackageMeta // key: path; answered in order, the last one sticks
+	pkgMetaErrs     map[string]error
+	pkgMetaCalls    map[string]int
+	pkgMetaFailAt   map[string]int // key: path; calls from this index on return pkgMetaErrs[path]
 }
 
 // SendRecord captures one bank/MsgSend made through the Fake (test introspection).
@@ -77,7 +85,59 @@ func NewFake() *Fake {
 		addPkgBcasts:    map[string]int{},
 		lastAddPkgFiles: map[string][]*std.MemFile{},
 		gasFee:          DefaultGasFeeUgnot,
+		pkgMetas:        map[string][]PackageMeta{},
+		pkgMetaErrs:     map[string]error{},
+		pkgMetaCalls:    map[string]int{},
+		pkgMetaFailAt:   map[string]int{},
 	}
+}
+
+func (f *Fake) SetSubmissionPolicy(policy string) { f.policy = policy }
+func (f *Fake) SetSubmissionPolicyErr(err error)  { f.policyErr = err }
+func (f *Fake) SetRunSubmitters(addrs []string)   { f.runSubmitters = addrs }
+func (f *Fake) SetRunSubmittersErr(err error)     { f.runSubmitErr = err }
+func (f *Fake) SetPackageMetaErr(path string, err error) {
+	f.pkgMetaErrs[path] = err
+	delete(f.pkgMetaFailAt, path)
+}
+
+// SetPackageMetaSequence scripts what PackageMeta answers for path on
+// successive calls; the last entry repeats once the sequence runs out.
+func (f *Fake) SetPackageMetaSequence(path string, metas ...PackageMeta) { f.pkgMetas[path] = metas }
+
+// FailPackageMetaFrom makes PackageMeta for path answer as seeded until the
+// call with index call (0-based), and fail with err from then on.
+func (f *Fake) FailPackageMetaFrom(path string, call int, err error) {
+	f.pkgMetaErrs[path] = err
+	f.pkgMetaFailAt[path] = call
+}
+
+// PackageMetaCalls reports how many times PackageMeta was asked about path.
+func (f *Fake) PackageMetaCalls(path string) int { return f.pkgMetaCalls[path] }
+
+func (f *Fake) SubmissionPolicy(_ context.Context) (string, error) {
+	return f.policy, f.policyErr
+}
+
+func (f *Fake) RunSubmitters(_ context.Context) ([]string, error) {
+	if f.runSubmitErr != nil {
+		return nil, f.runSubmitErr
+	}
+	return f.runSubmitters, nil
+}
+
+// PackageMeta answers PackageAbsent for a path nothing was seeded for.
+func (f *Fake) PackageMeta(_ context.Context, path string) (PackageMeta, error) {
+	n := f.pkgMetaCalls[path]
+	f.pkgMetaCalls[path] = n + 1
+	if err := f.pkgMetaErrs[path]; err != nil && n >= f.pkgMetaFailAt[path] {
+		return PackageMeta{}, err
+	}
+	metas := f.pkgMetas[path]
+	if len(metas) == 0 {
+		return PackageMeta{Status: PackageAbsent}, nil
+	}
+	return metas[min(n, len(metas)-1)], nil
 }
 
 func (f *Fake) SetRender(realm, path, body string)      { f.renders[realm+"|"+path] = body }

@@ -2,6 +2,7 @@ package chain
 
 import (
 	"context"
+	"crypto/ed25519"
 	"strings"
 	"testing"
 
@@ -13,6 +14,48 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// ---- Session signing payload
+
+type ed25519SessionSigner struct{ priv ed25519.PrivateKey }
+
+func (s ed25519SessionSigner) Address() string { return "" }
+func (s ed25519SessionSigner) Pubkey() []byte  { return s.priv.Public().(ed25519.PublicKey) }
+func (s ed25519SessionSigner) Sign(payload []byte) ([]byte, error) {
+	return ed25519.Sign(s.priv, payload), nil
+}
+
+// The chain verifies a session signature against the session account's own
+// number and sequence, not the master's.
+func TestSignTxForSession_signsForTheSessionAccount(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	r := &Real{chainID: "test-chain"}
+	acc := &gnoland.GnoSessionAccount{}
+	acc.AccountNumber, acc.Sequence = 5, 7
+	tx := preflightTx(crypto.AddressFromPreimage([]byte("master")), 1_000, 0)
+
+	signed, err := r.signTxForSession(tx, ed25519SessionSigner{priv}, acc, crypto.AddressFromPreimage([]byte("session")))
+	require.NoError(t, err)
+	require.Len(t, signed.Signatures, 1)
+	sig := signed.Signatures[0].Signature
+	pub := priv.Public().(ed25519.PublicKey)
+
+	signBytes, err := tx.GetSignBytes("test-chain", 5, 7)
+	require.NoError(t, err)
+	assert.True(t, ed25519.Verify(pub, signBytes, sig), "must verify over the session account's sign bytes")
+}
+
+// An empty remaining reads as "no limit", so an exhausted limit must report
+// zero rather than nothing.
+func TestSpendRemaining_exhaustedLimitIsZeroNotUnlimited(t *testing.T) {
+	limit := std.Coins{std.Coin{Denom: "ugnot", Amount: 1_000_000}}
+
+	assert.Equal(t, "400000ugnot", spendRemaining(limit, std.Coins{std.Coin{Denom: "ugnot", Amount: 600_000}}))
+	assert.Equal(t, "0ugnot", spendRemaining(limit, limit))
+	assert.Equal(t, "0ugnot", spendRemaining(limit, std.Coins{std.Coin{Denom: "ugnot", Amount: 1_200_000}}))
+	assert.Empty(t, spendRemaining(nil, nil), "a session with no limit stays unlimited")
+}
 
 // ---- Session spend pre-flight (mirrors the chain ante's Phase 2a)
 

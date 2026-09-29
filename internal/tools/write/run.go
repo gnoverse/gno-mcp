@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,6 +29,8 @@ func RegisterRun(s *server.Server, ks *keystore.Keystore, sessionMgr *session.Ma
 			"On local and testnet profiles the agent key signs by default (local: the built-in test1 account; " +
 			"testnet: a key from gno_key_generate, funded via gno_faucet_fund). " +
 			"Pass identity=session to act as the user instead — that requires an active gnomcp session with allow_run=true (use gno_session_propose with allow_run=true). " +
+			"A chain may accept MsgRun only from the addresses in its run_submitters param; a caller not on the list " +
+			"(the agent key, or a session's master) is refused with run_not_allowed before anything is signed. " +
 			"Pass simulate=true to dry-run without spending gas. Required args: " +
 			"profile, code. Optional: simulate (bool), identity (\"agent\" or \"session\"). " +
 			"The result reports which identity signed (tell the user which account performed the write) and an " +
@@ -167,6 +170,9 @@ func runHandler(
 			rr, opErr = c.RunAsUser(ctx, signer, master, code, simulate)
 			return rr.GasFeeUgnot, opErr
 		},
+		precheck: func(ctx context.Context, caller string) error {
+			return requireRunSubmitter(ctx, c, caller)
+		},
 		auditResult: &auditResult,
 		sessionAddr: &sessionAddr,
 	})
@@ -183,6 +189,25 @@ func runHandler(
 		decorateWriteResult(buildRunResult(rr, profileName), identity, signerAddr, master, profile.IsLocal()),
 		gkCmd,
 	), nil
+}
+
+// requireRunSubmitter refuses a MsgRun the chain would reject: once the chain
+// lists run_submitters, the message's caller must be one of them.
+func requireRunSubmitter(ctx context.Context, c chain.Client, caller string) error {
+	allowed, err := c.RunSubmitters(ctx)
+	if err != nil {
+		return fmt.Errorf("gno_run: read the chain's run_submitters param (nothing signed): %w", err)
+	}
+	// bech32 addresses compare case-insensitively.
+	if len(allowed) == 0 || slices.ContainsFunc(allowed, func(a string) bool { return strings.EqualFold(a, caller) }) {
+		return nil
+	}
+	return &server.ToolError{
+		Code: "run_not_allowed",
+		Message: fmt.Sprintf("this chain accepts MsgRun only from the addresses in its run_submitters param, and %s is not one of them; nothing was signed. "+
+			"Deploy the logic as a package and call it with gno_call, or run it on a chain whose run_submitters is empty.", caller),
+		Extra: map[string]any{"address": caller},
+	}
 }
 
 // buildRunResult constructs the server.Result from a chain.RunResult. MsgRun

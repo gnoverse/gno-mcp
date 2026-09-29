@@ -3,11 +3,14 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
 
@@ -86,22 +90,13 @@ func TestMain_writeToolsAbsent_whenAllReadOnly(t *testing.T) {
 	// config that merely ADDS a profile leaves the writable builtins in place.
 	// Every builtin is redefined here under its own name with a read-only
 	// chain-id, which is the only way to reach a catalog with no writable chain.
-	toml := `
-[local]
-rpc-url = "https://rpc.gno.land:443"
-chain-id = "gnoland-1"
-
-[testnet]
-rpc-url = "https://rpc.gno.land:443"
-chain-id = "gnoland-1"
-
-[mainnet]
-rpc-url = "https://rpc.gno.land:443"
-chain-id = "gnoland-1"
-`
+	var toml strings.Builder
+	for _, name := range slices.Sorted(maps.Keys(profiles.BuiltinProfiles())) {
+		fmt.Fprintf(&toml, "[%s]\nrpc-url = \"https://rpc.gno.land:443\"\nchain-id = \"gnoland-1\"\n\n", name)
+	}
 	cfg := t.TempDir()
 	cfgFile := filepath.Join(cfg, "profiles.toml")
-	require.NoError(t, os.WriteFile(cfgFile, []byte(toml), 0o600))
+	require.NoError(t, os.WriteFile(cfgFile, []byte(toml.String()), 0o600))
 	sessDir := t.TempDir()
 
 	cmd := exec.Command("go", "run", ".", "-config", cfgFile, "-sessions-path", sessDir)

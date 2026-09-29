@@ -63,6 +63,10 @@ func TestSessionPropose_defaultSpendLimitDerivedFromFee(t *testing.T) {
 	// surface structuredContent never see the Text rendering.
 	assert.Equal(t, int64(4_000_000), res.StructuredContent["per_write_fee_ugnot"])
 	assert.Equal(t, int64(10), res.StructuredContent["writes_budget"])
+	// writes_budget counts the fee alone: a write that creates state also draws
+	// its storage deposit from the limit, and the caveat must travel with the count.
+	assert.Contains(t, res.Text, "storage deposit")
+	assert.Contains(t, res.StructuredContent["writes_budget_note"], "storage deposit")
 }
 
 func TestSessionPropose_gnokeyCommandUsesLiveFee(t *testing.T) {

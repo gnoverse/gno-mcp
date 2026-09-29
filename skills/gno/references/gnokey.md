@@ -58,8 +58,8 @@ ratio clears the chain's minimum (next section). So the two knobs interact only 
 raise `GasWanted` and you must raise `GasFee` to keep the ratio above the floor.
 
 **The floor.** The minimum acceptable fee is `GasWanted × minGasPrice`. The genesis price is
-**1 ugnot per 1000 gas** — pearl and mainnet both run at that floor (`1ugnot/1000gas`); earlier testnets had drifted
-to `10ugnot/1000gas`. Re-query `auth/gasprice` live; the floor moves per chain. At the genesis
+**1 ugnot per 1000 gas** — onyx and mainnet both run at that floor (`1ugnot/1000gas`). Re-query
+`auth/gasprice` live; the floor moves per chain. At the genesis
 price, `GasWanted = 10_000_000` puts the floor at **10,000 ugnot (0.01 GNOT)**. gnomcp does not offer a fixed pair: every write **dry-runs first at a
 1B-gas measuring ceiling**, then broadcasts at `GasWanted = measured × 1.5` floored at
 `DefaultGasWanted = 10_000_000` (a realm call burns ~1–2M gas, a deploy ~5M — light writes stay on
@@ -81,8 +81,8 @@ the config). gnomcp mirrors the genesis ratio as `minGasPriceDivisor`
 and its comment flags that it must change for a chain with a different `min_gas_prices`. Two price
 gates exist and BOTH run, in this order: the adaptive EIP-1559-style **block price** first (skipped
 only when it is zero or invalid), then the node's static config floor. What `auth/gasprice` returns
-is the *block* price — `LastGasPrice`, the price of the last block — not `min_gas_prices`. On both
-live chains it reads `1ugnot/1000gas`, i.e. nonzero, so the block-price gate is active and is the
+is the *block* price — `LastGasPrice`, the price of the last block — not `min_gas_prices`. On every
+live chain it reads `1ugnot/1000gas`, i.e. nonzero, so the block-price gate is active and is the
 one a tx hits first; the two happen to coincide there, which is why the numbers agree even though
 the mechanism differs.
 
@@ -110,7 +110,7 @@ Persisting bytes on-chain **locks** a deposit = `bytes × storage_price` (defaul
 the tx lock**, not an amount spent. Key facts:
 
 - An **empty** `--max-deposit` does *not* mean unbounded — it falls back to the `DefaultDeposit`
-  chain param (`params/vm:p:default_deposit`, **100 GNOT** on both live chains), so a deploy can lock
+  chain param (`params/vm:p:default_deposit`, **100 GNOT** on every live chain), so a deploy can lock
   far more than you expect if the realm is large. Query the param; GovDAO can move it.
 - The deposit is **refundable**: when a realm frees storage (state deleted), the proportional locked
   amount is returned. It's a deposit, not a fee.
@@ -124,9 +124,11 @@ the tx lock**, not an amount spent. Key facts:
 ## Simulate before you broadcast
 
 Simulation runs the **full ante handler + full message execution** against a throwaway cache: it
-charges nothing, commits nothing, **skips signature verification** (so you can simulate *unsigned* —
-only the public key is needed, no password; gnolang/gno #4279), and returns the **real `GasUsed`**.
-This is how you size `GasWanted` honestly instead of guessing.
+charges nothing, commits nothing, and returns the **real `GasUsed`**. This is how you size
+`GasWanted` honestly instead of guessing. It **skips signature verification** except on a
+transaction carrying code, so anything else simulates *unsigned*: only the public key is needed, no
+password (gnolang/gno #4279). A `MsgAddPackage`, `MsgRun` or `MsgEnablePackage` simulation must be
+signed on every live chain (`gno.land/pkg/gnoland/app.go`, `txCarriesCode`).
 
 - gnokey: `--simulate` is `test` (simulate, then broadcast if it passes — the default), `skip`
   (broadcast directly), or `only` (dry-run; also prints a suggested fee with a `--gas-fee-margin`,
@@ -134,7 +136,10 @@ This is how you size `GasWanted` honestly instead of guessing.
   `maketx` still errors if you don't pass `--gas-wanted` and `--gas-fee` yourself.
 - gnomcp: the `simulate` parameter on `gno_call`/`gno_addpkg`/`gno_run` does the same dry-run; the
   write tools also **simulate before broadcasting** so a type error or an unmet deploy gate
-  (CLA/namespace) fails at **zero gas** instead of stranding a freshly-funded key.
+  (CLA/namespace) fails at **zero gas** instead of stranding a freshly-funded key. A chain running
+  the `inert` code-submission policy (onyx, mainnet) parks a deploy without type-checking it, so
+  there the dry run catches the deploy gates and the gas fee, but neither a type error nor a storage
+  deposit the key cannot pay, which the chain charges when it enables the package (`networks.md`).
 
 Best practice (gnokey or gnomcp): **simulate → read `GasUsed` → set `GasWanted` a margin above it →
 price `GasFee` for that `GasWanted` at the live gas price** (a small margin over the minimum — gnomcp
@@ -177,7 +182,7 @@ two stores** — they don't see each other's keys.
 | `--gas-wanted 4000000000` → "invalid gas-wanted" | Keep under block-max-gas (~3B) | #329 |
 | Empty `--send ""` to a payable realm → "payment must not be less than …" | A required deposit must ride in `--send`; empty sends nothing | #329 |
 | `out of gas` → bump to just above the reported number, fails again | The number is gas-used-so-far; bump well above, or simulate | #3704 |
-| `signature verification failed; verify correct account, sequence, and chain-id` | First suspect a **stale gnokey binary** (a known cause); then check `--chainid`, and `--account-number`/`--sequence` from `gnokey query auth/accounts/<addr>` | #2109 |
+| `signature verification failed; verify correct account, sequence, and chain-id` | First suspect a gnokey that does not match the chain: a **stale binary** (a known cause); then check `--chainid`, and `--account-number`/`--sequence` from `gnokey query auth/accounts/<addr>` | #2109 |
 | `gnokey add --derivation-path …` prints derived addrs but may save an **un-derived** key | Verify the stored key's `path:` before signing | #5122 |
 | Tx "succeeds" at CheckTx then fails at DeliverTx | The real cause is one line buried in a large `Log` stack dump — grep the deliver-tx log; typed realm errors aren't here yet | #203, #416 |
 | Mismatched / missing `--remote` + `--chainid` | Both must be set and match the target chain (the UX may collapse to one `-chain` flag later) | #3703 |
@@ -191,8 +196,7 @@ key or mnemonic. Reaching for `gnokey` for a write means you took a wrong turn, 
 - **Separate keystore.** gnomcp keys live under `~/.local/share/gnomcp/agent-keys/<profile>/`; `gnokey` can't see or sign with them.
 - **Atomic + safe defaults.** gnomcp builds-signs-broadcasts in one step, simulates first, and offers
   2× the live price floor off right-sized gas — you can't accidentally overpay or strand a key.
-- **It's a hard rule here.** The gno-build skill forbids it, and the e2e flows fail any run where the
-  agent shells out to `gnokey`.
+- **It's a hard rule here.** The gno-build skill forbids it.
 
 gnokey understanding is for three things: **reasoning** about what a write costs and why it fails;
 **reading chain params** that gnomcp may not wrap (the `gnokey query params/<module>:p:<name>`
@@ -207,11 +211,11 @@ fee — every gnomcp write result echoes the real values):
 
 ```
 # gno_call{realm:"gno.land/r/demo/foo", func:"Bump", args:["1"], send:"", key:"alice"}
-# (light call on pearl: gas-wanted floors at 10M; live price 1ugnot/1000gas → fee = 10M × 1ugnot/1000gas × 2)
+# (light call on onyx: gas-wanted floors at 10M; live price 1ugnot/1000gas → fee = 10M × 1ugnot/1000gas × 2)
 gnokey maketx call \
   -pkgpath gno.land/r/demo/foo -func Bump -args 1 \
   -gas-wanted 10000000 -gas-fee 20000ugnot \
-  -remote https://rpc.pearl.testnets.gno.land:443 -chainid pearl-1 \
+  -remote https://rpc.onyx.testnets.gno.land:443 -chainid onyx-1 \
   -broadcast alice
 ```
 
@@ -236,8 +240,7 @@ dependency: this reference renders the same command from first principles when t
 
 Distilled from `gnokey` (`tm2/pkg/crypto/keys/client`, `gno.land/pkg/keyscli`), the auth ante handler
 and fee/gas-price logic (`tm2/pkg/sdk/auth`, `tm2/pkg/std`), and the vm storage-deposit keeper
-(`gno.land/pkg/sdk/vm`) in gnolang/gno at the commit pinned in this repo's go.mod; the gnomcp write
-path (`internal/chain/real.go`, `internal/tools/write`); and the gnolang/gno issue tracker (#3805,
-#5086, #3704, #329, #2109, #4279, #5122, #203, #416, #3703). Mechanics verified against the live
-pearl deploy-gate flows; the CLA gate is disabled on both live chains today, so confirm it live
+(`gno.land/pkg/sdk/vm`) in gnolang/gno at release `v1.5.0`; gnomcp's write tools; and the
+gnolang/gno issue tracker (#3805, #5086, #3704, #329, #2109, #4279, #5122, #203, #416, #3703).
+The mechanics cover onyx's deploy gates and parking flow. The CLA gate is disabled on every live chain as of this writing; confirm it live
 rather than reading it off this line (see sysrealms.md). Flag surface is version-bound — confirm with `gnokey <cmd> -help`.

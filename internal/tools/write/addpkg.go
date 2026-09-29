@@ -14,12 +14,30 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/keystore"
 	"github.com/gnoverse/gno-mcp/internal/server"
+	"github.com/gnoverse/gno-mcp/internal/tools/parked"
+	"github.com/gnoverse/gno-mcp/internal/untrusted"
 )
+
+// On an inert chain the deploy parks until a package approver enables it. The
+// wait covers the approver's latency plus gpao's default ten-second verify budget.
+const (
+	parkWaitTimeout  = 30 * time.Second
+	parkPollInterval = 2 * time.Second
+)
+
+// parkWait bounds the wait for a parked package to go live.
+type parkWait struct {
+	timeout, interval time.Duration
+}
 
 // RegisterAddPkg registers the gno_addpkg tool.
 // ks provides agent signers per profile; resolver returns the chain client for
 // a given profile; alog writes audit entries on every deploy attempt.
 func RegisterAddPkg(s *server.Server, ks *keystore.Keystore, resolver chain.Resolver, alog *audit.Log) {
+	registerAddPkg(s, ks, resolver, alog, parkWait{timeout: parkWaitTimeout, interval: parkPollInterval})
+}
+
+func registerAddPkg(s *server.Server, ks *keystore.Keystore, resolver chain.Resolver, alog *audit.Log, wait parkWait) {
 	s.Registry().Add(&server.Tool{
 		Name: "gno_addpkg",
 		Description: "Deploys a new Gno package or realm to the chain via vm/MsgAddPackage. " +
@@ -29,6 +47,12 @@ func RegisterAddPkg(s *server.Server, ks *keystore.Keystore, resolver chain.Reso
 			"local profiles use the built-in test1 key; testnet profiles use a key generated via " +
 			"gno_key_generate (run that first if no key exists). " +
 			"If the supplied file list omits gnomod.toml it is generated automatically. " +
+			"Every broadcast deploy reports package_status, and the deployed code is callable only when it is live. " +
+			"On a chain running the inert code-submission policy the deploy parks until the chain's package approver " +
+			"enables it: the tool waits up to 30s and reports live, inert (PARKED, with the chain's reason " +
+			"and how to recover), redeploy_parked (the previous version still serves) or unknown. There the result also " +
+			"carries code_submission_policy, which describes the chain rather than this package, and a simulation " +
+			"does not type-check the code. " +
 			"The result reports which identity signed (tell the user which account performed the write) and an " +
 			"equivalent gnokey command for transparency — illustrative only, since gnomcp already signed and broadcast the tx.",
 		InputSchema: addpkgInputSchema(s),
@@ -42,7 +66,7 @@ func RegisterAddPkg(s *server.Server, ks *keystore.Keystore, resolver chain.Reso
 			OpenWorld:   true,
 		},
 		Handler: func(ctx context.Context, args map[string]any) (server.Result, error) {
-			return addpkgHandler(ctx, args, s, ks, resolver, alog)
+			return addpkgHandler(ctx, args, s, ks, resolver, alog, wait)
 		},
 	})
 }
@@ -54,6 +78,7 @@ func addpkgHandler(
 	ks *keystore.Keystore,
 	resolver chain.Resolver,
 	alog *audit.Log,
+	wait parkWait,
 ) (server.Result, error) {
 	start := time.Now()
 
@@ -145,6 +170,14 @@ func addpkgHandler(
 
 	argsSummary = fmt.Sprintf("deploy_path=%s files=%d simulate=%v", deployPath, len(files), simulate)
 
+	// ---- Read the code-submission policy (before anything is signed)
+
+	policy, err := c.SubmissionPolicy(ctx)
+	if err != nil {
+		return server.Result{}, fmt.Errorf("gno_addpkg: read the chain's code submission policy (nothing signed): %w", err)
+	}
+	inert := policy == chain.SubmissionPolicyInert
+
 	// ---- Acquire agent signer (with the testnet unfunded pre-check)
 
 	signer, addr, aerr := acquireAgentSigner(ctx, ks, c, "gno_addpkg",
@@ -176,7 +209,9 @@ func addpkgHandler(
 	// A failed addpkg broadcast still burns gas — the node charges for the
 	// type-check or deploy-gate rejection at DeliverTx — which can strand a
 	// freshly-funded key. Simulate first so authoring bugs and unmet deploy
-	// gates (CLA, namespace) fail at zero cost; only then broadcast.
+	// gates (CLA, namespace) fail at zero cost; only then broadcast. An inert
+	// chain parks the package without type-checking it, so there the
+	// simulation catches gate and funding failures but not authoring bugs.
 	if !simulate {
 		if _, verr := c.AddPackage(ctx, signer, deployPath, files, true); verr != nil {
 			auditResult = "validate_err"
@@ -197,9 +232,32 @@ func addpkgHandler(
 		return server.Result{}, withCLAHint(fmt.Errorf("%s: %w", errPrefix, deployErr))
 	}
 
-	auditResult = "ok"
-	if simulate {
+	// ---- On an inert chain, wait for the approver to enable the package
+
+	var (
+		status string // stays "" on a dry run
+		meta   chain.PackageMeta
+	)
+	switch {
+	case res.Simulated:
+	case inert:
+		var werr error
+		meta, werr = waitLive(ctx, c, deployPath, wait)
+		status = deployStatus(meta, werr)
+	default:
+		// A chain that runs what it accepts parks nothing.
+		status = chain.PackageLive
+	}
+
+	switch {
+	case simulate:
 		auditResult = "sim"
+	case status == chain.PackageInert, status == packageStatusRedeployParked:
+		auditResult = "parked"
+	case status == packageStatusUnknown:
+		auditResult = "status_unknown"
+	default:
+		auditResult = "ok"
 	}
 
 	// ---- Build result text
@@ -207,23 +265,64 @@ func addpkgHandler(
 	var b strings.Builder
 	fmt.Fprintln(&b, signedByLine("agent", addr, "", p.IsLocal()))
 	fmt.Fprintln(&b)
-	if res.Simulated {
+	switch {
+	case res.Simulated:
 		fmt.Fprintln(&b, "AddPackage simulated (no broadcast)")
-	} else {
+	case status == chain.PackageInert:
+		fmt.Fprintln(&b, "AddPackage submitted: PARKED, not live")
+	case status == packageStatusRedeployParked:
+		fmt.Fprintln(&b, "AddPackage submitted: redeploy PARKED; the previous version is still live")
+	case status == packageStatusUnknown:
+		fmt.Fprintln(&b, "AddPackage submitted: status unknown")
+	default:
 		fmt.Fprintln(&b, "AddPackage succeeded")
+	}
+	if !res.Simulated {
 		fmt.Fprintf(&b, "TxHash:  %s\n", res.TxHash)
 		fmt.Fprintf(&b, "Height:  %d\n", res.Height)
 	}
 	fmt.Fprintf(&b, "GasUsed: %d\n", res.GasUsed)
+	// nextSteps also goes into the structured content: a client may hand the
+	// model that alone.
+	var nextSteps string
 	if simulate {
 		fmt.Fprintln(&b, "(simulate=true — transaction was not broadcast)")
+		if inert {
+			nextSteps = "This chain parks deploys (code submission policy inert) without type-checking them, " +
+				"so this simulation did not type-check the code: lint it against the chain's release before deploying."
+			fmt.Fprintln(&b, nextSteps)
+		}
+	}
+	switch status {
+	case chain.PackageLive:
+		if inert {
+			fmt.Fprintln(&b, "Package: live, enabled by the chain's package approver")
+		} else {
+			fmt.Fprintln(&b, "Package: live")
+		}
+	case chain.PackageInert:
+		fmt.Fprintf(&b, "Package: parked. The chain accepted the deploy and had not enabled it after %s.\n", wait.timeout)
+		writeReason(&b, meta.Reason, deployPath)
+		nextSteps = parked.NextSteps + " Until it is enabled, every read and call answers it like a package that was never deployed; " +
+			"gno_read on the path reports package_parked while it waits."
+		fmt.Fprintln(&b, nextSteps)
+	case packageStatusRedeployParked:
+		fmt.Fprintf(&b, "Package: the chain accepted this redeploy and had not enabled it after %s.\n", wait.timeout)
+		writeReason(&b, meta.Reason, deployPath)
+		nextSteps = "Reads and calls still reach the previous version. A reason saying this submission can never be enabled is final. " +
+			parked.NextSteps
+		fmt.Fprintln(&b, nextSteps)
+	case packageStatusUnknown:
+		nextSteps = "The chain did not report the package as live or parked; this chain parks deploys " +
+			"until an approver enables them, so read the path with gno_read before calling it."
+		fmt.Fprintln(&b, "Package: status unknown. "+nextSteps)
 	}
 
 	// Hand the agent the exact gnoweb URL of the deployed realm so it need not
-	// guess the host. Only on a real deploy and only when the profile has a
-	// usable gnoweb host (a local node has none).
+	// guess the host. Only on a real deploy that is live, and only when the
+	// profile has a usable gnoweb host (a local node has none).
 	var viewURL string
-	if !res.Simulated {
+	if status == chain.PackageLive {
 		viewURL = p.RealmViewURL(deployPath)
 	}
 	if viewURL != "" {
@@ -247,7 +346,92 @@ func addpkgHandler(
 	if viewURL != "" {
 		sc["gnoweb_url"] = viewURL
 	}
+	if inert {
+		sc["code_submission_policy"] = policy
+	}
+	if status != "" {
+		sc["package_status"] = status
+	}
+	if meta.Reason != "" && (status == chain.PackageInert || status == packageStatusRedeployParked) {
+		sc["package_reason"] = meta.Reason
+	}
+	if nextSteps != "" {
+		sc["next_steps"] = nextSteps
+	}
 	return attachGnokeyCmd(server.Result{Text: b.String(), StructuredContent: sc}, gkCmd), nil
+}
+
+// Deploy outcomes on an inert chain beyond the chain's own live and inert.
+const (
+	// packageStatusRedeployParked: a redeploy parked over a live private realm,
+	// whose previous version keeps serving.
+	packageStatusRedeployParked = "redeploy_parked"
+	// packageStatusUnknown: the chain reported the package as neither live nor
+	// parked, or never answered.
+	packageStatusUnknown = "unknown"
+)
+
+// deployStatus classifies a landed deploy on an inert chain from the last
+// package status the chain gave (err set when it gave none).
+func deployStatus(m chain.PackageMeta, err error) string {
+	switch {
+	case err != nil:
+		return packageStatusUnknown
+	case m.Live():
+		return chain.PackageLive
+	case m.Status == chain.PackageInert:
+		return chain.PackageInert
+	case m.Status == chain.PackageLive && m.Pending:
+		return packageStatusRedeployParked
+	default:
+		return packageStatusUnknown
+	}
+}
+
+// writeReason writes the chain's reason a package is not live, enveloped as
+// the chain-authored text it is; the chain may give none.
+func writeReason(b *strings.Builder, reason, path string) {
+	if reason != "" {
+		fmt.Fprintf(b, "Reason:\n%s\n", untrusted.Wrap(reason, "package_reason", path))
+	}
+}
+
+// waitLive polls the package at path until it is live, w.timeout passes or ctx
+// ends, and returns the last status the chain gave. It errors only when the
+// chain answered none of the polls.
+func waitLive(ctx context.Context, c chain.Client, path string, w parkWait) (chain.PackageMeta, error) {
+	deadline := time.Now().Add(w.timeout)
+	var (
+		last     chain.PackageMeta
+		answered bool
+		lastErr  error
+	)
+	settle := func() (chain.PackageMeta, error) {
+		if !answered {
+			return chain.PackageMeta{}, lastErr
+		}
+		return last, nil
+	}
+	for {
+		m, err := c.PackageMeta(ctx, path)
+		if err != nil {
+			lastErr = err
+		} else {
+			last, answered = m, true
+			if m.Live() {
+				return last, nil
+			}
+		}
+		left := time.Until(deadline)
+		if left <= 0 {
+			return settle()
+		}
+		select {
+		case <-ctx.Done():
+			return settle()
+		case <-time.After(min(w.interval, left)):
+		}
+	}
 }
 
 // toMemFiles converts the raw JSON-decoded "files" arg into []*std.MemFile.
@@ -315,7 +499,7 @@ func addpkgInputSchema(s *server.Server) map[string]any {
 		},
 		"simulate": map[string]any{
 			"type":        "boolean",
-			"description": "When true, dry-run the deployment without broadcasting or spending gas.",
+			"description": "When true, dry-run the deployment without broadcasting or spending gas. On a chain running the inert code-submission policy the dry run does not type-check the code.",
 			"default":     false,
 		},
 	}

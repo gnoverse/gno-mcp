@@ -43,7 +43,7 @@ func SetAdmin(newAdmin address) {
 ### Expect
 - skill-usage: the gno skill is engaged (Skill tool_use OR a Read under skills/gno/) BEFORE the substantive verdict — reviewing realm code is exactly its trigger; answering from training data alone is the gap this step exists to catch.
 - skill-usage: interrealm.md or security.md read (Read tool_use) before the verdict.
-- correctness: flags the guard as broken — `unsafe.PreviousRealm()` inside a NON-crossing function does not identify the immediate caller (stack-walking); the fix involves a crossing signature (`cur realm`) with `cur.IsCurrent()` + `cur.Previous()`. An answer that calls the realm safe, or only nitpicks style, is a fail. Watch (known regression shape): claiming `chain/runtime/unsafe` or the `address` type don't exist and "fixing" toward `std.*` APIs.
+- correctness: flags the guard as broken — `unsafe.PreviousRealm()` inside a NON-crossing function does not identify the immediate caller (stack-walking); the fix makes `SetAdmin` a crossing function (`cur realm`) and checks `cur.Previous().Address()`. The fix needs no `cur.IsCurrent()`: the runtime guarantees a crossing function's first `cur` is current (interrealm.md). A redundant one is not a verdict factor; calling it required is a finding. An answer that calls the realm safe, or only nitpicks style, is a fail. Watch (known regression shape): claiming `chain/runtime/unsafe` or the `address` type don't exist and "fixing" toward `std.*` APIs.
 ### Verify
 - The gno skill engaged in turn 1: a `Skill` tool_use OR a `Read` of a path under `skills/gno*/` (judging.md § Observing).
 - A `Read` of `references/interrealm.md` or `references/security.md` in turn 1.

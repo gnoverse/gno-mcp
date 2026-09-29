@@ -44,11 +44,11 @@ their answers, not on the initial label.
 
 ## Step 3 — Hands-on (see before do; one new concept per step; checkpoint after each)
 
-Run this flow on pearl or a local gnodev. The `mainnet` builtin ships read-only: it has no agent
+Run this flow on onyx (the `testnet` profile) or a local gnodev. The `mainnet` builtin ships read-only: it has no agent
 key and no faucet, so steps 2 to 4 fail there rather than degrading. Step 1 works on any chain.
 
-1. **Observe:** `gno_render` a live realm (`gno.land/r/gnoland/blog` is deployed on pearl and
-   mainnet; confirm with `gno_packages` rather than trusting this path), then
+1. **Observe:** `gno_render` a live realm (`gno.land/r/gnoland/blog` is deployed on onyx
+   and mainnet; confirm with `gno_packages` rather than trusting this path), then
    `gno_read` it (the default outline shows every file's API surface) — "this is a contract,
    and you can read all of it". If the client elides resource previews, hand over the gnoweb
    URL instead.
@@ -64,7 +64,8 @@ key and no faucet, so steps 2 to 4 fail there rather than degrading. Step 1 work
    paths do not survive a testnet roll. Then `simulate=true`, show the gas, and broadcast.
    Always say which identity signed.
 5. **Close:** match their goal — if it was deploying, close the loop with a `gno_addpkg`
-   `simulate=true` of a ~10-line counter realm before pointing at docs; writing a realm →
+   `simulate=true` of a ~10-line counter realm before pointing at docs (on onyx the dry run is
+   not type-checked, and the result says so); writing a realm →
    the gno skill's `build.md`/`patterns.md`; "what is gnokey / why does a tx cost what it
    costs / what's the gnokey command for this" → the gno skill's `gnokey.md`; safety review →
    `/gno-audit`; something failed → `/gno-debug`.

@@ -194,6 +194,20 @@ type Client interface {
 	// Backed by the RPC /status endpoint.
 	Status(ctx context.Context) (NodeStatus, error)
 
+	// SubmissionPolicy returns the chain's code-submission policy
+	// (SubmissionPolicyInert, "permissionless", …), or "" on a chain that
+	// predates the param.
+	SubmissionPolicy(ctx context.Context) (string, error)
+
+	// RunSubmitters returns the addresses allowed to send MsgRun. Empty means
+	// the allowlist is off and anyone may.
+	RunSubmitters(ctx context.Context) ([]string, error)
+
+	// PackageMeta reports what the chain holds at pkgPath: live, parked
+	// (PackageInert) or absent. Every other read answers a parked path exactly
+	// like one never submitted.
+	PackageMeta(ctx context.Context, pkgPath string) (PackageMeta, error)
+
 	// GasFeeUgnot returns the ugnot GasFee gnomcp would offer on a write against
 	// this chain right now — the chain's live minimum gas price scaled for a
 	// DefaultGasWanted-sized tx. Callers that must reserve the fee before a send

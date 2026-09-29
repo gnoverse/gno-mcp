@@ -43,6 +43,10 @@ type writeTxDispatch struct {
 	// exact amount the chain billed (the chain bills the full offered fee).
 	agentOp   func(ctx context.Context, signer gnoclient.Signer) error
 	sessionOp func(ctx context.Context, signer chain.Signer, master string) (feeUgnot int64, err error)
+	// precheck, when set, runs before signing with the address the chain
+	// authorizes the message by (the agent's own, or the session's master); its
+	// error is returned as is.
+	precheck func(ctx context.Context, authAddr string) error
 
 	// Audit fields owned by the handler's deferred audit record; the dispatcher
 	// mutates them so denials and outcomes are recorded on every return path.
@@ -67,13 +71,23 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 	case "agent":
 		// ---- Agent branch: sign with the agent's own key (local test1 or testnet generated key)
 
-		agentSigner, addr, aerr := acquireAgentSigner(ctx, d.ks, d.c, d.tool, d.noKeyHint, d.profileName, d.keyName, d.profile, d.simulate)
+		signer, addr, aerr := agentSigner(d.ks, d.tool, d.noKeyHint, d.profileName, d.keyName, d.profile)
 		if aerr != nil {
 			return identity, "", "", aerr
 		}
 		signerAddr = addr
+		// The precheck answers before the funding check: a write the chain
+		// refuses outright must not send the agent to the faucet first.
+		if d.precheck != nil {
+			if err := d.precheck(ctx, addr); err != nil {
+				return identity, "", "", err
+			}
+		}
+		if err := requireFunded(ctx, d.c, d.tool, d.profileName, addr, d.profile, d.simulate); err != nil {
+			return identity, "", "", err
+		}
 
-		if opErr := d.agentOp(ctx, agentSigner); opErr != nil {
+		if opErr := d.agentOp(ctx, signer); opErr != nil {
 			return identity, signerAddr, "", d.txError(opErr)
 		}
 		// No UpdateSpend — agent pays from its own balance.
@@ -106,6 +120,11 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 		// session record), which may differ from profile.MasterAddress — e.g. a
 		// master-less profile whose user supplied an address at propose time.
 		master = sessMaster
+		if d.precheck != nil {
+			if err := d.precheck(ctx, master); err != nil {
+				return identity, signerAddr, master, err
+			}
+		}
 
 		feeUgnot, opErr := d.sessionOp(ctx, signer, master)
 		if opErr != nil {
@@ -120,10 +139,10 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 		}
 
 		// Update spend (simulate skips it). The chain bills the session the full
-		// GasFee per tx, not GasUsed, so deduct the fee the tx actually offered to
-		// keep local SpendRemaining in sync with the chain.
+		// GasFee per tx, not GasUsed, plus any storage deposit the write locked;
+		// the fee is the fallback when the chain cannot report the session.
 		if !d.simulate {
-			_ = d.sessionMgr.UpdateSpend(d.profileName, *d.sessionAddr, feeUgnot)
+			_ = d.sessionMgr.SettleSpend(ctx, d.c, d.profileName, *d.sessionAddr, feeUgnot)
 		}
 
 	default:

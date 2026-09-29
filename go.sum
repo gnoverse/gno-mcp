@@ -88,6 +88,8 @@ github.com/getsentry/sentry-go v0.47.0 h1:AnSMSyrYA5qZCIN/2xpgAAwv63sVULV+vBq37a
 github.com/getsentry/sentry-go v0.47.0/go.mod h1:h+b4VHpKnK7aUXB5wc+KDnPgp9ZtfliRD4eV85FbiSA=
 github.com/gnolang/gno v0.0.0-20260624072255-1822034ddd17 h1:zYXazCWUl4C1kwZp8qHOYDr+AAJi9xOGgJjVpIUaLPc=
 github.com/gnolang/gno v0.0.0-20260624072255-1822034ddd17/go.mod h1:JTIDaUqD1XuOk2zhTWOzdJXTE5jN11lPM97qoeDq0Nc=
+github.com/gnolang/gno v1.5.0 h1:yIfD2R7qYZgkPLwtZqHAWwGU78xhTqF2y3MO4k1cBlI=
+github.com/gnolang/gno v1.5.0/go.mod h1:Vby9oL4oRmmpg4W8+lVqiD9uQMf2GnPB8CtsMq0pD/c=
 github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=
 github.com/go-errors/errors v1.4.2/go.mod h1:sIVyrIiJhuEF+Pj9Ebtd6P/rEYROXFi3BopGUQ5a5Og=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=

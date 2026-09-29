@@ -309,6 +309,7 @@ func TestAddPkg_simulateOmitsGnowebURL(t *testing.T) {
 	require.NoError(t, pkgErr)
 	assert.NotContains(t, res.Text, "test9999.gno.land/r/test/foo", "simulate must not advertise a view URL")
 	assert.Nil(t, res.StructuredContent["gnoweb_url"], "simulate must not carry a gnoweb URL")
+	assert.NotContains(t, res.StructuredContent, "package_status", "nothing was deployed")
 }
 
 // A short deploy_path (no "/") expands to the agent's own-address namespace,
