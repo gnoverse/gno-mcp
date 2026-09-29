@@ -210,3 +210,89 @@ func TestFake_ListPaths(t *testing.T) {
 	_, err = f.ListPaths(context.Background(), "gno.land/r/unseeded/", 0)
 	require.Error(t, err)
 }
+
+// ---- VM params and package meta
+
+func TestFake_PackageMeta_unseededIsAbsent(t *testing.T) {
+	f := NewFake()
+	got, err := f.PackageMeta(context.Background(), "gno.land/r/x/never")
+	require.NoError(t, err)
+	assert.Equal(t, PackageAbsent, got.Status)
+}
+
+func TestFake_PackageMeta_sequenceThenLastSticks(t *testing.T) {
+	f := NewFake()
+	parked := PackageMeta{Status: PackageInert, Reason: "waiting", Pending: true}
+	live := PackageMeta{Status: PackageLive}
+	f.SetPackageMetaSequence("gno.land/r/x/y", parked, live)
+
+	var got []string
+	for range 3 {
+		m, err := f.PackageMeta(context.Background(), "gno.land/r/x/y")
+		require.NoError(t, err)
+		got = append(got, m.Status)
+	}
+	assert.Equal(t, []string{PackageInert, PackageLive, PackageLive}, got)
+	assert.Equal(t, 3, f.PackageMetaCalls("gno.land/r/x/y"))
+}
+
+func TestFake_PackageMeta_failFromACall(t *testing.T) {
+	f := NewFake()
+	f.SetPackageMetaSequence("gno.land/r/x/y", PackageMeta{Status: PackageInert, Pending: true})
+	f.FailPackageMetaFrom("gno.land/r/x/y", 1, errors.New("rpc down"))
+
+	_, err := f.PackageMeta(context.Background(), "gno.land/r/x/y")
+	require.NoError(t, err, "call 0 answers")
+	_, err = f.PackageMeta(context.Background(), "gno.land/r/x/y")
+	require.Error(t, err, "call 1 onward fails")
+}
+
+// A plain error seeder fails every call, whatever an earlier
+// FailPackageMetaFrom set.
+func TestFake_PackageMeta_errAfterFailFromFailsFromTheFirstCall(t *testing.T) {
+	f := NewFake()
+	f.FailPackageMetaFrom("gno.land/r/x/y", 3, errors.New("later"))
+	f.SetPackageMetaErr("gno.land/r/x/y", errors.New("now"))
+
+	_, err := f.PackageMeta(context.Background(), "gno.land/r/x/y")
+	require.Error(t, err)
+}
+
+func TestFake_PackageMeta_err(t *testing.T) {
+	f := NewFake()
+	f.SetPackageMetaErr("gno.land/r/x/y", errors.New("rpc down"))
+	_, err := f.PackageMeta(context.Background(), "gno.land/r/x/y")
+	require.Error(t, err)
+}
+
+func TestFake_SubmissionPolicy(t *testing.T) {
+	f := NewFake()
+	got, err := f.SubmissionPolicy(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, got, "unset by default, like a chain predating the param")
+
+	f.SetSubmissionPolicy(SubmissionPolicyInert)
+	got, err = f.SubmissionPolicy(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, SubmissionPolicyInert, got)
+
+	f.SetSubmissionPolicyErr(errors.New("rpc down"))
+	_, err = f.SubmissionPolicy(context.Background())
+	require.Error(t, err)
+}
+
+func TestFake_RunSubmitters(t *testing.T) {
+	f := NewFake()
+	got, err := f.RunSubmitters(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	f.SetRunSubmitters([]string{"g1allowed"})
+	got, err = f.RunSubmitters(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"g1allowed"}, got)
+
+	f.SetRunSubmittersErr(errors.New("rpc down"))
+	_, err = f.RunSubmitters(context.Background())
+	require.Error(t, err)
+}

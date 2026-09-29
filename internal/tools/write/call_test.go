@@ -224,6 +224,29 @@ func TestCall_auditsDeniedAttempt(t *testing.T) {
 	assert.Equal(t, "tool_err", entries[0].Result)
 }
 
+// A call into a parked realm fails with an opaque internal error; the agent
+// must learn the realm is parked rather than broken.
+func TestCall_parkedRealmReportsPackageParked(t *testing.T) {
+	s := newBaseTestServer(t)
+	const realm = "gno.land/r/test/tally"
+	fake := chain.NewFake()
+	fake.SetCallAsUserError(realm, "Bump", errors.New("internal error: unexpected node with location "+realm+":0:0"))
+	fake.SetPackageMetaSequence(realm, chain.PackageMeta{Status: chain.PackageInert, Reason: "waiting for a package approver to enable it", Pending: true})
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		seedActiveSession(t, m, "testnet5", []string{realm}, "1000000ugnot")
+	})
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), audit.NewLog(&bytes.Buffer{}))
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet5", "realm": realm, "func": "Bump", "identity": "session",
+	})
+
+	te, ok := errors.AsType[*server.ToolError](err)
+	require.True(t, ok, "want a ToolError, got %T: %v", err, err)
+	assert.Equal(t, "package_parked", te.Code)
+	assert.Equal(t, realm, te.Extra["path"])
+}
+
 func TestCall_missingRealm(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer

@@ -265,8 +265,10 @@ file does not cover.
    master or this file. Sub-package paths and the GRC20 path are spelled differently on pearl and on
    the mainnet line, so a working import block does not transfer unchecked.
 7. **Parking (onyx)** — lint against onyx's release before deploying, since the chain does not
-   type-check a submission. After the deploy, confirm the package is live before calling it. A
-   package still parked a minute after its deploy is not going to be enabled on its own: lint it,
+   type-check a submission. After the deploy, call the package only once it is live: `gno_addpkg`
+   waits for the approver and reports `package_status`, and a read of a parked path answers
+   `package_parked`. A package still parked a minute after its deploy is not going to be enabled on
+   its own: lint it,
    check the deploying key can pay the storage deposit, then redeploy to the same path with the
    same key.
 8. **Scripts** — `gno_run` works on pearl only; onyx allowlists `MsgRun`.

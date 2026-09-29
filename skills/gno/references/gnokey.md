@@ -134,7 +134,9 @@ This is how you size `GasWanted` honestly instead of guessing.
   `maketx` still errors if you don't pass `--gas-wanted` and `--gas-fee` yourself.
 - gnomcp: the `simulate` parameter on `gno_call`/`gno_addpkg`/`gno_run` does the same dry-run; the
   write tools also **simulate before broadcasting** so a type error or an unmet deploy gate
-  (CLA/namespace) fails at **zero gas** instead of stranding a freshly-funded key.
+  (CLA/namespace) fails at **zero gas** instead of stranding a freshly-funded key. A chain running
+  the `inert` code-submission policy (onyx, mainnet) parks a deploy without type-checking it, so
+  there the dry run catches gates and funding but not a type error (`networks.md`).
 
 Best practice (gnokey or gnomcp): **simulate → read `GasUsed` → set `GasWanted` a margin above it →
 price `GasFee` for that `GasWanted` at the live gas price** (a small margin over the minimum — gnomcp

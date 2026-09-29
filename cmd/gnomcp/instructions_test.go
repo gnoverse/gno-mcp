@@ -17,6 +17,15 @@ func TestServerInstructions_steerDiscoveryBeforeGuessing(t *testing.T) {
 	assert.Contains(t, serverInstructions, "guess")
 }
 
+// On a chain that parks deploys, "the deploy tx landed" and "the realm is
+// callable" part ways; the agent must wait for live before calling it, and
+// know that a parked path reads like an absent one.
+func TestServerInstructions_deployIsLiveOnlyWhenReported(t *testing.T) {
+	assert.Contains(t, serverInstructions, "package_status")
+	assert.Contains(t, serverInstructions, "package_parked")
+	assert.Contains(t, serverInstructions, "run_not_allowed")
+}
+
 // Tool errors carry repair instructions; when the user's request already
 // authorizes the repair, the model should perform it rather than relaying the
 // instructions back to the user.

@@ -53,6 +53,19 @@ func agentKeyToolError(err error, profileName, noKeyHint string) error {
 // unfunded-account pre-check (skipped when simulate). tool and noKeyHint tailor
 // the error messages to the calling tool.
 func acquireAgentSigner(ctx context.Context, ks *keystore.Keystore, c chain.Client, tool, noKeyHint, profileName, keyName string, profile profiles.Profile, simulate bool) (gnoclient.Signer, string, error) {
+	signer, addr, err := agentSigner(ks, tool, noKeyHint, profileName, keyName, profile)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := requireFunded(ctx, c, tool, profileName, addr, profile, simulate); err != nil {
+		return nil, "", err
+	}
+	return signer, addr, nil
+}
+
+// agentSigner loads the profile's agent signer and its bech32 address, mapping
+// keystore errors to structured ToolErrors.
+func agentSigner(ks *keystore.Keystore, tool, noKeyHint, profileName, keyName string, profile profiles.Profile) (gnoclient.Signer, string, error) {
 	signer, err := ks.SignerForProfile(profileName, keyName, profile)
 	if err != nil {
 		if terr := agentKeyToolError(err, profileName, noKeyHint); terr != nil {
@@ -64,20 +77,25 @@ func acquireAgentSigner(ctx context.Context, ks *keystore.Keystore, c chain.Clie
 	if err != nil {
 		return nil, "", fmt.Errorf("%s: signer info: %w", tool, err)
 	}
-	addr := info.GetAddress().String()
+	return signer, info.GetAddress().String(), nil
+}
 
-	if profile.IsTestnet() && !simulate {
-		bal, err := c.Balance(ctx, addr)
-		if err != nil {
-			return nil, "", fmt.Errorf("%s: balance check: %w", tool, err)
-		}
-		if bal == 0 {
-			return nil, "", &server.ToolError{
-				Code:    "insufficient_funds",
-				Message: fmt.Sprintf("agent testnet account %s is unfunded — run gno_faucet_fund (or send it ugnot), then retry", addr),
-				Extra:   map[string]any{"profile": profileName, "address": addr},
-			}
+// requireFunded refuses a testnet write from an agent account holding nothing,
+// before it can fail on chain; simulate skips it.
+func requireFunded(ctx context.Context, c chain.Client, tool, profileName, addr string, profile profiles.Profile, simulate bool) error {
+	if !profile.IsTestnet() || simulate {
+		return nil
+	}
+	bal, err := c.Balance(ctx, addr)
+	if err != nil {
+		return fmt.Errorf("%s: balance check: %w", tool, err)
+	}
+	if bal == 0 {
+		return &server.ToolError{
+			Code:    "insufficient_funds",
+			Message: fmt.Sprintf("agent testnet account %s is unfunded — run gno_faucet_fund (or send it ugnot), then retry", addr),
+			Extra:   map[string]any{"profile": profileName, "address": addr},
 		}
 	}
-	return signer, addr, nil
+	return nil
 }

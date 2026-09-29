@@ -21,7 +21,7 @@ fallbacks below — never block on the MCP.
 | Read one whole file verbatim (audit-grade) | `gno_read` with `file` + `full=true` (gets the larger budget) | local `.gno` files, gnoweb source view |
 | Read a whole package raw (realm **or** pure) | `gno_read` with `full=true` — small packages only; big ones overflow the budget, use the per-file path | same |
 | Discover packages under a namespace/path | `gno_packages` (prefix `gno.land/r/x/` or `@namespace`) | gnoweb, `gno` CLI |
-| Tell a *parked* package from one that does not exist (chains running the `inert` code-submission policy) | — no tool; every read answers `package not found` for both | `gnokey query vm/qpkgmeta_json -data "<pkgpath>"` → `status: live \| inert \| absent`; `gnokey query "vm/qinertpaths?limit=100" -data "<prefix>"` lists what awaits approval (`networks.md`) |
+| Tell a *parked* package from one that does not exist (chains running the `inert` code-submission policy) | after a deploy, `gno_addpkg` reports `package_status` (`live` \| `inert` \| `redeploy_parked` \| `unknown`); afterwards `gno_render`, `gno_eval`, `gno_read` and `gno_call` fail with `package_parked` on a parked path, and with the chain's plain error on an absent one | `gnokey query vm/qpkgmeta_json -data "<pkgpath>"` → `status: live \| inert \| absent`; `gnokey query "vm/qinertpaths?limit=100" -data "<prefix>"` lists what awaits approval (`networks.md`) |
 | Enumerate deployed packages under a namespace | `gno_packages` (path prefix or `@namespace`; paths only, no tags or categories — those are not indexed on-chain) | gnoweb |
 | See rendered `Render()` output | `gno_render` | gnoweb |
 | Read on-chain state / evaluate an expression | `gno_eval` | — |

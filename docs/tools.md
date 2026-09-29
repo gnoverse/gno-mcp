@@ -13,6 +13,7 @@ These tools require no config — the built-in `local`, `testnet`, `pearl` (suns
 - **Args:** `realm` (required), `path?` (subpath), `profile?`
 - **Returns:** rendered markdown from the realm's `Render()` function, wrapped in an `<untrusted_content>` envelope (realm markdown is the highest-injection-risk content in the system).
 - Output is truncated at ~4 KB. When truncated, a hint points at the canonical gnoweb URL or suggests fetching a narrower subpath.
+- On a chain running the inert code-submission policy, a package that was deployed but not yet enabled answers every read like a path never deployed; the tool then fails with `package_parked`, carrying the chain's reason and the recovery, instead of the chain's bare not-found.
 
 ### `gno_read`
 
@@ -23,11 +24,13 @@ These tools require no config — the built-in `local`, `testnet`, `pearl` (suns
   - **`full=true`:** raw source — one whole file (with `file`) or the whole package as txtar.
 - Budget: whole-package raw (`full` without `file`) truncates at ~4 KB; everything else — the outline (bounded by construction: bodies elided), `symbols`, `full` + `file` — gets ~64 KB, a higher ceiling sized for real reads, not a bypass.
 - The outline and dep headers are **navigation, not evidence**: names and docs are realm-authored claims. Audit-grade review reads whole files.
+- On a chain running the inert code-submission policy, a package that was deployed but not yet enabled answers every read like a path never deployed; the tool then fails with `package_parked`, carrying the chain's reason and the recovery, instead of the chain's bare not-found.
 
 ### `gno_eval`
 
 - **Args:** `path` (required), `expr` (required), `profile?`
 - **Returns:** the typed result of evaluating a Gno expression within a package, wrapped in an `<untrusted_content>` envelope.
+- On a chain running the inert code-submission policy, a package that was deployed but not yet enabled answers every read like a path never deployed; the tool then fails with `package_parked`, carrying the chain's reason and the recovery, instead of the chain's bare not-found.
 
 ### `gno_packages`
 
@@ -117,12 +120,14 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
 - Default identity: **agent** (test1 on local, generated key on testnet). Pass `identity=session` to act as the user instead.
 - `send` attaches coins to the call (e.g. `"1000000ugnot"`) for payable functions that read `std.OriginSend()`; under a session, the chain enforces the session spend limit against it.
+- A call into a parked package (deployed on an inert chain, not yet enabled) fails with `package_parked` rather than the chain's opaque internal error.
 
 ### `gno_run`
 
 - **Args:** `profile` (required), `code` (required), `simulate?`, `identity?`, `key?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
 - Default identity: **agent**; pass `identity=session` to act as the user.
+- A chain may accept `MsgRun` only from the addresses in its `run_submitters` param (onyx does). gnomcp reads the param first and refuses a caller not on the list — the agent key, or a session's master — with `run_not_allowed`, before anything is signed.
 
 ### `gno_addpkg`
 
@@ -130,6 +135,13 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Returns:** deploy (or `simulate`) result, prefixed with the signing identity.
 - Deploys a package/realm via `vm/MsgAddPackage`, signed by the agent key (local: test1, testnet: generated key). A `gnomod.toml` is generated automatically if omitted.
 - `deploy_path` accepts a full package path, or a **short name** (no `/`) that expands to the agent's own-address namespace `gno.land/r/<agent-address>/<name>` — always authorized, no registration, gnoweb-safe (no hyphens). A short name cannot be combined with a caller-supplied `gnomod.toml` (its module line cannot be rewritten); pass the full path in that case.
+- The tool reads the chain's code-submission policy before signing. On a chain running `inert` (onyx), the deploy parks until the chain's package approver enables it, so after the broadcast the tool polls `vm/qpkgmeta_json` for up to 30s and reports `package_status`:
+  - `live` — enabled; the result reads as an ordinary success, with the gnoweb link when the profile has a gnoweb host.
+  - `inert` — still parked: the headline says PARKED, the chain's reason arrives in an `<untrusted_content kind="package_reason">` envelope (raw in `package_reason`), and the text carries the recovery. No gnoweb link.
+  - `redeploy_parked` — a redeploy parked over a live private realm: reads and calls still reach the previous version, and the result says so.
+  - `unknown` — the chain reported the package as neither live nor parked, or never answered; never reported as live.
+  The result also carries `code_submission_policy`. On any other chain the output is unchanged and no status is polled.
+- A simulation on an inert chain does not type-check the code (the chain parks without checking it); the result says so.
 
 ### `gno_cla_info`
 

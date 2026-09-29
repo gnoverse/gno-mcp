@@ -24,6 +24,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 | `internal/gnosrc/` | syntactic source views for `gno_read`: outline, symbol extraction, dep analysis (go/parser, no type checking) |
 | `internal/server/` | tool `Registry`, `Tool`/`Result`/`ToolError` types, profile-arg schema |
 | `internal/tools/{read,write,indexer,admin}/` | one `Register*` func per tool |
+| `internal/tools/parked/` | the `package_parked` explanation the read and write tools share for a package parked on an inert chain |
 | `internal/session/`, `internal/keystore/` | session lifecycle/scope; per-profile agent keys |
 | `internal/profiles/` | profiles.toml loading, validation, chain-id allowlist, hard limits |
 | `internal/untrusted/`, `internal/budget/`, `internal/audit/` | envelope+neutralization, output budget, JSONL audit log |

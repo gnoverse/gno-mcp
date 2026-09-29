@@ -64,7 +64,8 @@ key and no faucet, so steps 2 to 4 fail there rather than degrading. Step 1 work
    paths do not survive a testnet roll. Then `simulate=true`, show the gas, and broadcast.
    Always say which identity signed.
 5. **Close:** match their goal — if it was deploying, close the loop with a `gno_addpkg`
-   `simulate=true` of a ~10-line counter realm before pointing at docs; writing a realm →
+   `simulate=true` of a ~10-line counter realm before pointing at docs (on onyx the dry run is
+   not type-checked, and the result says so); writing a realm →
    the gno skill's `build.md`/`patterns.md`; "what is gnokey / why does a tx cost what it
    costs / what's the gnokey command for this" → the gno skill's `gnokey.md`; safety review →
    `/gno-audit`; something failed → `/gno-debug`.
