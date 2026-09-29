@@ -119,9 +119,12 @@ func TestSimnet_claGate_blocksThenAllows(t *testing.T) {
 	// Before signing: deploy is blocked by the CLA gate.
 	_, err = c.AddPackage(ctx, signer, deployPath, tallyRealm(deployPath), false)
 	require.Error(t, err, "deploy must be blocked before the CLA is signed")
-	if !errors.Is(err, vm.UnauthorizedUserError{}) {
-		t.Logf("pre-sign deploy error (not typed as UnauthorizedUserError over the wire): %v", err)
-	}
+	require.ErrorIs(t, err, vm.UnauthorizedUserError{})
+	// The namespace gate refuses with the same type; only the keeper's log names
+	// the CLA, and gno_addpkg's cla_unsigned hint keys on it. The refusal comes
+	// from the pre-broadcast simulation, so the log must survive that path.
+	require.True(t, chainMentions(err, "has not signed the required CLA"),
+		"the refusal must carry the keeper's deliver-tx log: %+v", err)
 
 	// Sign the CLA from the agent's own key (the scenario-14 unblock path).
 	_, err = c.Call(ctx, signer, "gno.land/r/sys/cla", "Sign", []string{claHash}, "", false)
@@ -130,6 +133,18 @@ func TestSimnet_claGate_blocksThenAllows(t *testing.T) {
 	// After signing: the same deploy lands.
 	_, err = c.AddPackage(ctx, signer, deployPath, tallyRealm(deployPath), false)
 	require.NoError(t, err, "deploy must succeed after the CLA is signed")
+}
+
+// chainMentions reports whether phrase appears in any node of err's chain. A
+// tm2 error shows its wrap annotations only under %+v, so each node is
+// formatted on its own.
+func chainMentions(err error, phrase string) bool {
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		if strings.Contains(fmt.Sprintf("%+v", e), phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestSimnet_claEconomics measures the real per-tx cost of the deploy-through-CLA

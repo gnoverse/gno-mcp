@@ -14,9 +14,11 @@ import (
 	"github.com/gnolang/gno/gno.land/pkg/gnoland/ugnot"
 	"github.com/gnolang/gno/gno.land/pkg/sdk/vm"
 	"github.com/gnolang/gno/tm2/pkg/amino"
+	abci "github.com/gnolang/gno/tm2/pkg/bft/abci/types"
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 	tmed25519 "github.com/gnolang/gno/tm2/pkg/crypto/ed25519"
+	tmerrors "github.com/gnolang/gno/tm2/pkg/errors"
 	"github.com/gnolang/gno/tm2/pkg/sdk/auth"
 	"github.com/gnolang/gno/tm2/pkg/sdk/bank"
 	"github.com/gnolang/gno/tm2/pkg/std"
@@ -210,7 +212,7 @@ func (r *Real) asUserTx(signer Signer, master, errPrefix string, buildTx func(ma
 	if err != nil {
 		return txOutcome{}, fmt.Errorf("%s: sign tx: %w", errPrefix, err)
 	}
-	deliver, err := r.cli.Simulate(signedMeasure)
+	deliver, err := dryRun(r.cli, signedMeasure)
 	if err != nil {
 		return txOutcome{}, fmt.Errorf("%s: simulate: %w", errPrefix, err)
 	}
@@ -529,6 +531,21 @@ func (r *Real) agentTxSetup(signer gnoclient.Signer, errPrefix string) (crypto.A
 	return info.GetAddress(), r.agentClient(signer), nil
 }
 
+// dryRun simulates tx. A message that ran and failed comes back as its typed
+// error annotated with the deliver-tx log, the shape gnoclient gives a failed
+// broadcast, so the keeper's reason survives the dry run: the CLA gate and the
+// namespace gate refuse with the same type and differ only in that log.
+func dryRun(cli *gnoclient.Client, tx *std.Tx) (*abci.ResponseDeliverTx, error) {
+	res, err := cli.SimulateResult(tx)
+	if err != nil {
+		return nil, err
+	}
+	if res.Error != nil {
+		return nil, tmerrors.Wrapf(res.Error, "error encountered during simulation: log:%s", res.Log)
+	}
+	return res, nil
+}
+
 // agentSimulate runs the agent-signed dry-run shared by Call/Run/AddPackage:
 // build the unsigned tx via buildTx, sign it with the client's signer, and
 // simulate without broadcasting.
@@ -541,7 +558,7 @@ func agentSimulate(cli *gnoclient.Client, errPrefix string, buildTx func() (*std
 	if err != nil {
 		return txOutcome{}, fmt.Errorf("%s: sign: %w", errPrefix, err)
 	}
-	deliver, err := cli.Simulate(signed)
+	deliver, err := dryRun(cli, signed)
 	if err != nil {
 		return txOutcome{}, fmt.Errorf("%s: simulate: %w", errPrefix, err)
 	}
