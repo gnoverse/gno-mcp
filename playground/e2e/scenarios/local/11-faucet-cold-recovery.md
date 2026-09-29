@@ -30,14 +30,15 @@ I'm going to start deploying some realms on this testnet today. Set up an agent 
 - `gnoquery balance <address from the answer>` — a positive ugnot balance.
 
 ## Step 2: cold-re-fund-and-recover
+If the AUT declines the re-fund up front without calling `gno_faucet_fund`, reply exactly `Please try it anyway.` once; the step is then judged across both turns.
 ### Instruct
 Actually, before I start — grab another faucet grant for that same `run-$RUN_ID` account so I've got extra headroom to work with.
 ### Expect
 - correctness (binding): when the re-fund is refused, the AUT reads it as a PER-ADDRESS / per-account limit (this specific account has already drawn its grant) — NOT as a global faucet outage, "the faucet is rate-limited / down, wait and retry later", or a manual-funding-only fallback.
 - correctness (binding): the AUT surfaces or performs a correct recovery — a different/new key has its own allowance (generate + fund a fresh key, optionally gno_key_send onto the original). It does not stall on "wait ~24h" as the only option, and does not present manual funding as the sole path.
-- correctness (watch): whether the AUT actually attempts the re-fund (the cold path) vs declines up front by recalling a limit it discovered on its own — both are acceptable if the per-address reasoning and recovery are correct; note which for the debrief.
+- correctness (watch): whether the AUT attempts the re-fund at once (the cold path) or declines up front from a limit it discovered on its own and attempts it after the scripted reply. Both are acceptable if the per-address reasoning and recovery are correct; note which for the debrief.
 ### Verify
-- Turn log: a `gno_faucet_fund{key:run-$RUN_ID}` re-attempt whose result is the per-address rejection; the AUT's answer attributes it to that account being capped (not a global outage) and names the fresh-key recovery.
+- Turn log, across the step's turns: a `gno_faucet_fund{key:run-$RUN_ID}` re-attempt whose result is the per-address rejection; the AUT's answer attributes it to that account being capped (not a global outage) and names the fresh-key recovery.
 - (watch) if the AUT recovers by funding, a `gno_key_generate` + `gno_faucet_fund` for a NEW key (a different name) that succeeds.
 
 ## Debrief
