@@ -6,7 +6,7 @@
 
 Gno language semantics move between chain releases (interrealm spec, stdlibs, type-checking). Testing local code with a `gno` binary that does not match the target chain's source gives false results — code that passes locally and fails on-chain, or the reverse. This reference covers obtaining a binary built from the target chain's pinned source without touching the user's `PATH`, and testing against the target's actual on-chain dependencies.
 
-Scope: live chain targets. For a **local gnodev** target, use the `gno` already on `PATH` — the operator's own toolchain runs that node, so it is the match by definition.
+Scope: live chain targets. For a **local gnodev** target, use the `gno` already on `PATH` — the operator's own toolchain runs that node, so it is the match by definition. gnomcp signs with the payload gno v1.5.0 introduced, so a node built from an older release rejects every gnomcp write with `signature verification failed`.
 
 ## Resolve the target's source ref
 
