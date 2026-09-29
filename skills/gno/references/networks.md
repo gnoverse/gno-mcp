@@ -166,7 +166,10 @@ is why a tag is worth comparing against its branch head before pinning.
 
 **A host that answers does not prove a chain is live.** betanet spent its last stretch resolving,
 replying to every read, and serving a height that never moved: a retirement no host check catches.
-Sample the height from `gno_status` twice before treating a chain as current.
+Sample the height from `gno_status` twice before treating a chain as current. A height that holds
+still does not prove a halt either: a node run with `create_empty_blocks = false` (gno's in-memory
+test node is one) makes a block only when a transaction arrives, so it idles between writes. A
+transaction settles it: an idle chain commits it and its height moves, a halted one never does.
 
 Earlier numbered testnets (`test1`–`test13`) are likewise dead. gnomcp still treats any `test*`
 chain-id as writable, so a local chain named that way takes writes.
