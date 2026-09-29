@@ -40,7 +40,8 @@ func RegisterSessionPropose(s *server.Server, sessionMgr *session.Manager, resol
 			"Required: profile, plus at least one of allow_paths (non-empty array of realm paths) " +
 			"or allow_run=true. Optional: spend_limit (string like \"50000000ugnot\"; must cover " +
 			"at least one write's gas fee at the chain's live gas price, else the proposal is " +
-			"rejected with the minimum to use), expires_in (Go duration string like \"24h\").",
+			"rejected with the minimum to use), expires_in (Go duration string like \"24h\"). " +
+			"A narrow scope (tight allow_paths, a low spend_limit, a short expires_in) bounds what a leaked session key can do.",
 		InputSchema: sessionProposeInputSchema(s),
 		OutputKind:  server.OutputText,
 		Capability:  server.CapWritePrep,

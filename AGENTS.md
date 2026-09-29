@@ -43,6 +43,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 - TDD: failing test first; unit tests use `chain.Fake`, integration tests the in-process node.
 - testify `require`/`assert`; small focused test funcs over mega-tables.
 - New tool = copy the shape of `internal/tools/read/packages.go`: `Register*` func, schema via `addProfileArg`, explicit Annotations, description answering what/when/returns/NOT/format. Wire it in `cmd/gnomcp/register.go`.
+- Claude Code sends the model the first 2,048 characters of the server instructions and of each tool description (`cmd/gnomcp/instructions_test.go` enforces both), and hands it a successful result's structured content without the text: a signal the agent must act on goes in a structured field as well.
 - Gated tools (indexer/faucet) register per profile guards in `register.go`; re-registration after dynamic adds must stay idempotent.
 - Commit style: conventional commits; ADR-only changes use `docs(adr):`.
 

@@ -10,17 +10,19 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -39,55 +41,74 @@ import (
 // dev builds report "dev".
 var version = "dev"
 
+// maxMCPTextLen is the length, in characters, of the server instructions and
+// of each tool description that Claude Code sends the model by default; it
+// drops the rest.
+const maxMCPTextLen = 2048
+
 // serverInstructions is the MCP initialize-time guidance: cross-tool flows the
 // per-tool descriptions can't express (tool descriptions cover one tool each).
-const serverInstructions = "gnomcp exposes Gno chain operations over MCP. The indexer and faucet tools register only when a profile provides them (tx-indexer-url / a testnet); the rest are always available. Typical flows:\n" +
-	"- IDENTITY: private keys and mnemonics never enter the conversation — that is the design. The agent key signs agent writes; writing AS the user goes through an authorization session the user approves with their own gnokey (gno_session_propose). If a task looks like it needs the user's key, check gno_auth_status and gno_session_propose first; never ask the user to share, paste, or import key material.\n" +
-	"- DISCOVER: when the user names an app or realm without its full path, enumerate the chain — gno_packages (path prefix or @namespace) — instead of guessing package paths or asking the user for something the chain can answer. When the user names a CHAIN or network (\"on onyx\", \"on mainnet\"), gno_profile_list maps profile names to chain-ids and endpoints — the startup list below can be stale after runtime adds.\n" +
-	"- READ: gno_read (default = structural outline; symbols=[...] for specific declarations; full=true for raw source) plus gno_render / gno_eval (rendered output / on-chain values). The outline is navigation, not evidence — audit-grade review reads whole files.\n" +
-	"- WRITE on testnet: gno_key_generate (once) -> gno_faucet_fund (fund the agent key) -> gno_call / gno_run / gno_addpkg. An unfunded write returns insufficient_funds pointing at gno_faucet_fund. A deploy rejected with cla_unsigned needs the chain's CLA signed once per key: gno_cla_info reports the agreement URL and hash — show the URL to the user and get their confirmation first, then gno_cla_sign with that hash. " +
-	"On a chain that parks deploys until a package approver enables them (onyx), a deploy is callable only once gno_addpkg reports package_status live; a PARKED result carries the recovery, and reads and calls on a parked path fail with package_parked. Where the chain allowlists MsgRun (onyx), gno_run fails with run_not_allowed — deploy the logic and gno_call it instead.\n" +
-	"- MULTIPLE KEYS (testnet): a profile can hold several named agent keys (key arg on the write tools, default \"default\"; cap GNOMCP_AGENT_MAX_KEYS). gno_key_list shows them, gno_key_delete removes one (replace = delete then generate). To exercise a realm involving multiple addresses, fund one key, then gno_key_send to move ugnot to your own secondary keys and sign calls as each with the key arg. key applies to identity=agent only.\n" +
-	"- WRITE as the user (any WRITABLE chain): gno_session_propose -> the user runs the printed gnokey command to authorize -> retry the write with identity=session. The session needs the user's master account: if the profile has a master-address it is used; if it has none, gno_session_propose requires master_address — ASK the user for their PUBLIC address (g1..., the public one, NOT a key or seed phrase) and pass it. Do NOT tell the user to edit profiles.toml or restart — that friction is gone. gno_auth_status / gno_session_revoke inspect and revoke sessions. Sessions cover gno_call and gno_run ONLY — gno_addpkg (deploy) is not session-supported and always signs with the agent key; deploying under the USER's own address means the user runs `gnokey maketx addpkg` themselves. The session path is WIP — prefer tight allow_paths, a low spend_limit, and a short expires_in.\n" +
-	"- A GNOWEB URL NAMES A CHAIN: a gnoweb URL (e.g. https://gno.land/r/gnoland/blog) is authoritative for WHICH chain to use — resolve it from the URL with gno_profile_add (gnoweb_url=...) before reading, never on whatever profile is ambient. gno_profile_add discovers, verifies, and adds in one call (in-memory, gone on restart); gno_connect previews without adding. dev/testnets are write-capable; any other chain (mainnet gnoland-1 included) is added READ-ONLY (read tools only), which is all an audit needs. " +
-	"To persist: run the returned persist_command and restart gnomcp. Writable dynamic profiles support reads and agent-key writes; sessions need a persisted profile with master-address.\n" +
-	"- RECOVER: tool errors carry their own repair instructions. When the user's request already authorizes the repair (e.g. they asked you to set up write access and the error says to add a master-address), perform it yourself — edit the config, fund the key, retry — and report what you changed; hand instructions back only for steps that genuinely need the user (running gnokey, restarting the MCP client).\n" +
-	"Always report which identity signed a write (the agent key vs a session) so it is never ambiguous."
+// It comes first, so a client that cuts the text keeps it whole.
+const serverInstructions = "Indexer and faucet tools exist only for profiles that provide them.\n" +
+	"- IDENTITY: keys and mnemonics never enter the conversation; never request key material. The agent key signs agent writes. " +
+	"Writing AS the user needs a session the user approves with their own gnokey: gno_session_propose (with no profile master-address, " +
+	"pass the user's PUBLIC g1 address as master_address), the user runs the printed command, then retry with identity=session. " +
+	"Sessions cover gno_call and gno_run; gno_addpkg is not session-signed.\n" +
+	"- DISCOVER: never guess a package path; gno_packages lists a prefix or @namespace. gno_profile_list maps a chain the user names " +
+	"(\"on onyx\") to a profile. A gnoweb URL names its chain: resolve it with gno_profile_add (gnoweb_url=...), never read it on the ambient profile.\n" +
+	"- READ: gno_read (outline by default; symbols=[...] or full=true for source), gno_render, gno_eval. An outline is navigation, not evidence.\n" +
+	"- WRITE (testnet): gno_key_generate once, gno_faucet_fund, then gno_call / gno_run / gno_addpkg; the key arg picks among several agent keys. " +
+	"On cla_unsigned, show the user gno_cla_info's agreement URL, then gno_cla_sign once they confirm. Where deploys park (onyx), a deploy is " +
+	"callable only once gno_addpkg reports package_status live, a parked path fails with package_parked, and gno_run fails with run_not_allowed.\n" +
+	"- RECOVER: tool errors carry their repair; perform it when the user's request already authorizes it, and hand back only the steps " +
+	"that need the user (gnokey, a client restart).\n" +
+	"Report which identity signed every write.\n"
 
 // buildServerInstructions appends the configured profiles to the static
-// guidance so the agent knows which chains it can target — and which are
-// write-as-user capable — without having to call a tool first. This lists what
-// EXISTS, not what is reachable; gno_status checks liveness. Profiles are
-// sorted by name so the instructions (and the prompt cache) are stable across
-// restarts.
+// guidance so the agent knows which chains it can target without calling a
+// tool first. It lists what EXISTS, not what is reachable, sorted by name so
+// the text (and the prompt cache) is stable across restarts, and stops at
+// maxMCPTextLen with a pointer to gno_profile_list.
 func buildServerInstructions(profs map[string]profiles.Profile) string {
 	var b strings.Builder
 	b.WriteString(serverInstructions)
-	b.WriteString("\nProfiles configured at startup (target one with the `profile` arg; this is what exists, not what is reachable — gno_status checks liveness):\n")
+	b.WriteString("Profiles at startup, what exists, not what is reachable (gno_profile_list is current):\n")
 
-	names := make([]string, 0, len(profs))
-	for name := range profs {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		p := profs[name]
-		fmt.Fprintf(&b, "- %s: chain-id %s, rpc %s (%s)", name, p.ChainID, p.RPCURL, p.Kind())
-		if p.GnowebURL != "" {
-			fmt.Fprintf(&b, ", realms viewable at %s/<path>", p.GnowebURL)
+	names := slices.Sorted(maps.Keys(profs))
+	for i, name := range names {
+		line := profileLine(name, profs[name])
+		reserve := 0
+		if rest := len(names) - i - 1; rest > 0 {
+			reserve = utf8.RuneCountInString(moreProfilesLine(rest))
 		}
-		if p.MasterAddress != "" {
-			b.WriteString(" — write-as-user enabled (master-address set)")
+		if utf8.RuneCountInString(b.String())+utf8.RuneCountInString(line)+reserve > maxMCPTextLen {
+			b.WriteString(moreProfilesLine(len(names) - i))
+			break
 		}
-		switch {
-		case p.IsReadOnly():
-			b.WriteString(" — read-only (read tools only; no agent key, faucet, or writes)")
-		case p.Sunset:
-			b.WriteString(" — sunset: retiring chain, still fully writable; prefer the current testnet for new work")
-		}
-		b.WriteByte('\n')
+		b.WriteString(line)
 	}
 	return b.String()
+}
+
+func profileLine(name string, p profiles.Profile) string {
+	line := fmt.Sprintf("- %s: %s at %s, %s", name, p.ChainID, p.RPCURL, p.Kind())
+	switch {
+	case p.IsReadOnly():
+		line += " (read tools only)"
+	case p.Sunset:
+		line += " (sunset: still fully writable, prefer the current testnet)"
+	}
+	if p.MasterAddress != "" {
+		line += ", write-as-user"
+	}
+	if p.GnowebURL != "" {
+		line += ", gnoweb " + p.GnowebURL
+	}
+	return line + "\n"
+}
+
+func moreProfilesLine(n int) string {
+	return fmt.Sprintf("- %d more: gno_profile_list lists every profile.\n", n)
 }
 
 func main() {

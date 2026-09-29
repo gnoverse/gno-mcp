@@ -20,7 +20,7 @@ func RegisterKeyGenerate(s *server.Server, ks *keystore.Keystore) {
 			"and mainnet/prod profiles use session-based signing. " +
 			"A profile can hold several named keys (optional key arg, default \"default\") so the agent " +
 			"can fund secondary accounts and exercise realms involving multiple addresses; " +
-			"the number of keys per profile is capped. " +
+			"the number of keys per profile is capped (GNOMCP_AGENT_MAX_KEYS, default 5). " +
 			"The returned address must be funded (gno_faucet_fund) before it can submit transactions. " +
 			"Purely additive: it refuses to overwrite an existing key — to replace one, gno_key_delete it first, " +
 			"then generate again. " +
