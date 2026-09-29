@@ -21,7 +21,7 @@ Two callers reach realms: an **EOA** (externally-owned account) via `MsgCall` or
 
 **Core principle.** Pattern-matching from Solidity, Cosmos, or vanilla Go produces wrong answers here. Gno has its own model: **`cur realm` is a capability token**, the storage realm of an object is its allocator (PkgID at allocation = authority), cross-realm references carry a sticky **readonly taint**, and "receiver attachment is a privilege grant" is a deliberate design choice rather than a fixable bug. Crossing entrypoints receive a runtime-current first `cur realm`; non-crossing helpers that accept a secondary `rlm realm` must check `rlm.IsCurrent()` before trusting `rlm` for authority.
 
-Two public chains run: **onyx** (`onyx-1`), the default writable testnet, which runs mainnet's release; and **mainnet** (`gnoland-1`), which holds value and is read-only through gnomcp. The interrealm spec is the youngest and most actively-changing part of the stack. Treat security-critical patterns as version-bound to master HEAD and verify against upstream when emitting consequential code. Confirm the chain before every write and every audit: `references/networks.md` carries what differs between them.
+Two public chains run: **onyx** (`onyx-1`), the default writable testnet, on mainnet's release line; and **mainnet** (`gnoland-1`), which holds value and is read-only through gnomcp. The interrealm spec is the youngest and most actively-changing part of the stack. Treat security-critical patterns as version-bound to master HEAD and verify against upstream when emitting consequential code. Confirm the chain before every write and every audit: `references/networks.md` carries what differs between them.
 
 ## When this skill applies
 

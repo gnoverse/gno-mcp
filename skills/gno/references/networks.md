@@ -23,10 +23,10 @@ this file is only the per-chain snapshot.
 |---|---|---|
 | chain-id | `onyx-1` | `gnoland-1` |
 | gnomcp profile | `testnet` | `mainnet` |
-| writes through gnomcp | deploys (parked until approved), calls, sessions, faucet; **no `MsgRun`** | **none**, read tools only |
+| writes through gnomcp | deploys (parked until approved), calls, sessions, faucet; **`gno_run` refused** (`MsgRun` allowlist) | **none**, read tools only |
 | RPC | `rpc.onyx.testnets.gno.land:443` | `rpc.gno.land:443` |
 | gnoweb | `onyx.testnets.gno.land` | `gno.land` |
-| release (`/status` `build_version`) | `v1.5.0`, commit `e75fef82c`: the release mainnet runs | `heads/chain/mainnet.3444+e75fef82c` |
+| release (`/status` `build_version`) | `v1.5.0`, commit `e75fef82c`: the release mainnet runs | `heads/chain/mainnet.<depth>+e75fef82c` |
 | upgrade ledger | `misc/deployments/onyx.gno.land/upgrades.json` | `misc/deployments/mainnet.gno.land/upgrades.json` |
 | gas price (`auth/gasprice`) | `1ugnot/1000gas` | same |
 | block max gas | 3,000,000,000 | same |
@@ -68,8 +68,9 @@ identifies nothing.
 
 ## onyx: `onyx-1`
 
-onyx runs mainnet's release line and takes each mainnet upgrade first, as its rehearsal. Today both
-run commit `e75fef82c`, so code that compiles and runs on onyx compiles and runs on mainnet. That
+onyx runs mainnet's release line and takes each mainnet upgrade first, as its rehearsal. As of the
+date above both run commit `e75fef82c`, so the VM that type-checks and runs code on onyx is the one
+mainnet runs; chain params such as the package approvers and the `MsgRun` allowlist are each chain's own. That
 holds only while both `build_version`s resolve to the same commit. The strings never match: onyx
 reports the tag `v1.5.0`, which peels to `e75fef82c`, and mainnet reports
 `heads/chain/mainnet.<depth>+e75fef82c`. Compare the commits. During an upgrade onyx runs the new
@@ -113,10 +114,11 @@ Another address is refused (`package already awaiting approval at …, submitted
 Packages deployed to mainnet after genesis run there once approved. "Submitted" and "live" are
 different states with a gap between them.
 
-**A parked package is invisible to every ordinary read.** `vm/qpaths` skips it; `vm/qfuncs`,
+**A parked package is invisible to every ordinary chain query.** `vm/qpaths` skips it; `vm/qfuncs`,
 `vm/qeval`, `vm/qrender` and `vm/qfile` answer it exactly as they answer a path that was never
-submitted. Its source cannot be read back at all; only the submitting transaction carries it. Two
-queries exist for this and nothing else:
+submitted. gnomcp's read and call tools tell the two apart for you: on a parked path they return
+`package_parked`. Its source cannot be read back at all; only the submitting transaction carries
+it. Outside gnomcp, two queries exist for this and nothing else:
 
 ```bash
 gnokey query vm/qpkgmeta_json -data "gno.land/r/x/y"    # status: "live" | "inert" | "absent"
@@ -125,8 +127,8 @@ gnokey query "vm/qinertpaths?limit=100" -data "gno.land/r/"   # everything await
 
 `qpkgmeta_json` is the only way to tell a parked package from one that does not exist. It also
 carries a `reason`, which reads the same for a package still waiting and for one the approver
-refused. Reach for it before reporting that a path is missing on a chain running `inert`. Never
-probe a path's existence with a call: a call into a parked path and a call into a path never
+refused. Reach for it before reporting that a path is missing on a chain running `inert`. Outside
+gnomcp, never probe a path's existence with a call: a call into a parked path and a call into a path never
 submitted fail with the same internal error (`unexpected node with location` in the log), so only
 `qpkgmeta_json` answers the question.
 
@@ -255,13 +257,15 @@ file does not cover.
    master or this file. Code written for pearl spells several imports differently (§ Porting code
    written for pearl).
 7. **Parking.** Lint against onyx's release before deploying, since the chain does not type-check a
-   submission. After the deploy, call the package only once it is live: `gno_addpkg` waits for the
-   approver and reports `package_status`, and a read of a parked path answers `package_parked`.
-   `live` is the only status that means callable. `inert` means parked: a package still parked a
-   minute after its deploy is not going to be enabled on its own, so lint it, check the deploying
-   key can pay the storage deposit, then redeploy to the same path with the same key.
-   `redeploy_parked` means the previous version keeps serving reads and calls until the new one is
-   enabled. `unknown` means the chain gave no usable answer: read the path before calling it.
+   submission. `gno_addpkg` waits for the approver and reports `package_status`; call the package
+   only once it is `live`. A read of a parked path answers `package_parked`.
+
+   | `package_status` | Meaning | Next |
+   |---|---|---|
+   | `live` | callable | call it |
+   | `inert` | parked, not callable | still parked a minute after the deploy: lint it, check the deploying key can pay the storage deposit, then redeploy to the same path with the same key |
+   | `redeploy_parked` | the previous version keeps serving reads and calls until the new one is enabled | as for `inert`, if it stays parked |
+   | `unknown` | the chain gave no usable answer | read the path before calling it |
 8. **Scripts.** On onyx `gno_run` returns `run_not_allowed`: deploy the logic as a realm and
    `gno_call` it, or run the script on a local gnodev.
 9. **Transaction history.** `gno_activity`/`gno_history` work on both chains. To enumerate what is

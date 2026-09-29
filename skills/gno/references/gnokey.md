@@ -58,8 +58,8 @@ ratio clears the chain's minimum (next section). So the two knobs interact only 
 raise `GasWanted` and you must raise `GasFee` to keep the ratio above the floor.
 
 **The floor.** The minimum acceptable fee is `GasWanted × minGasPrice`. The genesis price is
-**1 ugnot per 1000 gas** — onyx and mainnet both run at that floor (`1ugnot/1000gas`); earlier testnets had drifted
-to `10ugnot/1000gas`. Re-query `auth/gasprice` live; the floor moves per chain. At the genesis
+**1 ugnot per 1000 gas** — onyx and mainnet both run at that floor (`1ugnot/1000gas`). Re-query
+`auth/gasprice` live; the floor moves per chain. At the genesis
 price, `GasWanted = 10_000_000` puts the floor at **10,000 ugnot (0.01 GNOT)**. gnomcp does not offer a fixed pair: every write **dry-runs first at a
 1B-gas measuring ceiling**, then broadcasts at `GasWanted = measured × 1.5` floored at
 `DefaultGasWanted = 10_000_000` (a realm call burns ~1–2M gas, a deploy ~5M — light writes stay on
@@ -242,5 +242,5 @@ Distilled from `gnokey` (`tm2/pkg/crypto/keys/client`, `gno.land/pkg/keyscli`), 
 and fee/gas-price logic (`tm2/pkg/sdk/auth`, `tm2/pkg/std`), and the vm storage-deposit keeper
 (`gno.land/pkg/sdk/vm`) in gnolang/gno at release `v1.5.0`; gnomcp's write tools; and the
 gnolang/gno issue tracker (#3805, #5086, #3704, #329, #2109, #4279, #5122, #203, #416, #3703).
-The mechanics match the deploy-gate flows of pearl, since retired, and onyx's parking flow; the CLA gate is disabled on every live chain today, so confirm it live
+The mechanics cover onyx's deploy gates and parking flow. The CLA gate is disabled on every live chain as of this writing; confirm it live
 rather than reading it off this line (see sysrealms.md). Flag surface is version-bound — confirm with `gnokey <cmd> -help`.
