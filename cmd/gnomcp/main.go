@@ -58,8 +58,8 @@ const serverInstructions = "Indexer and faucet tools exist only for profiles tha
 	"(\"on onyx\") to a profile. A gnoweb URL names its chain: resolve it with gno_profile_add (gnoweb_url=...), never read it on the ambient profile.\n" +
 	"- READ: gno_read (outline by default; symbols=[...] or full=true for source), gno_render, gno_eval. An outline is navigation, not evidence.\n" +
 	"- WRITE (testnet): gno_key_generate once, gno_faucet_fund, then gno_call / gno_run / gno_addpkg; the key arg picks among several agent keys. " +
-	"On cla_unsigned, show the user gno_cla_info's agreement URL, then gno_cla_sign once they confirm. Where deploys park (onyx), a deploy is " +
-	"callable only once gno_addpkg reports package_status live, a parked path fails with package_parked, and gno_run fails with run_not_allowed.\n" +
+	"On cla_unsigned, show the user gno_cla_info's agreement URL, then gno_cla_sign once they confirm. A deploy is callable only once " +
+	"gno_addpkg reports package_status live. Where deploys park (onyx), a parked path fails with package_parked, and gno_run fails with run_not_allowed.\n" +
 	"- RECOVER: tool errors carry their repair; perform it when the user's request already authorizes it, and hand back only the steps " +
 	"that need the user (gnokey, a client restart).\n" +
 	"Report which identity signed every write.\n"

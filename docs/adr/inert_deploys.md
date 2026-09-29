@@ -27,7 +27,7 @@ The result reports `package_status`:
 - `redeploy_parked`: a redeploy parked over a live private realm; the result says the previous version still serves reads and calls.
 - `unknown`: the chain reported the package as neither live nor parked, or never answered. Never reported as live.
 
-For every status but `live`, the recovery also goes into the structured field `next_steps`: Claude Code hands the model a successful result's structured content without its text. Audit records distinguish `parked` and `status_unknown` from `ok`. On any other chain the only addition is the policy read; nothing is polled after the broadcast.
+For every status but `live`, the recovery also goes into the structured field `next_steps`: Claude Code hands the model a successful result's structured content without its text. Audit records distinguish `parked` and `status_unknown` from `ok`. On any other chain nothing is polled after the broadcast, and the result reports `package_status` `live`: such a chain parks nothing, so the one field answers whether a deploy is callable on every chain, and an agent never has to know which chains park.
 
 **A simulation on an inert chain says it did not type-check the code.**
 

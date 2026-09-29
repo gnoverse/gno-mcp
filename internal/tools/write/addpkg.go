@@ -48,10 +48,12 @@ func registerAddPkg(s *server.Server, ks *keystore.Keystore, resolver chain.Reso
 			"local profiles use the built-in test1 key; testnet profiles use a key generated via " +
 			"gno_key_generate (run that first if no key exists). " +
 			"If the supplied file list omits gnomod.toml it is generated automatically. " +
+			"Every broadcast deploy reports package_status, and the deployed code is callable only when it is live. " +
 			"On a chain running the inert code-submission policy the deploy parks until the chain's package approver " +
-			"enables it: the tool waits up to 30s and reports package_status live, inert (PARKED, with the chain's reason " +
-			"and how to recover), redeploy_parked (the previous version still serves) or unknown. A parked package is not " +
-			"callable, and a simulation on such a chain does not type-check the code. " +
+			"enables it: the tool waits up to 30s and reports live, inert (PARKED, with the chain's reason " +
+			"and how to recover), redeploy_parked (the previous version still serves) or unknown. There the result also " +
+			"carries code_submission_policy, which describes the chain rather than this package, and a simulation " +
+			"does not type-check the code. " +
 			"The result reports which identity signed (tell the user which account performed the write) and an " +
 			"equivalent gnokey command for transparency — illustrative only, since gnomcp already signed and broadcast the tx.",
 		InputSchema: addpkgInputSchema(s),
@@ -234,13 +236,18 @@ func addpkgHandler(
 	// ---- On an inert chain, wait for the approver to enable the package
 
 	var (
-		status string // stays "" on a chain that runs what it accepts
+		status string // stays "" on a dry run
 		meta   chain.PackageMeta
 	)
-	if inert && !res.Simulated {
+	switch {
+	case res.Simulated:
+	case inert:
 		var werr error
 		meta, werr = waitLive(ctx, c, deployPath, wait)
 		status = deployStatus(meta, werr)
+	default:
+		// A chain that runs what it accepts parks nothing.
+		status = chain.PackageLive
 	}
 
 	switch {
@@ -289,7 +296,11 @@ func addpkgHandler(
 	}
 	switch status {
 	case chain.PackageLive:
-		fmt.Fprintln(&b, "Package: live, enabled by the chain's package approver")
+		if inert {
+			fmt.Fprintln(&b, "Package: live, enabled by the chain's package approver")
+		} else {
+			fmt.Fprintln(&b, "Package: live")
+		}
 	case chain.PackageInert:
 		fmt.Fprintf(&b, "Package: parked. The chain accepted the deploy and had not enabled it after %s.\n", wait.timeout)
 		writeReason(&b, meta.Reason, deployPath)
@@ -312,7 +323,7 @@ func addpkgHandler(
 	// guess the host. Only on a real deploy that is live, and only when the
 	// profile has a usable gnoweb host (a local node has none).
 	var viewURL string
-	if !res.Simulated && (status == "" || status == chain.PackageLive) {
+	if status == chain.PackageLive {
 		viewURL = p.RealmViewURL(deployPath)
 	}
 	if viewURL != "" {

@@ -135,12 +135,13 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 - **Returns:** deploy (or `simulate`) result, prefixed with the signing identity.
 - Deploys a package/realm via `vm/MsgAddPackage`, signed by the agent key (local: test1, testnet: generated key). A `gnomod.toml` is generated automatically if omitted.
 - `deploy_path` accepts a full package path, or a **short name** (no `/`) that expands to the agent's own-address namespace `gno.land/r/<agent-address>/<name>` — always authorized, no registration, gnoweb-safe (no hyphens). A short name cannot be combined with a caller-supplied `gnomod.toml` (its module line cannot be rewritten); pass the full path in that case.
-- The tool reads the chain's code-submission policy before signing. On a chain running `inert` (onyx), the deploy parks until the chain's package approver enables it, so after the broadcast the tool polls `vm/qpkgmeta_json` for up to 30s and reports `package_status`:
+- Every broadcast deploy reports `package_status`, and the deployed code is callable only when it is `live`. A simulation reports none.
+- The tool reads the chain's code-submission policy before signing. On a chain running `inert` (onyx), the deploy parks until the chain's package approver enables it, so after the broadcast the tool polls `vm/qpkgmeta_json` for up to 30s and reports one of:
   - `live` — enabled; the result reads as an ordinary success, with the gnoweb link when the profile has a gnoweb host.
   - `inert` — still parked: the headline says PARKED, the chain's reason arrives in an `<untrusted_content kind="package_reason">` envelope (raw in `package_reason`), and the text carries the recovery. No gnoweb link.
   - `redeploy_parked` — a redeploy parked over a live private realm: reads and calls still reach the previous version, and the result says so.
   - `unknown` — the chain reported the package as neither live nor parked, or never answered; never reported as live.
-  The result also carries `code_submission_policy`. For `inert`, `redeploy_parked` and `unknown`, `next_steps` repeats the recovery the text carries, for clients that hand the model the structured content alone. On any other chain the output is unchanged and no status is polled.
+  The result also carries `code_submission_policy`, which describes the chain, not the package. For `inert`, `redeploy_parked` and `unknown`, `next_steps` repeats the recovery the text carries, for clients that hand the model the structured content alone. Any other chain parks nothing: no status is polled, and a deploy that lands reports `live`.
 - A simulation on an inert chain does not type-check the code (the chain parks without checking it); the result says so, in the text and in `next_steps`.
 
 ### `gno_cla_info`

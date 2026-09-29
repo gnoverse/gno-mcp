@@ -53,7 +53,8 @@ func deployTally(t *testing.T, fake *chain.Fake, simulate bool, wait parkWait) (
 	return res, err, parseAuditEntries(t, &auditBuf)
 }
 
-func TestAddPkg_nonInertChainIsUntouched(t *testing.T) {
+// A chain that runs what it accepts parks nothing, so a landed deploy is live.
+func TestAddPkg_nonInertChainReportsLive(t *testing.T) {
 	fake := chain.NewFake()
 	fake.SetSubmissionPolicy("permissionless")
 
@@ -61,7 +62,9 @@ func TestAddPkg_nonInertChainIsUntouched(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, res.Text, "AddPackage succeeded")
-	assert.NotContains(t, res.StructuredContent, "package_status")
+	assert.Contains(t, res.Text, "Package: live")
+	assert.NotContains(t, res.Text, "package approver", "no approver enabled it")
+	assert.Equal(t, chain.PackageLive, res.StructuredContent["package_status"])
 	assert.NotContains(t, res.StructuredContent, "code_submission_policy")
 	assert.NotContains(t, res.StructuredContent, "next_steps")
 	assert.Zero(t, fake.PackageMetaCalls(inertPath), "a chain that runs what it accepts needs no status poll")
@@ -185,6 +188,7 @@ func TestAddPkg_inertSimulateSaysTheCodeWasNotTypeChecked(t *testing.T) {
 	assert.Contains(t, res.Text, "did not type-check")
 	assert.Equal(t, chain.SubmissionPolicyInert, res.StructuredContent["code_submission_policy"])
 	assert.Contains(t, res.StructuredContent["next_steps"], "did not type-check")
+	assert.NotContains(t, res.StructuredContent, "package_status", "nothing was deployed")
 	assert.Zero(t, fake.PackageMetaCalls(inertPath), "nothing was deployed, so nothing to poll")
 }
 
