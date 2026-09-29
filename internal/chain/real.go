@@ -530,10 +530,9 @@ func (r *Real) agentTxSetup(signer gnoclient.Signer, errPrefix string) (crypto.A
 	return info.GetAddress(), r.agentClient(signer), nil
 }
 
-// dryRun simulates tx. A message that ran and failed comes back as its typed
-// error annotated with the deliver-tx log, the shape gnoclient gives a failed
-// broadcast, so the keeper's reason survives the dry run: the CLA gate and the
-// namespace gate refuse with the same type and differ only in that log.
+// dryRun simulates tx, returning a failed message's typed error with the
+// deliver-tx log as a failed broadcast does: the CLA and namespace gates
+// differ only in that log.
 func dryRun(cli *gnoclient.Client, tx *std.Tx) (*abci.ResponseDeliverTx, error) {
 	res, err := cli.SimulateResult(tx)
 	if err != nil {

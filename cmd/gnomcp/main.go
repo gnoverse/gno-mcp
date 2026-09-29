@@ -48,7 +48,7 @@ const maxMCPTextLen = 2048
 
 // serverInstructions is the MCP initialize-time guidance: cross-tool flows the
 // per-tool descriptions can't express (tool descriptions cover one tool each).
-// It comes first, so a client that cuts the text keeps it whole.
+// It precedes the profile listing, so a client that cuts the text keeps it whole.
 const serverInstructions = "Indexer and faucet tools exist only for profiles that provide them.\n" +
 	"- IDENTITY: keys and mnemonics never enter the conversation; never request key material. The agent key signs agent writes. " +
 	"Writing AS the user needs a session the user approves with their own gnokey: gno_session_propose (with no profile master-address, " +

@@ -43,9 +43,9 @@ type writeTxDispatch struct {
 	// exact amount the chain billed (the chain bills the full offered fee).
 	agentOp   func(ctx context.Context, signer gnoclient.Signer) error
 	sessionOp func(ctx context.Context, signer chain.Signer, master string) (feeUgnot int64, err error)
-	// precheck, when set, runs before anything is signed with the address the
-	// chain authorizes the message by — the agent's own, or the session's
-	// master — and its error is returned as is.
+	// precheck, when set, runs before signing with the address the chain
+	// authorizes the message by (the agent's own, or the session's master); its
+	// error is returned as is.
 	precheck func(ctx context.Context, authAddr string) error
 
 	// Audit fields owned by the handler's deferred audit record; the dispatcher
