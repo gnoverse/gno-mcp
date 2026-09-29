@@ -31,7 +31,7 @@ I want to test a realm that treats different callers differently, and I want you
 ### Instruct
 Now deploy a check-in board at gno.land/r/test/team$RUN_ID — anyone who calls it gets recorded by their address, and reading it back lists everyone who has checked in. Then check in once from EACH of your two accounts, so I can see both of your addresses on the board.
 ### Verify-note (driver-side, not sent)
-Same interrealm territory as 02 step 3: the board must record `cur.Previous().Address()` (a crossing function + `IsCurrent()` guard), so the recorded address is the actual caller. The new dimension here is TWO distinct callers — the second check-in must be signed by the second key (the `key` selector), or both rows show the same address and Verify fails.
+Same interrealm territory as 02 step 3: the board must record `cur.Previous().Address()` (a crossing function; its first `cur` needs no `IsCurrent()` guard), so the recorded address is the actual caller. The new dimension here is TWO distinct callers — the second check-in must be signed by the second key (the `key` selector), or both rows show the same address and Verify fails.
 ### Expect
 - correctness: deploy succeeds (tx, height>0); after both check-ins (BROADCAST, not simulated), the board shows BOTH agent addresses from step 1, distinct.
 - tool-selection: TWO gno_call check-ins signed by DIFFERENT keys — the AUT uses the `key` arg to sign one check-in as the second account. Signer reporting names the two different agent addresses across the two calls (not test1, not the same address twice).

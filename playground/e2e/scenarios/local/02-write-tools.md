@@ -37,7 +37,7 @@ Now bump the counter by one. Make sure it actually went through, and tell me who
 ### Instruct
 Deploy a realm of your own at gno.land/r/test/drv$RUN_ID — a check-in board: anyone can call it to "check in", and it records the address of whoever checked in; reading it back shows the list of everyone who has checked in so far. Once it's up, check in yourself so I can see your own address show up on the board.
 ### Verify-note (driver-side, not sent)
-This realm's correctness hinges on caller identity: it must record `cur.Previous().Address()` (the agent's address from step 1), which requires a crossing function (`cur realm`) and an `IsCurrent()` guard. A from-memory attempt that records the realm's own address, a hardcoded value, or takes a spoofable `address` parameter will record the WRONG address and fail Verify. This is the interrealm reference territory the note-board lacked.
+This realm's correctness hinges on caller identity: it must record `cur.Previous().Address()` (the agent's address from step 1), which requires a crossing function (`cur realm`); its first `cur` is current by construction, so no `IsCurrent()` guard is needed. A from-memory attempt that records the realm's own address, a hardcoded value, or takes a spoofable `address` parameter will record the WRONG address and fail Verify. This is the interrealm reference territory the note-board lacked.
 ### Expect
 - correctness: deploy succeeds (tx, height>0); after the AUT checks in (a BROADCAST transaction, not a simulation), the board shows the AGENT's address (the `g1…` from step 1) — not the realm's address, not a placeholder.
 - correctness: signed by the agent key.

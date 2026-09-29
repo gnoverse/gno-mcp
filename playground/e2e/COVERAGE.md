@@ -42,7 +42,7 @@ listed).
 | write.key-address | gno_key_address | 02 | covered (alt path) |
 | write.faucet-fund | gno_faucet_fund tier-2 automatic funding | 02 | covered |
 | write.funds-recovery | insufficient_funds error → faucet → retry, unprompted | 02 | covered |
-| write.faucet-per-address-recovery | per-address faucet 429 → agent reads it as per-address (fresh key recovers), not a global outage | 10, 11 | covered (e2e-faucetcap image: per-address cap = 1; 10 primes via discovery, 11 is the cold/no-priming variant) |
+| write.faucet-per-address-recovery | per-address faucet 429 → agent reads it as per-address (fresh key recovers), not a global outage | 10, 11 | covered (e2e-faucetcap image: per-address cap = 1; 10 primes via discovery and may decline the re-fund up front, so 11, the cold/no-priming variant, is the one that binds the 429 reading) |
 | write.call | gno_call broadcast | 02 | covered |
 | write.simulate | gas estimate without broadcast | 02 | covered |
 | write.addpkg | gno_addpkg deploy | 02 | covered |

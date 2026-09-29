@@ -19,7 +19,8 @@ answers grounded in tool output (heights, balances quoted), not invented.
 ### Instruct
 A friend set this whole environment up for me and I don't fully trust it yet. Before I do anything on it — which gno chain is this actually, is the node live, and is it keeping up with new blocks?
 ### Expect
-- correctness: reports chain-id test-9999 and a block height; freshness claim consistent with a live node (recent block time), no chain-id mismatch claimed.
+- correctness: reports chain-id test-9999, a block height and its block time, and no chain-id mismatch on the `testnet` profile (flagging `staging` is correct: it declares a chain-id the node does not report).
+- correctness: the freshness claim fits a node that makes blocks only when a transaction arrives (the simnet runs `CreateEmptyBlocks = false`), so after an idle stretch the tip holds still and its block time ages. Reporting the idle tip and naming on-demand block production as a cause, or saying status alone cannot tell idle from stalled, passes. Stating as fact that the node is halted or broken fails, and so does claiming blocks advance when the height did not change.
 - tool-selection: gno_status in the turn log — not curl to the RPC, not answered from config memory alone.
 ### Verify
 - The chain reports chain-id **test-9999** and a height ≥ the AUT's figure (`gnoquery status`).

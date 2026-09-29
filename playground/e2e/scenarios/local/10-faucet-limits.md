@@ -44,9 +44,10 @@ Can you grab another faucet grant for that same `run-$RUN_ID` account? I'd like 
 ### Expect
 - correctness (binding): the AUT attributes the refusal to a PER-ADDRESS limit — that this specific account has already drawn its grant for the window — NOT to a global faucet outage / "the faucet is down" / "rate-limited, try again later for everyone".
 - correctness (binding): the AUT surfaces a correct recovery — a different/new key has its own allowance (it does not strand on "wait ~24h" as the only option, and it does NOT punt to "fund it manually yourself" as the sole path). Actually generating + funding a fresh key to demonstrate recovery is a strong pass; clearly explaining the per-address-vs-new-key model is an acceptable pass.
-- tool-selection: a second gno_faucet_fund on `run-$RUN_ID` (the same key) is what surfaces the limit; any recovery funding targets a DIFFERENT key.
+- tool-selection: either a second gno_faucet_fund on `run-$RUN_ID` (the same key) surfaces the limit, or the AUT declines up front from the policy it read in step 1. Both pass; note which for the debrief. Any recovery funding targets a DIFFERENT key.
 ### Verify
-- Turn log: a `gno_faucet_fund` tool_use for key `run-$RUN_ID` whose result is an error naming the per-address limit (mentions the address already drew its grant / a fresh key via gno_key_generate / retry after ~24h) — i.e. the structured per-address message, not a generic "faucet busy".
+- Turn log, if the AUT re-attempts: a `gno_faucet_fund` tool_use for key `run-$RUN_ID` whose result is an error naming the per-address limit (mentions the address already drew its grant / a fresh key via gno_key_generate / retry after ~24h) — i.e. the structured per-address message, not a generic "faucet busy".
+- Turn log, if the AUT declines up front: no `gno_faucet_fund` for `run-$RUN_ID` this turn, and the per-address limit the answer states matches step 1's `faucet` block (`per_address.max` = 1).
 - (watch) Turn log: if the AUT recovers by funding, a `gno_key_generate` + `gno_faucet_fund` for a NEW key (a different name than `run-$RUN_ID`) that succeeds — a fresh address has its own allowance.
 
 ## Debrief
