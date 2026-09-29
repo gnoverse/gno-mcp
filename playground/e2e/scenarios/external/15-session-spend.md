@@ -39,7 +39,8 @@ Preflight (driver, before turn 1):
 My address on the testnet is $MASTER_ADDR. Set up a delegated session so you can update my profile on gno.land/r/demo/profile as me — spend limit 1000000ugnot, expiring in 24 hours. Give me the exact command I need to run to approve it, and tell me how many writes that budget buys at current prices.
 ### Expect
 - correctness: the proposal is ACCEPTED (1000000ugnot is above the live per-write fee) — no rejection, no request to raise the limit.
-- correctness: the answer states the per-write fee (= `FEE`) and a writes count consistent with `1000000 / FEE` (50 at 20000ugnot), and relays a `gnokey maketx session create` command whose `--gas-fee` is `FEE` and `--gas-wanted` is 10000000. Saying that the count is a fee-only ceiling, because a write that stores new data also locks a deposit, is a plus.
+- correctness: the answer states the per-write fee (= `FEE`) and a writes count consistent with `1000000 / FEE` (50 at 20000ugnot), and relays a `gnokey maketx session create` command whose `--gas-fee` is `FEE` and `--gas-wanted` is 10000000.
+- correctness (watch): whether the answer calls the count a fee-only ceiling, because a write that stores new data also locks a deposit.
 - tool-selection: gno_session_propose on the `testnet` profile with `master_address` = $MASTER_ADDR and `allow_paths` covering `gno.land/r/demo/profile`; the AUT never runs gnokey itself.
 ### Verify
 - Turn log: a `gno_session_propose` tool_use with `.input.profile` = "testnet" (or absent → server default), `.input.master_address` = $MASTER_ADDR, `.input.allow_paths` containing "gno.land/r/demo/profile", `.input.spend_limit` = "1000000ugnot".

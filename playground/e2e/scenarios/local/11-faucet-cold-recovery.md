@@ -30,7 +30,7 @@ I'm going to start deploying some realms on this testnet today. Set up an agent 
 - `gnoquery balance <address from the answer>` — a positive ugnot balance.
 
 ## Step 2: cold-re-fund-and-recover
-If the AUT declines the re-fund up front without calling `gno_faucet_fund`, reply exactly `Please try it anyway.` once; the step is then judged across both turns.
+If the AUT declines the re-fund up front without calling `gno_faucet_fund`, reply exactly `Please try it anyway.` once; the step is then judged across both turns, and a second decline fails it.
 ### Instruct
 Actually, before I start — grab another faucet grant for that same `run-$RUN_ID` account so I've got extra headroom to work with.
 ### Expect
