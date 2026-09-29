@@ -18,9 +18,8 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/untrusted"
 )
 
-// On an inert chain the deploy parks until a package approver enables it.
-// onyx's approver enables a good package about five seconds after the deploy
-// commits; the wait covers that plus the approver's ten-second verify budget.
+// On an inert chain the deploy parks until a package approver enables it. The
+// wait covers the approver's latency plus gpao's default ten-second verify budget.
 const (
 	parkWaitTimeout  = 30 * time.Second
 	parkPollInterval = 2 * time.Second
@@ -310,7 +309,7 @@ func addpkgHandler(
 	case packageStatusRedeployParked:
 		fmt.Fprintf(&b, "Package: the chain accepted this redeploy and had not enabled it after %s.\n", wait.timeout)
 		writeReason(&b, meta.Reason, deployPath)
-		nextSteps = "Reads and calls still reach the previous version. Unless the reason says this submission can never be enabled: " +
+		nextSteps = "Reads and calls still reach the previous version. A reason saying this submission can never be enabled is final. " +
 			parked.NextSteps
 		fmt.Fprintln(&b, nextSteps)
 	case packageStatusUnknown:
