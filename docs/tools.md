@@ -185,4 +185,4 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 ### `gno_faucet_fund`
 
 - **Args:** `profile?` (testnet only), `key?`
-- **Returns:** the outcome of requesting a testnet grant for the named agent key — an automatic service grant (tx hash), a faucet link, or manual instructions, depending on the profile's faucet config. Use after `gno_key_generate` when the agent account is unfunded.
+- **Returns:** the outcome of requesting a testnet grant for the named agent key — an automatic service grant (tx hash), a faucet link, or manual instructions, depending on the profile's faucet config. Use after `gno_key_generate` when the agent account is unfunded. On a faucet `500`, `502` or `504`, or no answer before the client timeout, the tool polls the balance for up to 60s, since the grant may have landed. A funded key is reported funded. Otherwise the error tells the agent to read the balance with `gno_account` before calling again.

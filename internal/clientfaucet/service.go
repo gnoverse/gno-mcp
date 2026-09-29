@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -22,6 +24,10 @@ const maxFaucetRespBytes = 4 << 10
 // txHashRE is the shape a tx hash must match before it is embedded into
 // LLM-visible output. It blocks injection text and over-budget blobs.
 var txHashRE = regexp.MustCompile(`^(0x)?[0-9a-fA-F]{1,128}$`)
+
+// ErrServiceFailed marks a faucet 500, 502 or 504, or no answer before the
+// client timeout: an outcome that does not rule out a landed grant.
+var ErrServiceFailed = errors.New("faucet service error")
 
 // ServiceFaucet talks to an automatic agent-faucet service (POST /fund).
 type ServiceFaucet struct {
@@ -39,6 +45,9 @@ func (s *ServiceFaucet) Fund(ctx context.Context, address, chainID string) (Outc
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.http.Do(req)
 	if err != nil {
+		if uerr, ok := errors.AsType[*url.Error](err); ok && uerr.Timeout() {
+			return Outcome{}, fmt.Errorf("%w: no answer in time: %w", ErrServiceFailed, err)
+		}
 		return Outcome{}, fmt.Errorf("faucet service unreachable: %w", err)
 	}
 	defer resp.Body.Close()
@@ -50,7 +59,13 @@ func (s *ServiceFaucet) Fund(ctx context.Context, address, chainID string) (Outc
 		// text; the label marks it (envelope forgery is neutralized at the SDK
 		// error boundary).
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return Outcome{}, fmt.Errorf("faucet service error: %s: [untrusted faucet response] %s", resp.Status, strings.TrimSpace(string(b)))
+		// resp.Status would carry the faucet's own reason phrase ahead of the label.
+		detail := fmt.Sprintf("%d %s: [untrusted faucet response] %s", resp.StatusCode, http.StatusText(resp.StatusCode), strings.TrimSpace(string(b)))
+		switch resp.StatusCode {
+		case http.StatusInternalServerError, http.StatusBadGateway, http.StatusGatewayTimeout:
+			return Outcome{}, fmt.Errorf("%w: %s", ErrServiceFailed, detail)
+		}
+		return Outcome{}, fmt.Errorf("faucet service error: %s", detail)
 	}
 	var body struct {
 		TxHash string `json:"tx_hash"`
