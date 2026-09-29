@@ -54,7 +54,7 @@ wrong deployment).
 Never block on the MCP — it's an accelerator, not a dependency (see `mcp.md`). Raw ABCI recipe:
 
 ```bash
-RPC=https://rpc.pearl.testnets.gno.land:443   # chain-id pearl-1
+RPC=https://rpc.onyx.testnets.gno.land:443    # chain-id onyx-1
 hex=$(printf '%s' 'gno.land/r/sys/names.IsEnabled()' | xxd -p | tr -d '\n')
 curl -s "$RPC/abci_query?path=%22vm/qeval%22&data=0x$hex"   # value = base64 at result.response.ResponseBase.Data
 # paths: vm/qeval (eval expr) · vm/qfuncs (list exported funcs, data=pkgpath) · vm/qrender (data=pkgpath:renderpath)
@@ -72,9 +72,9 @@ is gone because the bare or older path is empty.** A wrong-version query that re
 most common way to answer "doesn't exist" when the truth is "exists at /vN."
 
 **The version number does not rank across chains.** Name registration is `namereg/v1` on pearl and
-`namereg/v0` on mainnet, with the same exported surface; the validator set is held by
-`validators/v3` on pearl and `validators/v0` on mainnet, and both chains also deploy a `validators/v2`
-that holds nothing. A higher number on one chain does not mean newer, and a version present on one
+`namereg/v0` on onyx and mainnet, with the same exported surface; the validator set is held by
+`validators/v3` on pearl and `validators/v0` on onyx and mainnet, and every live chain also deploys a
+`validators/v2` that holds nothing. A higher number on one chain does not mean newer, and a version present on one
 chain need not exist on the other. Enumerate with `gno_packages` on the prefix, then ask each
 deployed version which one answers.
 
@@ -85,11 +85,11 @@ deployed version which one answers.
 | Realm | Durable role | Query live for… |
 |---|---|---|
 | `r/sys/users` | Canonical name↔address store + collision index. Source of truth; holds no policy. | `IsNameTaken(n)`, `ResolveName(n)`, `ResolveAddress(a)`, `Controllers()` (which controllers it trusts) |
-| `r/sys/namereg/vN` | A *controller*: public registration policy (format/price/blacklist) writing through `users`. Its version segment differs per chain (`/v1` on pearl, `/v0` on mainnet) and it may not be loaded at all. | enumerate the `r/sys/namereg` prefix first, then `ValidateNymFormat(s)`, `IsPaused()`, and `Render("")` for the price + rules |
+| `r/sys/namereg/vN` | A *controller*: public registration policy (format/price/blacklist) writing through `users`. Its version segment differs per chain (`/v1` on pearl, `/v0` on onyx and mainnet) and it may not be loaded at all. | enumerate the `r/sys/namereg` prefix first, then `ValidateNymFormat(s)`, `IsPaused()`, and `Render("")` for the price + rules |
 | `r/sys/names` | Read-only verifier the chain consults to gate package deploys; reads `users`. | `IsEnabled()` (is namespace enforcement on at all?), `IsPaused()`, `IsAuthorizedAddressForNamespace(addr, ns)` |
 | `r/sys/params` | GovDAO-facing **writer** of native chain params (sole privileged caller of native `sys/params`); exposes getters for only a handful (`GetValoperRegisterFee()`, valset getters). **Not** the read surface for arbitrary params. | its own getters for the few it exposes; **raw param values live in the keeper, not this realm** — read them via the param path (see "Reading a chain param value" below) |
 | `sys/params` (native stdlib) | The Go-side params keeper `r/sys/params` writes through; frame-gated to that one realm. | Not a realm — observed indirectly via `r/sys/params` and the params query surface |
-| `r/sys/validators/vN` | Params-backed validator-set design (valoper operator/signing-key model with key rotation). The live set sits at `/v3` on pearl and `/v0` on mainnet. | `GetValidators()`, `GetValidator(a)`, `IsValidator(a)`, `RotateValoperSigningKey`, `NotifyValoperChanged` — the rotation knobs are NOT here: fee and period live on `r/sys/params` (`GetValoperRotationFee()`, `GetValoperRotationPeriodBlocks()`). **`qfuncs` the realm and report live values; `master` may have changed since this chain deployed** |
+| `r/sys/validators/vN` | Params-backed validator-set design (valoper operator/signing-key model with key rotation). The live set sits at `/v3` on pearl and `/v0` on onyx and mainnet. | `GetValidators()`, `GetValidator(a)`, `IsValidator(a)`, `RotateValoperSigningKey`, `NotifyValoperChanged` — the rotation knobs are NOT here: fee and period live on `r/sys/params` (`GetValoperRotationFee()`, `GetValoperRotationPeriodBlocks()`). **`qfuncs` the realm and report live values; `master` may have changed since this chain deployed** |
 | `r/sys/validators/v2` | PoA-based version. Deployed on both live chains and holding the set on neither — `GetValidators()` returns empty there. | `GetValidators()` on **every** deployed version; the one returning a non-empty set is the live one. Cross-check against the node's own `/validators`. |
 | `p/sys/validators` | Pure types/interface shared by the validator realms. No state. | — |
 | `r/sys/cla` | Contributor License Agreement gate the chain consults before deploys. | `Render("")` (enabled? required hash? URL?), `HasValidSignature(addr)` |
@@ -147,32 +147,32 @@ the chain, don't recite it): `auth:p:fee_collector` (gas fee collector), `vm:p:s
 (storage-deposit collector — distinct from the gas one), `vm:p:storage_price`, `node:p:halt_height`,
 `bank:p:restricted_denoms`.
 
-## Worked example — "how do I register a name on pearl?"
+## Worked example — "how do I register a name on onyx?"
 
 The model in action. Every concrete value comes from a live query; you explain the steps, the user
 runs the funded tx.
 
-1. **Confirm the chain.** `gno_status` (or RPC `/status`) → chain-id is `pearl-1`. Now reads are about
+1. **Confirm the chain.** `gno_status` (or RPC `/status`) → chain-id is `onyx-1`. Now reads are about
    the chain the user actually means.
 2. **Is enforcement even on?** `gno_eval gno.land/r/sys/names.IsEnabled()`. If `false`, namespace
    enforcement is off on this network — anyone can already deploy under any `r/<name>/*` and registering
    a username isn't required to deploy (explain that, don't invent a registration flow). If `true`, continue.
-3. **Which registration path is live?** `gno_packages gno.land/r/sys/` (or `qfuncs gno.land/r/sys/namereg/v1`).
-   If `namereg/v1` isn't deployed on this chain, there's no open self-service tier here — names come from
+3. **Which registration path is live?** `gno_packages gno.land/r/sys/` (or `qfuncs gno.land/r/sys/namereg/v0`).
+   If `namereg/v0` isn't deployed on this chain, there's no open self-service tier here — names come from
    genesis seeding / GovDAO, and personal-address namespaces (`r/<your-g1address>/*`) still work. Say so.
-4. **Read the real rules — live, not from memory.** If `namereg/v1` is present: `gno_render gno.land/r/sys/namereg/v1`
+4. **Read the real rules — live, not from memory.** If `namereg/v0` is present: `gno_render gno.land/r/sys/namereg/v0`
    (shows the format and price) and `gno_eval ...ValidateNymFormat("nym-alice123")` / `...IsPaused()`. Report the
    format and price you actually read — do not state `nym-<stem><digits>` or any price as fact without this step.
 5. **Explain the steps the user runs.** With the real package path, func, and price in hand: the user signs a
-   `maketx call -pkgpath gno.land/r/sys/namereg/v1 -func Register -args "<username>"` from their own funded
+   `maketx call -pkgpath gno.land/r/sys/namereg/v0 -func Register -args "<username>"` from their own funded
    key (or via a gno-mcp session they authorize). Two hard constraints read off the deployed source:
    `Register` panics unless the sent amount **exactly equals** `registerPrice` — which is `0` today, so
    **omit `-send` entirely** rather than passing `-send "0ugnot"` — and it requires `cur.Previous().IsUserCall()`,
    so it must be a direct `maketx call` from an EOA; a `maketx run` script can never register. Execution is
    theirs; you don't broadcast it.
 
-The point: whether `namereg/v1` exists, whether enforcement is on, the exact format and price — all of it
-came from querying pearl, not from this file.
+The point: whether `namereg/v0` exists, whether enforcement is on, the exact format and price — all of it
+came from querying onyx, not from this file.
 
 ## See also
 
@@ -184,5 +184,5 @@ came from querying pearl, not from this file.
 ## Source
 
 Distilled from `examples/gno.land/r/sys/*` + `gnovm/stdlibs/sys/params` in gnolang/gno, the gnolang/gno
-issue/PR roadmap, per-network genesis configs, and verified against live pearl and mainnet (ABCI `vm/qfuncs`/`qeval`/`qrender`).
+issue/PR roadmap, per-network genesis configs, and verified against live onyx, pearl and mainnet (ABCI `vm/qfuncs`/`qeval`/`qrender`).
 The design above is durable; concrete values are intentionally absent — query the live chain.

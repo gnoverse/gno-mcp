@@ -73,13 +73,26 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	}
 	tn, ok := cfg.Profiles["testnet"]
 	require.True(t, ok, "testnet default missing")
-	assert.Equal(t, "pearl-1", tn.ChainID, "testnet default chain-id")
-	assert.Equal(t, "https://rpc.pearl.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
-	assert.Equal(t, "https://pearl.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
-	assert.Equal(t, "https://indexer.pearl.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
-	assert.Equal(t, "https://faucet-agent.pearl.testnets.gno.land", tn.FaucetServiceURL, "testnet default agent-faucet service url")
+	assert.Equal(t, "onyx-1", tn.ChainID, "testnet default chain-id")
+	assert.Equal(t, "https://rpc.onyx.testnets.gno.land:443", tn.RPCURL, "testnet default rpc-url")
+	assert.Equal(t, "https://onyx.testnets.gno.land", tn.GnowebURL, "testnet default gnoweb-url")
+	assert.Equal(t, "https://indexer.onyx.testnets.gno.land/graphql/query", tn.TxIndexerURL, "testnet default tx-indexer-url")
+	assert.Equal(t, "https://faucet-agent.onyx.testnets.gno.land", tn.FaucetServiceURL, "testnet default agent-faucet service url")
+	assert.True(t, tn.IsTestnet(), "the default testnet must be writable")
+	assert.False(t, tn.Sunset, "the default testnet is not retiring")
 	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
+
+	old, ok := cfg.Profiles["pearl"]
+	require.True(t, ok, "sunset predecessor testnet missing from builtins")
+	assert.Equal(t, "pearl-1", old.ChainID, "pearl chain-id")
+	assert.True(t, old.Sunset, "pearl must be marked sunset")
+	assert.True(t, old.IsTestnet(), "sunset builtin must stay a writable testnet")
+	assert.Equal(t, "https://rpc.pearl.testnets.gno.land:443", old.RPCURL, "pearl rpc-url")
+	assert.Equal(t, "https://pearl.testnets.gno.land", old.GnowebURL, "pearl gnoweb-url")
+	assert.Equal(t, "https://faucet-agent.pearl.testnets.gno.land", old.FaucetServiceURL, "pearl faucet (live) must be configured so deploys can fund")
+	assert.Equal(t, "https://indexer.pearl.testnets.gno.land/graphql/query", old.TxIndexerURL, "pearl indexer (live) must be configured")
+	assert.Empty(t, old.MasterAddress, "built-in pearl must carry no master-address")
 
 	// mainnet carries real value. It ships the read paths and nothing that
 	// could sign.

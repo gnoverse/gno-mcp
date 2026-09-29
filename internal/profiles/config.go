@@ -49,7 +49,7 @@ type Profile struct {
 func (p Profile) IsLocal() bool { return p.ChainID == "dev" }
 
 // IsTestnet reports whether the profile targets a write-capable testnet (a
-// chain on the testnet name list, e.g. pearl-1 — sunset or not).
+// chain on the testnet name list, e.g. onyx-1, pearl-1 — sunset or not).
 // Read-only chains are NOT testnets: they have no agent key path and no
 // faucet.
 func (p Profile) IsTestnet() bool {
@@ -138,8 +138,8 @@ func Load(r io.Reader) (*Config, error) {
 // the canonical persistent testnet rolls (append the new codename to
 // testnetChainNames in validate.go and demote the previous chain to a sunset
 // builtin named after its codename). The chain reports its chain-id with a
-// version suffix ("pearl-1") while its hosts use the bare codename
-// ("pearl.testnets.gno.land"). The writable builtins carry at most the current
+// version suffix ("onyx-1") while its hosts use the bare codename
+// ("onyx.testnets.gno.land"). The writable builtins carry at most the current
 // testnet and its immediate predecessor: a chain drops out once its hosts stop
 // resolving, since a profile pointing at dead infrastructure only offers the
 // agent a chain every call fails against. Verify a satellite endpoint against
@@ -149,11 +149,20 @@ const (
 	builtinLocalRPC   = "http://127.0.0.1:26657"
 	builtinLocalChain = "dev"
 
-	builtinTestnetRPC     = "https://rpc.pearl.testnets.gno.land:443"
-	builtinTestnetChain   = "pearl-1"
-	builtinTestnetGnoweb  = "https://pearl.testnets.gno.land"
-	builtinTestnetIndexer = "https://indexer.pearl.testnets.gno.land/graphql/query"
-	builtinTestnetFaucet  = "https://faucet-agent.pearl.testnets.gno.land"
+	builtinTestnetRPC     = "https://rpc.onyx.testnets.gno.land:443"
+	builtinTestnetChain   = "onyx-1"
+	builtinTestnetGnoweb  = "https://onyx.testnets.gno.land"
+	builtinTestnetIndexer = "https://indexer.onyx.testnets.gno.land/graphql/query"
+	builtinTestnetFaucet  = "https://faucet-agent.onyx.testnets.gno.land"
+
+	// pearl is the sunset predecessor: still fully writable while its infra
+	// stays up (deploys, faucet, indexer all live) — the sunset label only
+	// steers new work toward the current testnet.
+	builtinPearlRPC     = "https://rpc.pearl.testnets.gno.land:443"
+	builtinPearlChain   = "pearl-1"
+	builtinPearlGnoweb  = "https://pearl.testnets.gno.land"
+	builtinPearlIndexer = "https://indexer.pearl.testnets.gno.land/graphql/query"
+	builtinPearlFaucet  = "https://faucet-agent.pearl.testnets.gno.land"
 
 	// mainnet carries value and is never writable, so it ships the read paths
 	// and no faucet. Keep the hyphen in "gnoland-1": "gnoland1" names a
@@ -182,6 +191,14 @@ func BuiltinProfiles() map[string]Profile {
 			GnowebURL:        builtinTestnetGnoweb,
 			TxIndexerURL:     builtinTestnetIndexer,
 			FaucetServiceURL: builtinTestnetFaucet,
+		},
+		"pearl": {
+			RPCURL:           builtinPearlRPC,
+			ChainID:          builtinPearlChain,
+			GnowebURL:        builtinPearlGnoweb,
+			TxIndexerURL:     builtinPearlIndexer,
+			FaucetServiceURL: builtinPearlFaucet,
+			Sunset:           true,
 		},
 		"mainnet": {
 			RPCURL:       builtinMainnetRPC,

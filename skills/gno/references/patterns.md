@@ -354,7 +354,7 @@ Panics if anything but a direct `MsgCall` from an EOA reaches this function. Str
 
 ### Allowlist via `ownable` / `authz`
 
-For multi-admin or rotateable ownership, use the canonical packages: `gno.land/p/nt/ownable/v0` (single-owner pattern) or `authz` (richer auth schemes), spelled `gno.land/p/moul/authz` on pearl and `gno.land/p/moul/authz/v0` on mainnet.
+For multi-admin or rotateable ownership, use the canonical packages: `gno.land/p/nt/ownable/v0` (single-owner pattern) or `authz` (richer auth schemes), spelled `gno.land/p/moul/authz` on pearl and `gno.land/p/moul/authz/v0` on onyx and mainnet.
 
 ## Cost-aware design
 
@@ -389,9 +389,9 @@ Gas is a measure of computational and storage cost. Every read, write, allocatio
 
 ## Common library imports
 
-Packages that survived the `examples/quarantined/` cull — the test-13 safe-list (PR #5726) that moved unaudited/personal-namespace packages to `examples/quarantined/`. The path is chain-specific: resolve every one against the target chain with `gno_packages` before importing. Where pearl and mainnet spell a package differently, both are given:
+Packages that survived the `examples/quarantined/` cull — the test-13 safe-list (PR #5726) that moved unaudited/personal-namespace packages to `examples/quarantined/`. The path is chain-specific: resolve every one against the target chain with `gno_packages` before importing. Where pearl and the mainnet line (onyx, mainnet) spell a package differently, both are given:
 
-| Need | pearl | mainnet |
+| Need | pearl | onyx, mainnet |
 |---|---|---|
 | AVL trees (ordered keyed state) | `gno.land/p/nt/avl/v0` | same |
 | B+tree (alternative for ordered keyed state) | `gno.land/p/nt/bptree/v0` | same |
@@ -402,11 +402,11 @@ Packages that survived the `examples/quarantined/` cull — the test-13 safe-lis
 | Realm-path parsing | `gno.land/p/moul/realmpath` | `gno.land/p/moul/realmpath/v0` |
 | Authorization patterns | `gno.land/p/moul/authz` | `gno.land/p/moul/authz/v0` |
 | Pagination | `gno.land/p/jeronimoalbi/pager` | `gno.land/p/jeronimoalbi/pager/v0` |
-| DAO primitives | `gno.land/p/nt/commondao/v0` resolves on neither live chain | |
+| DAO primitives | `gno.land/p/nt/commondao/v0` resolves on no live chain | |
 
 Prefer these over re-implementation — they're reviewed, used, and stable.
 
-Sub-packages of these roots are spelled differently on the two chains (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on mainnet), and the GRC20 standard sits in a different tree. `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split, and authz and realmpath each carry more than one version on at least one chain: the table gives one spelling that resolves, which is not always the newest. Enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
+Sub-packages of these roots are spelled differently on pearl and on the mainnet line (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on onyx and mainnet), and the GRC20 standard sits in a different tree. `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split, and authz and realmpath each carry more than one version on at least one chain: the table gives one spelling that resolves, which is not always the newest. Enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
 
 **Don't** import `gno.land/r/tests/vm/test20` — deliberately insecure test fixture exporting `PrivateLedger`. Using it in production code = instant compromise (see `security.md` § Encapsulation pattern).
 

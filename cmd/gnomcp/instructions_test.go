@@ -79,7 +79,7 @@ func TestBuildServerInstructions_flagsReadOnlyProfile(t *testing.T) {
 func TestBuildServerInstructions_flagsSunsetProfile(t *testing.T) {
 	got := buildServerInstructions(map[string]profiles.Profile{
 		"test13":  {RPCURL: "https://rpc.old.example", ChainID: "test-13", Sunset: true},
-		"testnet": {RPCURL: "https://rpc.new.example", ChainID: "pearl-1"},
+		"testnet": {RPCURL: "https://rpc.new.example", ChainID: "onyx-1"},
 	})
 	assert.Contains(t, got, "sunset")
 	assert.Contains(t, got, "still fully writable")

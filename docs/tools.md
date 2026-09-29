@@ -6,7 +6,7 @@ Chain-returned bytes are untrusted: the inline-text read/indexer tools (includin
 
 ## Read-only (chain)
 
-These tools require no config — the built-in `local`, `testnet` and `mainnet` profiles are available by default.
+These tools require no config — the built-in `local`, `testnet`, `pearl` (sunset) and `mainnet` profiles are available by default.
 
 ### `gno_render`
 
@@ -63,7 +63,7 @@ These tools require no config — the built-in `local`, `testnet` and `mainnet` 
 
 - **Args:** `name` (required), then exactly one form: `rpc_url` + `chain_id` (explicit), or `gnoweb_url` (discovery). Optional: `tx_indexer_url`, `faucet_service_url`, `faucet_url`.
 - **Returns:** confirmation plus the `gnomcp profile add` command to persist the profile.
-- Adds a profile **in-memory only** — it disappears on restart and never touches `profiles.toml`. Init-time profiles cannot be overridden; re-adding a dynamically added name replaces it. Any format-safe chain-id is accepted; `dev` and known-testnet chain-ids (`test*`, `pearl-*`) are added read/write, everything else read-only. The node is dialed to confirm it reports the declared chain-id (gnoweb meta-tags are a hint, not truth; a non-loopback gnoweb advertising a loopback RPC is rejected). No `master-address` field: dynamic profiles support reads and agent-key writes only — sessions require a persisted profile. After a successful add the tool set is re-published (`tools/list_changed`), which can summon gated tools (faucet, indexer) mid-session.
+- Adds a profile **in-memory only** — it disappears on restart and never touches `profiles.toml`. Init-time profiles cannot be overridden; re-adding a dynamically added name replaces it. Any format-safe chain-id is accepted; `dev` and known-testnet chain-ids (`test*`, `pearl-*`, `onyx-*`) are added read/write, everything else read-only. The node is dialed to confirm it reports the declared chain-id (gnoweb meta-tags are a hint, not truth; a non-loopback gnoweb advertising a loopback RPC is rejected). No `master-address` field: dynamic profiles support reads and agent-key writes only — sessions require a persisted profile. After a successful add the tool set is re-published (`tools/list_changed`), which can summon gated tools (faucet, indexer) mid-session.
 
 ## Read-only (indexer)
 

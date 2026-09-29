@@ -58,7 +58,7 @@ ratio clears the chain's minimum (next section). So the two knobs interact only 
 raise `GasWanted` and you must raise `GasFee` to keep the ratio above the floor.
 
 **The floor.** The minimum acceptable fee is `GasWanted × minGasPrice`. The genesis price is
-**1 ugnot per 1000 gas** — pearl and mainnet both run at that floor (`1ugnot/1000gas`); earlier testnets had drifted
+**1 ugnot per 1000 gas** — onyx, pearl and mainnet all run at that floor (`1ugnot/1000gas`); earlier testnets had drifted
 to `10ugnot/1000gas`. Re-query `auth/gasprice` live; the floor moves per chain. At the genesis
 price, `GasWanted = 10_000_000` puts the floor at **10,000 ugnot (0.01 GNOT)**. gnomcp does not offer a fixed pair: every write **dry-runs first at a
 1B-gas measuring ceiling**, then broadcasts at `GasWanted = measured × 1.5` floored at
@@ -177,7 +177,7 @@ two stores** — they don't see each other's keys.
 | `--gas-wanted 4000000000` → "invalid gas-wanted" | Keep under block-max-gas (~3B) | #329 |
 | Empty `--send ""` to a payable realm → "payment must not be less than …" | A required deposit must ride in `--send`; empty sends nothing | #329 |
 | `out of gas` → bump to just above the reported number, fails again | The number is gas-used-so-far; bump well above, or simulate | #3704 |
-| `signature verification failed; verify correct account, sequence, and chain-id` | First suspect a **stale gnokey binary** (a known cause); then check `--chainid`, and `--account-number`/`--sequence` from `gnokey query auth/accounts/<addr>` | #2109 |
+| `signature verification failed; verify correct account, sequence, and chain-id` | First suspect a gnokey that does not match the chain: a **stale binary** (a known cause), or, against pearl, one built from `v1.5.0` or later, whose signature payload pearl does not verify (`networks.md`); then check `--chainid`, and `--account-number`/`--sequence` from `gnokey query auth/accounts/<addr>` | #2109 |
 | `gnokey add --derivation-path …` prints derived addrs but may save an **un-derived** key | Verify the stored key's `path:` before signing | #5122 |
 | Tx "succeeds" at CheckTx then fails at DeliverTx | The real cause is one line buried in a large `Log` stack dump — grep the deliver-tx log; typed realm errors aren't here yet | #203, #416 |
 | Mismatched / missing `--remote` + `--chainid` | Both must be set and match the target chain (the UX may collapse to one `-chain` flag later) | #3703 |
@@ -207,11 +207,11 @@ fee — every gnomcp write result echoes the real values):
 
 ```
 # gno_call{realm:"gno.land/r/demo/foo", func:"Bump", args:["1"], send:"", key:"alice"}
-# (light call on pearl: gas-wanted floors at 10M; live price 1ugnot/1000gas → fee = 10M × 1ugnot/1000gas × 2)
+# (light call on onyx: gas-wanted floors at 10M; live price 1ugnot/1000gas → fee = 10M × 1ugnot/1000gas × 2)
 gnokey maketx call \
   -pkgpath gno.land/r/demo/foo -func Bump -args 1 \
   -gas-wanted 10000000 -gas-fee 20000ugnot \
-  -remote https://rpc.pearl.testnets.gno.land:443 -chainid pearl-1 \
+  -remote https://rpc.onyx.testnets.gno.land:443 -chainid onyx-1 \
   -broadcast alice
 ```
 
@@ -239,5 +239,5 @@ and fee/gas-price logic (`tm2/pkg/sdk/auth`, `tm2/pkg/std`), and the vm storage-
 (`gno.land/pkg/sdk/vm`) in gnolang/gno at the commit pinned in this repo's go.mod; the gnomcp write
 path (`internal/chain/real.go`, `internal/tools/write`); and the gnolang/gno issue tracker (#3805,
 #5086, #3704, #329, #2109, #4279, #5122, #203, #416, #3703). Mechanics verified against the live
-pearl deploy-gate flows; the CLA gate is disabled on both live chains today, so confirm it live
+pearl deploy-gate flows; the CLA gate is disabled on every live chain today, so confirm it live
 rather than reading it off this line (see sysrealms.md). Flag surface is version-bound — confirm with `gnokey <cmd> -help`.

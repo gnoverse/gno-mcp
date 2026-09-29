@@ -10,7 +10,7 @@ import (
 
 // ProfileChainList renders "name (chain id[, label])" for each name, in the
 // given order, for embedding in profile-arg descriptions — the model resolves
-// a chain the user names ("on pearl", "on mainnet") to a profile from this map.
+// a chain the user names ("on onyx", "on mainnet") to a profile from this map.
 // Labels: sunset (retiring testnet, still writable — prefer the current one
 // for new work) and read-only (mainnet and any chain outside the writable
 // set, no write path).

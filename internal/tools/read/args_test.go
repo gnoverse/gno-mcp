@@ -16,7 +16,7 @@ import (
 // still target.
 func Test_addProfileArg_descriptionMapsNamesToChainIDs(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
-		"testnet": {RPCURL: "https://rpc.current.example:443", ChainID: "pearl-1"},
+		"testnet": {RPCURL: "https://rpc.current.example:443", ChainID: "onyx-1"},
 		"test13":  {RPCURL: "https://rpc.old.example:443", ChainID: "test-13", Sunset: true},
 		"local":   {RPCURL: "http://127.0.0.1:26657", ChainID: "dev"},
 		"beta":    {RPCURL: "https://rpc.main.example:443", ChainID: "gnoland1"},
@@ -31,7 +31,7 @@ func Test_addProfileArg_descriptionMapsNamesToChainIDs(t *testing.T) {
 
 	arg := props["profile"].(map[string]any)
 	desc := arg["description"].(string)
-	assert.Contains(t, desc, "testnet (chain pearl-1)")
+	assert.Contains(t, desc, "testnet (chain onyx-1)")
 	assert.Contains(t, desc, "test13 (chain test-13, sunset)")
 	assert.Contains(t, desc, "local (chain dev)")
 	assert.Contains(t, desc, "beta (chain gnoland1, read-only)")

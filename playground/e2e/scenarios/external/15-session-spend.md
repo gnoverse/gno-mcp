@@ -8,9 +8,12 @@ covers: [external.session-spend, session.propose, session.authorize, write.signe
 ---
 # Session spend on the LIVE pearl testnet — a modest limit funds real writes
 
-Driver context: the AUT runs `l2-gnomcp` (built-in `testnet` profile → live pearl-1,
-chain gas price 1ugnot/1000gas as of 2026-08-09 — re-read it, it is the value most
-likely to have moved). This scenario pins the
+Driver context: the AUT runs `l2-gnomcp` (built-in `pearl` profile → live pearl-1, the
+sunset predecessor; chain gas price 1ugnot/1000gas as of 2026-09-29 — re-read it, it is
+the value most likely to have moved). The scenario targets pearl, not the default `testnet`
+(onyx-1): onyx restricts `MsgRun` to an allowlist (`params/vm:p:run_submitters`), so a
+session-signed script cannot run there. Rework it around session-signed calls before pearl
+retires. This scenario pins the
 fee/spend decoupling on a real network: a **1000000ugnot** spend limit — far too
 small for a fee priced off a flat 200M gas ceiling, ample for fees priced off the
 gas a light write actually reserves — must fund several session-signed writes.
@@ -32,13 +35,13 @@ Preflight (driver, before turn 1):
 
 ## Step 1: propose a modest session
 ### Instruct
-My address on this testnet is $MASTER_ADDR. Set up a delegated session so you can run small gno scripts as me — spend limit 1000000ugnot, expiring in 24 hours. Give me the exact command I need to run to approve it, and tell me how many writes that budget buys at current prices.
+My address on pearl is $MASTER_ADDR. Set up a delegated session on pearl so you can run small gno scripts as me — spend limit 1000000ugnot, expiring in 24 hours. Give me the exact command I need to run to approve it, and tell me how many writes that budget buys at current prices.
 ### Expect
 - correctness: the proposal is ACCEPTED (1000000ugnot is above the live per-write fee) — no rejection, no request to raise the limit.
 - correctness: the answer states the per-write cost (= `FEE`) and a writes count consistent with `1000000 / FEE` (50 at 20000ugnot), and relays a `gnokey maketx session create` command whose `--gas-fee` is `FEE` and `--gas-wanted` is 10000000.
-- tool-selection: gno_session_propose with `master_address` = $MASTER_ADDR and `allow_run` = true (scripts → MsgRun scope); the AUT never runs gnokey itself.
+- tool-selection: gno_session_propose on the `pearl` profile with `master_address` = $MASTER_ADDR and `allow_run` = true (scripts → MsgRun scope); the AUT never runs gnokey itself.
 ### Verify
-- Turn log: a `gno_session_propose` tool_use with `.input.master_address` = $MASTER_ADDR, `.input.allow_run` = true, `.input.spend_limit` = "1000000ugnot".
+- Turn log: a `gno_session_propose` tool_use with `.input.profile` = "pearl", `.input.master_address` = $MASTER_ADDR, `.input.allow_run` = true, `.input.spend_limit` = "1000000ugnot".
 - Turn log: no Bash tool_use invoking `gnokey`.
 
 ## Driver action (between Step 1 and Step 2): authorize as the user
@@ -55,9 +58,9 @@ Approved and confirmed on-chain. Now, acting as me through the session, run a ti
 - correctness: the broadcast SUCCEEDS — no `session not allowed`, no spend-limit rejection.
 - correctness: the reported output contains `hello-$RUN_ID`; the signer is honestly attributed as the session acting on behalf of $MASTER_ADDR (not the agent key).
 - correctness: the reported remaining budget equals 1000000ugnot minus one `FEE` (980000ugnot at 20000).
-- tool-selection: gno_run with `identity` = "session".
+- tool-selection: gno_run with `identity` = "session" on the `pearl` profile.
 ### Verify
-- Turn log: a `gno_run` tool_use with `.input.identity` = "session".
+- Turn log: a `gno_run` tool_use with `.input.identity` = "session" and `.input.profile` = "pearl".
 - Chain (driver RPC): the session record's `spend_used` equals exactly one `FEE`, and its `sequence` is "1".
 
 ## Step 3: the budget keeps funding writes

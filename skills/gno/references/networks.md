@@ -1,16 +1,18 @@
 # Networks — per-chain facts and cross-chain drift
 
-**pearl** (chain-id `pearl-1`) is the one public chain gnomcp can write to. **mainnet**
-(`gnoland-1`) is read-only: reads and audits work, no code path signs anything there. Every value
-below was verified live on **2026-09-28**; re-query anything load-bearing (`gno_status`,
-`auth/gasprice`, a realm's render, whether a package resolves) before relying on it.
+**onyx** (chain-id `onyx-1`) is the testnet gnomcp writes to by default, through the built-in
+`testnet` profile. **pearl** (`pearl-1`) is its sunset predecessor: still writable through the
+`pearl` profile while its infrastructure lives, and the place to go for anything onyx refuses.
+**mainnet** (`gnoland-1`) is read-only: reads and audits work, no code path signs anything there.
+Every value below was verified live on **2026-09-29**; re-query anything load-bearing
+(`gno_status`, `auth/gasprice`, a realm's render, whether a package resolves) before relying on it.
 
-**Run `gno_status` before quoting anything here.** This file covers exactly two chain-ids,
-`pearl-1` and `gnoland-1`. A local gnodev, an e2e simnet, a staging chain and any newer testnet are
-none of them, and nothing below describes them — their gas price, faucet policy, package set and
-gate states are their own. Confirm the chain-id you are actually connected to first; if it is
-neither of the two, read the value off that chain instead of this page, and say which chain your
-answer is about.
+**Run `gno_status` before quoting anything here.** This file covers exactly three chain-ids,
+`onyx-1`, `pearl-1` and `gnoland-1`. A local gnodev, an e2e simnet, a staging chain and any newer
+testnet are none of them, and nothing below describes them — their gas price, faucet policy,
+package set and gate states are their own. Confirm the chain-id you are actually connected to
+first; if it is none of the three, read the value off that chain instead of this page, and say
+which chain your answer is about.
 
 **This file describes genesis sets only.** A chain's genesis is fixed at launch and safe to write
 down; everything deployed after it belongs to whoever deployed it and changes without notice, so no
@@ -20,73 +22,98 @@ this file is only the per-chain snapshot and the differences between chains.
 
 ## Per-chain matrix
 
-| Fact | pearl — writable | mainnet — read-only |
-|---|---|---|
-| chain-id | `pearl-1` | `gnoland-1` |
-| writes through gnomcp | deploys, calls, sessions, faucet | **none** — read tools only |
-| RPC | `rpc.pearl.testnets.gno.land:443` | `rpc.gno.land:443` |
-| gnoweb | `pearl.testnets.gno.land` | `gno.land` |
-| release | `chain/pearl` build | read `misc/deployments/mainnet.gno.land/upgrades.json` for the current one — `chain/mainnet`'s tag names only its genesis build |
-| `/status` | `node_info.version` is `v1.0.0-rc.0` and `software` empty on every chain — neither identifies a release. `build_version` does: read it | same |
-| gas price (`auth/gasprice`) | `1ugnot/1000gas` | same |
-| block max gas | 3,000,000,000 | same |
-| storage deposit (`params/vm:p:storage_price`) | 100 ugnot | same |
-| deposit cap (`params/vm:p:default_deposit`) | 100 GNOT | same |
-| code submission (`params/vm:p:code_submission_policy`) | `permissionless` | **`inert`** — see below |
-| `MsgRun` (`params/vm:p:run_submitters`) | unrestricted | **allowlisted** — query the param for the current set |
-| CLA deploy gate (`r/sys/cla`) | **OFF** | **OFF** |
-| namespace gate (`r/sys/names.IsEnabled`) | `true`; personal-address path free | `true` |
-| name registration | `r/sys/namereg/v1`, not paused | `r/sys/namereg/v0` — same realm renumbered, not paused, identical exported surface |
-| validator set | `r/sys/validators/v3` holds it (`/v2` also deployed, empty) | `r/sys/validators/v0` holds it (`/v2` also deployed, empty) |
-| faucet | present — read the grant size and per-address cap from `gno_status`'s `faucet` block, never from this row | none — mainnet ships without one |
-| tx indexer | `indexer.pearl…/graphql/query` | `indexer.gno.land/graphql/query` — same query root, `getSupply` on both |
-| toolchain tag | `chain/pearl` at `c4c72fdd2`, commit-only | `chain/mainnet` at `9c8eb132`, semver twin `v1.2.0` — genesis only, superseded by the upgrade ledger |
-| sub-package path scheme | version at the **root** (`p/nt/avl/v0/rotree`) | version at the **leaf** (`p/nt/avl/rotree/v0`) |
+| Fact | onyx — default, writable | pearl — sunset, writable | mainnet — read-only |
+|---|---|---|---|
+| chain-id | `onyx-1` | `pearl-1` | `gnoland-1` |
+| gnomcp profile | `testnet` | `pearl` | `mainnet` |
+| writes through gnomcp | deploys (parked until approved), calls, sessions, faucet; **no `MsgRun`** | deploys, calls, scripts, sessions, faucet | **none** — read tools only |
+| RPC | `rpc.onyx.testnets.gno.land:443` | `rpc.pearl.testnets.gno.land:443` | `rpc.gno.land:443` |
+| gnoweb | `onyx.testnets.gno.land` | `pearl.testnets.gno.land` | `gno.land` |
+| release (`/status` `build_version`) | `v1.5.0`, commit `e75fef82c` — the release mainnet runs | `heads/chain/pearl.3320+c4c72fdd2` | `heads/chain/mainnet.3444+e75fef82c` |
+| upgrade ledger | `misc/deployments/onyx.gno.land/upgrades.json` | none | `misc/deployments/mainnet.gno.land/upgrades.json` |
+| gas price (`auth/gasprice`) | `1ugnot/1000gas` | same | same |
+| block max gas | 3,000,000,000 | same | same |
+| storage deposit (`params/vm:p:storage_price`) | 100 ugnot | same | same |
+| deposit cap (`params/vm:p:default_deposit`) | 100 GNOT | same | same |
+| code submission (`params/vm:p:code_submission_policy`) | **`inert`**, approved automatically — see below | `permissionless` | **`inert`** |
+| `MsgRun` (`params/vm:p:run_submitters`) | **allowlisted** — one address | unrestricted | **allowlisted** |
+| CLA deploy gate (`r/sys/cla`) | **OFF** | **OFF** | **OFF** |
+| namespace gate (`r/sys/names.IsEnabled`) | `true`; personal-address path free | `true`; personal-address path free | `true` |
+| name registration | `r/sys/namereg/v0`, not paused | `r/sys/namereg/v1`, not paused | `r/sys/namereg/v0` — pearl's realm renumbered, identical exported surface |
+| validator set | `r/sys/validators/v0` holds it (`/v2` also deployed, empty) | `r/sys/validators/v3` holds it (`/v2` also deployed, empty) | `r/sys/validators/v0` holds it (`/v2` also deployed, empty) |
+| faucet | present — read the grant size and per-address cap from `gno_status`'s `faucet` block, never from this row | present — same | none — mainnet ships without one |
+| tx indexer | `indexer.onyx…/graphql/query` | `indexer.pearl…/graphql/query` | `indexer.gno.land/graphql/query` — same query root, `getSupply` on all three |
+| toolchain install ref | tag `v1.5.0` | `chain/pearl` at `c4c72fdd2`, commit-only | the ledger's newest entry — `chain/mainnet` (`9c8eb132`, semver twin `v1.2.0`) names genesis only |
+| sub-package path scheme | version at the **leaf** (`p/nt/avl/rotree/v0`) | version at the **root** (`p/nt/avl/v0/rotree`) | version at the **leaf** |
+| signature payload verified | either fee rendering | **legacy rendering only** — see drift 0 | either fee rendering |
 
-The minimum fee for a 10M-gas write on pearl is 10,000 ugnot (0.01 GNOT); gnomcp offers ×2 over
-the floor (`gnokey.md`). Mainnet runs the same gas price, so a write there would cost the same —
-gnomcp simply never signs one.
+The minimum fee for a 10M-gas write is 10,000 ugnot (0.01 GNOT) on all three chains; gnomcp offers
+×2 over the floor (`gnokey.md`). Mainnet runs the same gas price, so a write there would cost the
+same — gnomcp simply never signs one.
 
-Toolchain tags use the short chain **name**, never the chain-id (`chain/pearl`, not `chain/pearl-1`;
-`chain/mainnet`, not `chain/gnoland-1`). Globbing a chain-id finds nothing. A tag can also lag its
-branch: `heads/chain/pearl` equals its tag, while `heads/chain/mainnet` carries commits pushed after
-launch. Neither tag is automatically the ref to install — read the chain's `upgrades.json` first and
-fall back to the tag only when it has no entry (`toolchain.md`).
+Toolchain tags use the short chain **name**, never the chain-id (`chain/onyx`, not
+`chain/onyx-1`; `chain/mainnet`, not `chain/gnoland-1`). Globbing a chain-id finds nothing. A tag
+can also lag its branch: `heads/chain/pearl` equals its tag, while `heads/chain/mainnet` carries
+commits pushed after launch. Neither tag is automatically the ref to install — read the chain's
+`upgrades.json` first and fall back to the tag only when it has no entry (`toolchain.md`).
+`chain/onyx` tags the commit that added onyx's deployment config, not the binary it runs: the
+ledger names `v1.5.0`, and that tag is the install ref.
 
 **A chain tag names its genesis build, not what it runs today.** `chain/mainnet` is mainnet's
 `v1.2.0` genesis; the chain has since been halted and restarted on newer binaries by governance.
 
 **Two places say what a chain runs, and they agree.** `/status` carries a `build_version` naming
-the branch, commit depth and short sha of the running binary — mainnet's resolves to the same
-commit as the newest entry in `misc/deployments/mainnet.gno.land/upgrades.json`, the ledger of
-those restarts. Ask the node for what it is running and the ledger for what was agreed; a
-disagreement is worth chasing rather than averaging. Do not read `node_info.version` for this —
-it is `v1.0.0-rc.0` with an empty `software` on every chain and identifies nothing.
+the running binary — a bare release tag on onyx, a branch with commit depth and short sha on pearl
+and mainnet. On onyx and mainnet it resolves to the same commit as the newest entry in the chain's
+`upgrades.json`, the ledger of those restarts. Ask the node for what it is running and the ledger
+for what was agreed; a disagreement is worth chasing rather than averaging. Do not read
+`node_info.version` for this — it is `v1.0.0-rc.0` with an empty `software` on every chain and
+identifies nothing.
 
-## Mainnet — `gnoland-1`
+## onyx — `onyx-1`
 
-Mainnet is a fresh chain whose balances come from an audited allocation rather than faucets, and
-gnomcp treats it as read-only: no agent key, no session, no faucet, and both `master-address` and
-the faucet fields refused at config time. A forced write stops at the keystore, which has no key to
-give for a read-only chain-id. Reads and audits are the whole surface, which is what auditing
-deployed code needs. It ships as the built-in `mainnet` profile, so reading it needs no config.
+onyx is the testnet on the mainnet line. It runs mainnet's release and is upgraded when mainnet
+is, so code that compiles and runs on onyx compiles and runs on mainnet: the VM is the same build.
+Its genesis deploys mainnet's genesis package set, and hashing the deployed sources of the genesis
+packages these references build on finds only doc-comment edits between the two chains, in the
+GRC20 and GRC721 packages. It is a
+fresh chain: nothing from pearl or from mainnet balances carried over, and funds come from its
+faucet.
 
-**Code submission is `inert`.** `params/vm:p:code_submission_policy` reads `"inert"` on mainnet
-against `"permissionless"` on pearl. Anyone may submit — `params/vm:p:code_submitters` is unset —
-but the chain **parks** the package instead of running it: no typecheck, no `init()`, stored in a
-key space of its own. An address in `params/vm:p:pkg_approvers` then sends `MsgEnablePackage`, which
+**onyx allowlists `MsgRun`.** Only one address may send it, so a script run fails for any agent
+key with `… is not authorized to send MsgRun; see the vm run_submitters param`. Deploy the logic as
+a realm and call it, or run the script on pearl while pearl lives.
+
+## Inert code submission — onyx and mainnet
+
+`params/vm:p:code_submission_policy` reads `"inert"` on onyx and mainnet against
+`"permissionless"` on pearl. Anyone may submit — `params/vm:p:code_submitters` is unset — but the
+chain **parks** the package instead of running it: no typecheck, no `init()`, stored in a key space
+of its own. An address in `params/vm:p:pkg_approvers` then sends `MsgEnablePackage`, which
 typechecks the source and runs `init()` on *its* transaction and gas, with the submitter as
-`OriginCaller`. Only then does the package exist. Either side can abandon a parked submission with
-`MsgRejectPackage`; nothing expires one, and the submission charge is not refunded.
+`OriginCaller` and paying the storage deposit. Only then does the package exist. Either side can
+abandon a parked submission with `MsgRejectPackage`; nothing expires one.
+
+**onyx's approver is automatic.** It is an oracle (`contribs/gpao` in the monorepo) that watches
+each block, type-checks every submission and enables the ones that pass. A good package goes live
+a few seconds after its deploy commits. A package that fails the type check is never enabled: it
+stays parked indefinitely, and the chain reports it exactly like one still waiting for approval.
+
+**Simulation does not type-check on an inert chain.** Parking skips the type check, so a dry run of
+an ill-typed package reports success. Lint the package locally against the chain's release
+(`toolchain.md`) before deploying; the chain will not tell you.
+
+**A parked path accepts a resubmission from its submitter.** Fixing the code and deploying it to
+the same path with the same key replaces what is parked, and the approver looks at it afresh.
+Another address is refused (`package already awaiting approval at …, submitted by …`).
 
 Mainnet is therefore not a museum: packages deployed after genesis do run there, once approved.
-Treat "submitted" and "live" as different states with an unpredictable gap between them.
+Treat "submitted" and "live" as different states with a gap between them.
 
 **A parked package is invisible to every ordinary read.** `vm/qpaths` skips it; `vm/qfuncs`,
-`vm/qeval` and `vm/qrender` answer `package not found` and `vm/qfile` answers
-`package … is not available` — in each case the *same* answer a path
-that was never submitted gets. Its source cannot be read back at all; only the submitting
-transaction carries it. Two queries exist for this and nothing else:
+`vm/qeval`, `vm/qrender` and `vm/qfile` answer it exactly as they answer a path that was never
+submitted. Its source cannot be read back at all; only the submitting transaction carries it. Two
+queries exist for this and nothing else:
 
 ```bash
 gnokey query vm/qpkgmeta_json -data "gno.land/r/x/y"    # status: "live" | "inert" | "absent"
@@ -99,12 +126,21 @@ missing on a chain running `inert`. Never probe a path's existence with a call: 
 parked path returns an internal error rather than a clean not-found (look for `unexpected node
 with location` in the log), so a read answers the question more cheaply and more legibly.
 
-**`MsgRun` is allowlisted.** `params/vm:p:run_submitters` carries a non-empty address list on
-mainnet and is unset on pearl. `MsgRun` executes arbitrary source immediately under *every* policy,
-including `inert`, which is why it gets its own gate. Query the param for the current set.
+## Mainnet — `gnoland-1`
 
-**No transfer restriction is active.** `params/bank:p:restricted_denoms` reads empty on both chains.
-Read it rather than inferring a lock from launch tooling.
+Mainnet is a fresh chain whose balances come from an audited allocation rather than faucets, and
+gnomcp treats it as read-only: no agent key, no session, no faucet, and both `master-address` and
+the faucet fields refused at config time. A forced write stops at the keystore, which has no key to
+give for a read-only chain-id. Reads and audits are the whole surface, which is what auditing
+deployed code needs. It ships as the built-in `mainnet` profile, so reading it needs no config.
+
+**`MsgRun` is allowlisted.** `params/vm:p:run_submitters` carries a non-empty address list on
+mainnet and onyx and is unset on pearl. `MsgRun` executes arbitrary source immediately under
+*every* policy, including `inert`, which is why it gets its own gate. Query the param for the
+current set.
+
+**No transfer restriction is active.** `params/bank:p:restricted_denoms` reads empty on all three
+chains. Read it rather than inferring a lock from launch tooling.
 
 **`gnoland-1` and `gnoland1` are one hyphen apart and are different chains.** `gnoland-1` is
 mainnet; `gnoland1` was betanet, whose hosts are gone. Neither is writable, so confusing them
@@ -132,94 +168,110 @@ Sample the height from `gno_status` twice before treating a chain as current.
 Earlier numbered testnets (`test1`–`test13`) are likewise dead; the `test` name stays writable
 because it also covers the e2e simnet's `test-9999`.
 
-## Cross-chain drift — same import path, different source
+## Cross-chain drift — pearl against the mainnet line
 
 A shared import path is not a shared implementation, and a shared package is not a shared path.
-The two live chains also run different VM releases, so the *language* differs between them too.
-Four drifts matter:
+onyx and mainnet run the same release, so every drift below separates pearl from both of them:
 
-**0. The language itself. mainnet rejects code pearl accepts.** mainnet has been upgraded past its
-genesis build while pearl still runs the release it launched on. Two rules are measured to differ:
+**0. The language and the wire format. onyx and mainnet reject what pearl accepts, and the other
+way round.** pearl still runs the release it launched on. Three differences are measured:
 
-**A crossing `cur` is a fixed binding on mainnet.** Reassigning it, taking `&cur`, or
-range-assigning to it all compile on pearl and fail at preprocess on mainnet, each with its own
-message — `cannot reassign the crossing 'cur' parameter`, `cannot take the address of a
+**A crossing `cur` is a fixed binding on the mainnet line.** Reassigning it, taking `&cur`, or
+range-assigning to it all compile on pearl and fail at preprocess on onyx and mainnet, each with
+its own message — `cannot reassign the crossing 'cur' parameter`, `cannot take the address of a
 realm-typed 'cur'`, `cannot assign to a realm-typed 'cur' in a range clause`.
 
-**`AssertOriginCall()` reached through a re-export panics on mainnet.** Where one realm exposes
-another's crossing function as `var Deposit = other.Deposit`, calling the alias satisfies the check
-on pearl and panics on mainnet with `invalid non-origin call`. mainnet anchors the origin call to
-the entry package; pearl counts frames. Calling the original directly succeeds on both.
+**`AssertOriginCall()` reached through a re-export panics on the mainnet line.** Where one realm
+exposes another's crossing function as `var Deposit = other.Deposit`, calling the alias satisfies
+the check on pearl and panics on onyx and mainnet with `invalid non-origin call`. The mainnet line
+anchors the origin call to the entry package; pearl counts frames. Calling the original directly
+succeeds on all three.
 
-A realm that compiles and tests green against pearl can therefore fail on mainnet — at submit for
-the first rule, and at call time for the second, which no local `gno test` against the wrong release
+**pearl verifies only the legacy signature payload.** Release `v1.5.0` changed how a transaction's
+fee renders in the bytes a key signs; onyx and mainnet verify either rendering, pearl only the
+older one. A `gnokey` built from `v1.5.0` or later signs the new rendering, and pearl answers every
+such transaction with `signature verification failed; verify correct account, sequence, and
+chain-id` — the account, sequence and chain-id being fine. Against pearl, use a `gnokey` built from
+pearl's release (`toolchain.md`). gnomcp signs the legacy payload on every chain.
+
+A realm that compiles and tests green against pearl can therefore fail on onyx — at submit for the
+first rule, and at call time for the second, which no local `gno test` against the wrong release
 will show. Build against the target chain's own release (`toolchain.md`) rather than assuming one
 binary serves both.
 
 **Measure a suspected difference; never infer one from a changelog.** Whether an upstream PR is an
 ancestor of a chain's build says nothing about whether the behaviour is present: a release that
 rewrites a rule's message or mechanism looks like the rule arriving. `iota` as an ordinary
-identifier reads as exactly that trap — both live chains reject it, and only the wording differs
+identifier reads as exactly that trap — every live chain rejects it, and only the wording differs
 (`cannot use iota outside constant declaration` on pearl, `builtin identifiers cannot be shadowed`
-on mainnet). Install both releases (`toolchain.md`) and lint the same file against each.
+on the mainnet line). Install both releases (`toolchain.md`) and lint the same file against each.
 
 **1. The version segment sits in a different place on sub-packages.** Top-level packages share a
-spelling: `p/nt/avl/v0` and `p/nt/mux/v0` resolve on both. Below the root they diverge, because
-pearl hangs sub-packages under the version and mainnet gives each leaf its own.
+spelling: `p/nt/avl/v0` and `p/nt/mux/v0` resolve on all three chains. Below the root they diverge,
+because pearl hangs sub-packages under the version and the mainnet line gives each leaf its own.
 
 ```go
 gno.land/p/nt/avl/v0/rotree                  // pearl
-gno.land/p/nt/avl/rotree/v0                  // mainnet
+gno.land/p/nt/avl/rotree/v0                  // onyx, mainnet
 gno.land/p/nt/ownable/v0/exts/authorizable   // pearl
-gno.land/p/nt/ownable/exts/authorizable/v0   // mainnet
+gno.land/p/nt/ownable/exts/authorizable/v0   // onyx, mainnet
 ```
 
 An import block that stays on root packages carries across; one that reaches a sub-package does
 not. Resolve every import against the target chain with `gno_packages`.
 
-**2. The GRC20 standard lives at a different path.** pearl carries it at
-`p/demo/tokens/grc20`; mainnet has no `p/demo` tree at all and carries the standard at
-`p/nt/grc20/v0`. The deployed sources are otherwise the same package.
+**2. The GRC20 standard lives at a different path.** pearl carries it at `p/demo/tokens/grc20`;
+onyx and mainnet have no `p/demo` tree at all and carry the standard at `p/nt/grc20/v0`. The
+deployed sources are otherwise the same package.
 
-**3. `grc20.TransferFrom` guards self-transfer on mainnet only.** mainnet's `token.gno` rejects
+**3. `grc20.TransferFrom` guards self-transfer on the mainnet line only.** Its `token.gno` rejects
 `owner == to` with `ErrCannotTransferToSelf`; pearl's does not, and the guard exists there only on
-`Transfer`. A self-directed `TransferFrom` succeeds on pearl and fails on mainnet. The rest of the
-package, `tellers.gno` included, is identical between them.
+`Transfer`. A self-directed `TransferFrom` succeeds on pearl and fails on onyx and mainnet. The rest
+of the package, `tellers.gno` included, matches between them, doc comments aside.
 
-**`CallerTeller()` hangs off `*PrivateLedger` on both live chains.**
+**`CallerTeller()` hangs off `*PrivateLedger` on every live chain.**
 
 ```go
 teller := ledger.CallerTeller()  // func (ledger *PrivateLedger) CallerTeller() Teller
 ```
 
-Both also carry a `guardHome` check that confines a frame-relative teller to the token's own realm,
-so a teller a realm builds and then exports is inert elsewhere. An older GRC20 hung the same method
-off `*Token` with no guard; `security.md` reads what that receiver decides, and a fork can still
-carry it.
+All three also carry a `guardHome` check that confines a frame-relative teller to the token's own
+realm, so a teller a realm builds and then exports is inert elsewhere. An older GRC20 hung the same
+method off `*Token` with no guard; `security.md` reads what that receiver decides, and a fork can
+still carry it.
 
-The package sets differ too, and not only by path: the NFT standard is in mainnet's genesis set
-(under the `p/nt` tree with a `/v0` leaf) and does not resolve on pearl, while `p/nt/commondao/v0`
-resolves on neither live chain. `p/demo/tokens/grc721` resolves nowhere. Read the **target chain's**
-deployed source (`gno_read` / `vm/qfile`) before relying on any package this file does not cover.
+The package sets differ too, and not only by path: the NFT standard is in the mainnet line's
+genesis set (under the `p/nt` tree with a `/v0` leaf) and does not resolve on pearl, while
+`p/nt/commondao/v0` resolves on no live chain. `p/demo/tokens/grc721` resolves nowhere. Read the
+**target chain's** deployed source (`gno_read` / `vm/qfile`) before relying on any package this
+file does not cover.
 
-## Deploying — pearl is the only public target
+## Deploying — onyx by default, pearl while it lives
 
 1. **Confirm the target** — `gno_status` (chain-id) or `gno_profile_list` (name ↔ chain-id map).
-   A read-only chain has no deploy path at all, so a deploy that "should" go to gno.land is a
-   pearl deploy or nothing. Mainnet would park the package inert even if one reached it.
+   A read-only chain has no deploy path at all, so a deploy that "should" go to gno.land is an onyx
+   deploy (or a pearl one) or nothing. Mainnet would park the package even if one reached it.
 2. **Gates** — the personal-address path is free (namespace gate on, address paths always allowed).
-   CLA enforcement is off on pearl today, so no `Sign` step is needed, but it is a chain setting:
-   confirm with `gno_cla_info` rather than trusting this line.
-3. **Fund** — `gno_faucet_fund`. The grant size and the per-address cooldown are operator settings:
+   CLA enforcement is off on every live chain today, so no `Sign` step is needed, but it is a chain
+   setting: confirm with `gno_cla_info` rather than trusting this line.
+3. **Name** — the package name must equal the path's last element, or the element before a `/vN`
+   suffix. onyx and pearl both reject a mismatch at submit with `invalid package path`.
+4. **Fund** — `gno_faucet_fund`. The grant size and the per-address cooldown are operator settings:
    `gno_status` carries them in its `faucet` block, and the refusal message names the cap it hit. A
    capped address is not a broken faucet — a fresh key has its own allowance.
-4. **Fees** — `1ugnot/1000gas`; still query `auth/gasprice`, since this is the value most likely to
+5. **Fees** — `1ugnot/1000gas`; still query `auth/gasprice`, since this is the value most likely to
    drift next.
-5. **Imports** — resolve every import against the target chain with `gno_packages`, never against
-   master or this file. Sub-package paths and the GRC20 path are spelled differently on the two
-   live chains, so a working import block does not transfer unchecked.
-6. **Transaction history** — `gno_activity`/`gno_history` work on pearl and mainnet. To enumerate
+6. **Imports** — resolve every import against the target chain with `gno_packages`, never against
+   master or this file. Sub-package paths and the GRC20 path are spelled differently on pearl and on
+   the mainnet line, so a working import block does not transfer unchecked.
+7. **Parking (onyx)** — lint against onyx's release before deploying, since the chain does not
+   type-check a submission. After the deploy, confirm the package is live before calling it. A
+   package still parked a minute after its deploy is not going to be enabled on its own: lint it,
+   check the deploying key can pay the storage deposit, then redeploy to the same path with the
+   same key.
+8. **Scripts** — `gno_run` works on pearl only; onyx allowlists `MsgRun`.
+9. **Transaction history** — `gno_activity`/`gno_history` work on all three chains. To enumerate
    what is deployed, `gno_packages` reads the chain directly and needs no indexer.
-7. **Local tests** — use the chain-matched toolchain and vendor on-chain deps from the matching
-   source tree; a develop-HEAD toolchain can refuse to compile deps auto-fetched from a chain, and
-   the fetcher's default remote is mainnet's whatever you are targeting (`toolchain.md`).
+10. **Local tests** — use the chain-matched toolchain and vendor on-chain deps from the matching
+    source tree; a develop-HEAD toolchain can refuse to compile deps auto-fetched from a chain, and
+    the fetcher's default remote is mainnet's whatever you are targeting (`toolchain.md`).

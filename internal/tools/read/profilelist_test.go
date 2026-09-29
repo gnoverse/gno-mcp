@@ -12,13 +12,13 @@ import (
 )
 
 // The catalog is how an agent maps a user's chain name ("deploy on test13",
-// "use pearl") to a profile: every entry must show name AND chain-id together,
+// "use onyx") to a profile: every entry must show name AND chain-id together,
 // plus endpoints and lifecycle status.
 func TestProfileList_catalog(t *testing.T) {
 	cfg := &profiles.Config{Profiles: map[string]profiles.Profile{
 		"testnet": {
 			RPCURL:           "https://rpc.current.example:443",
-			ChainID:          "pearl-1",
+			ChainID:          "onyx-1",
 			GnowebURL:        "https://gnoweb.current.example",
 			TxIndexerURL:     "https://idx.current.example/graphql/query",
 			FaucetServiceURL: "https://faucet.current.example",
@@ -37,7 +37,7 @@ func TestProfileList_catalog(t *testing.T) {
 
 	// Name and chain-id visible together, per profile.
 	assert.Contains(t, res.Text, "testnet")
-	assert.Contains(t, res.Text, "pearl-1")
+	assert.Contains(t, res.Text, "onyx-1")
 	assert.Contains(t, res.Text, "test-13")
 	assert.Contains(t, res.Text, "dev")
 	assert.Contains(t, res.Text, "gnoland1")
@@ -61,7 +61,7 @@ func TestProfileList_catalog(t *testing.T) {
 	for _, p := range list {
 		byName[p["name"].(string)] = p
 	}
-	assert.Equal(t, "pearl-1", byName["testnet"]["chain_id"])
+	assert.Equal(t, "onyx-1", byName["testnet"]["chain_id"])
 	assert.Equal(t, "testnet", byName["testnet"]["kind"])
 	assert.Equal(t, false, byName["testnet"]["sunset"])
 	assert.Equal(t, true, byName["test13"]["sunset"])

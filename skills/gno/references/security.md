@@ -248,7 +248,7 @@ Three predicates that look interchangeable but aren't:
 
 ## The encapsulation pattern (GRC20 reference)
 
-The GRC20 standard is the canonical example of *safe* `/p/`-declared data. It lives at `gno.land/p/demo/tokens/grc20` on pearl and `gno.land/p/nt/grc20/v0` on mainnet; the sources below are the same package. It violates (A) — `Token`, `PrivateLedger`, and `fnTeller` are all `/p/`-declared — but compensates with airtight encapsulation:
+The GRC20 standard is the canonical example of *safe* `/p/`-declared data. It lives at `gno.land/p/demo/tokens/grc20` on pearl and `gno.land/p/nt/grc20/v0` on onyx and mainnet; the sources below are the same package. It violates (A) — `Token`, `PrivateLedger`, and `fnTeller` are all `/p/`-declared — but compensates with airtight encapsulation:
 
 | Defense | How |
 |---|---|
@@ -266,7 +266,7 @@ hung it off `(*Token)`, where any holder of the published token could construct 
 construction privacy was the only barrier. Auditing any fork, **read the receiver before trusting
 the home guard** — on the `(*Token)` shape, a teller that travels between realms is a finding.
 
-**`TransferFrom` guards self-transfer on mainnet only.** mainnet's copy rejects `owner == to` with
+**`TransferFrom` guards self-transfer on the mainnet line only.** The onyx and mainnet copy rejects `owner == to` with
 `ErrCannotTransferToSelf`; pearl's carries that guard on `Transfer` alone, so a self-directed
 `TransferFrom` succeeds there. Auditing a realm that wraps `TransferFrom`, read the guard off the
 target chain rather than assuming the standard supplies it. `networks.md` carries the full

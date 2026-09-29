@@ -42,7 +42,8 @@ gnomcp ships pointed at mainnet, the public testnet and a local gnodev node — 
 
 | Profile | Chain-id | RPC |
 |---------|----------|-----|
-| `testnet` | `pearl-1` | `https://rpc.pearl.testnets.gno.land:443` |
+| `testnet` | `onyx-1` | `https://rpc.onyx.testnets.gno.land:443` |
+| `pearl` | `pearl-1` | `https://rpc.pearl.testnets.gno.land:443` (sunset predecessor — still writable) |
 | `local` | `dev` | `http://127.0.0.1:26657` (local [gnodev](https://docs.gno.land/builders/local-dev-with-gnodev) node) |
 | `mainnet` | `gnoland-1` | `https://rpc.gno.land:443` (read-only — reads and audits, never writes) |
 
@@ -95,7 +96,7 @@ Full catalog → [docs/tools.md](docs/tools.md).
 
 gnomcp can reach any gno.land chain. Dev and testnet chains are read/write; every other chain, mainnet included, is read-only — inspect and audit deployed code, but no signing on real-funds chains.
 
-Beyond the built-in `mainnet`, `testnet` and `local` defaults, save the chains you use as named **profiles** with `gnomcp profile add` (written to `profiles.toml`), so gnomcp remembers them between runs. A profile can also carry an indexer URL, or a master address for user-session writes (dev/testnet only).
+Beyond the built-in `mainnet`, `testnet`, `pearl` and `local` defaults, save the chains you use as named **profiles** with `gnomcp profile add` (written to `profiles.toml`), so gnomcp remembers them between runs. A profile can also carry an indexer URL, or a master address for user-session writes (dev/testnet only).
 
 Profile fields and the signing model → [Configuration](docs/gnomcp.md#configuration) · [Write authorization](docs/gnomcp.md#write-authorization).
 
