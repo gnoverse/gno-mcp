@@ -186,7 +186,7 @@ users := make(map[string]User)
 
 **Maps**: O(1) lookup, type-safe values. Use only for **small bounded** in-memory state (e.g. config values). Never for persisted growth state — a persisted map rewrites wholesale on every mutation (gas/storage), and its insertion-order iteration is an impl detail you shouldn't expose as output ordering. (Iteration is deterministic, so this is a gas/design issue, not a consensus risk.)
 
-`gno.land/p/nt/bptree/v0` (B+tree) is an accepted alternative for ordered keyed state — used by `commondao` (in the examples tree, deployed on neither live chain) and others. Either is fine; pick one and stay consistent.
+`gno.land/p/nt/bptree/v0` (B+tree) is an accepted alternative for ordered keyed state — used by `commondao` (in the examples tree, deployed on no live chain) and others. Either is fine; pick one and stay consistent.
 
 ### Lazy initialization for heavy state
 
@@ -265,7 +265,7 @@ Other realms can register the object but cannot bypass its mutation gates. Note:
 | Need | Use |
 |---|---|
 | Native chain currency, IBC-ready, strict semantics, off-chain transferable | **Coins** (via `chain/banker`) |
-| Programmable balance logic, allowance/approve patterns, contract-owned tokens | **GRC20** (`gno.land/p/demo/tokens/grc20`) |
+| Programmable balance logic, allowance/approve patterns, contract-owned tokens | **GRC20** (`gno.land/p/nt/grc20/v0` on onyx and mainnet, `gno.land/p/demo/tokens/grc20` on pearl) |
 
 Coins are simpler and more constrained. GRC20 is the right choice when you need ERC20-style behaviors.
 
@@ -406,7 +406,7 @@ Packages that survived the `examples/quarantined/` cull — the test-13 safe-lis
 
 Prefer these over re-implementation — they're reviewed, used, and stable.
 
-Sub-packages of these roots are spelled differently on pearl and on the mainnet line (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on onyx and mainnet), and the GRC20 standard sits in a different tree. `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split, and authz and realmpath each carry more than one version on at least one chain: the table gives one spelling that resolves, which is not always the newest. Enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
+Sub-packages of these roots are spelled differently on pearl and on the mainnet line (`p/nt/avl/v0/rotree` on pearl, `p/nt/avl/rotree/v0` on onyx and mainnet), and the GRC20 standard sits in a different tree. `gno.land/p/demo/tokens/grc721` resolves nowhere. The three personal-namespace rows follow the same split. A chain can also carry later versions deployed after genesis: enumerate the leaves with `gno_packages` and pick deliberately. `networks.md` § Cross-chain drift carries the rule.
 
 **Don't** import `gno.land/r/tests/vm/test20` — deliberately insecure test fixture exporting `PrivateLedger`. Using it in production code = instant compromise (see `security.md` § Encapsulation pattern).
 

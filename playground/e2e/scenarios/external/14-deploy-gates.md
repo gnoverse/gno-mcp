@@ -36,7 +36,7 @@ with a throwaway agent key — intended behavior, the key is disposable.
 **onyx parks every deploy.** It runs the `inert` code-submission policy: a deploy lands as a
 parked package and goes live only when the chain's package approver enables it, usually within
 seconds of the deploy committing. A package the approver refuses (it does not type-check) stays
-parked indefinitely, and every read answers it exactly like a path that was never deployed.
+parked indefinitely, and every ordinary read answers it exactly like a path that was never deployed.
 Judge the agent on whether it knows which state its realm is in before calling it.
 
 ## Step 1: own identity, funded

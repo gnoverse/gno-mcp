@@ -15,12 +15,12 @@ Scope: live chain targets. For a **local gnodev** target, use the `gno` already 
    ```sh
    git ls-remote --tags https://github.com/gnolang/gno "chain/*" "v*"
    ```
-3. **Ask the node what it runs, before reaching for a tag.** A chain tag names the *genesis* build; a chain halted and restarted by governance runs a later release, and the difference is real language semantics rather than packaging. `/status` carries a `build_version` — `heads/chain/<name>.<depth>+<short sha>`, whose sha is the install ref, or a bare release tag such as onyx's `v1.5.0`, which is itself the install ref. Cross-check it against `misc/deployments/<chain>/upgrades.json`, the ledger of those restarts, whose newest entry names the release that was agreed; they should resolve to the same commit. Read neither `node_info.version` nor `software`: both are constant across chains and identify nothing. mainnet runs several releases past its genesis tag, so building against that tag green-lights code mainnet refuses at submit.
-4. **No `build_version` and no ledger entry — fall back to the latest `chain/<short-name>` tag**, which is the genesis build. The tag uses the chain's short **name**, never its chain-id: onyx's is `chain/onyx`, not `chain/onyx-1`, pearl's is `chain/pearl`, not `chain/pearl-1`, and mainnet's is `chain/mainnet`, not `chain/gnoland-1`. Globbing the chain-id matches nothing. The store key is the tag name minus the `chain/` prefix. Two install-ref shapes:
+3. **Ask the node what it runs, before reaching for a tag.** A chain tag names a *launch* commit; a chain halted and restarted by governance runs a later release, and the difference is real language semantics rather than packaging. `/status` carries a `build_version` — `heads/chain/<name>.<depth>+<short sha>`, whose sha is the install ref, or a bare release tag such as onyx's `v1.5.0`, which is itself the install ref. Cross-check it against `misc/deployments/<chain>/upgrades.json`, the ledger of those restarts, whose newest entry names the release that was agreed; they should resolve to the same commit. Read neither `node_info.version` nor `software`: both are constant across chains and identify nothing. mainnet runs several releases past its genesis tag, so building against that tag green-lights code that mainnet parks and never enables.
+4. **No `build_version` and no ledger entry — fall back to the latest `chain/<short-name>` tag**, which names the chain's launch commit. The tag uses the chain's short **name**, never its chain-id: onyx's is `chain/onyx`, not `chain/onyx-1`, pearl's is `chain/pearl`, not `chain/pearl-1`, and mainnet's is `chain/mainnet`, not `chain/gnoland-1`. Globbing the chain-id matches nothing. The store key is the tag name minus the `chain/` prefix. Two install-ref shapes:
    - **Semver twin** — a `v*` tag listing the same sha: use the semver tag as the ref.
    - **Commit-only** — tags containing `/` are not valid `go install @` refs, so use the commit sha. In `ls-remote` output that is the tag's `^{}` (peeled) line when one exists, else the tag's own line. `chain/pearl` has no semver twin and installs by sha.
    - Resolve the chain tag's sha first, then look for a `v*` tag listing that same sha before falling back to the raw sha.
-   - A tag can lag its branch, so compare it against `refs/heads/chain/<name>` before pinning. `chain/pearl` equals its branch head; `chain/mainnet` sits behind one carrying post-launch commits; retired `chain/topaz` sits behind its own. `chain/onyx` tags the commit that added onyx's deployment config, not the binary it runs — its ledger names `v1.5.0`.
+   - A tag can lag its branch, so compare it against `refs/heads/chain/<name>` before pinning, when the chain has a branch. `chain/pearl` equals its branch head; `chain/mainnet` sits behind one carrying post-launch commits; retired `chain/topaz` sits behind its own. onyx has no branch, and `chain/onyx` tags the commit that added onyx's deployment config, not the binary it runs: its ledger names `v1.5.0`.
 5. No ledger entry and no matching chain tag (unreleased or dev chain): ask the chain's operator which ref is deployed; if the user runs the node themselves, their local `gno` is the answer. Say in your answer which ref you built against.
 
 ## Install into the store
@@ -30,14 +30,21 @@ One directory per release; the binary keeps its name; releases coexist. **Never 
 ```sh
 release="onyx"         # store key: the chain release name
 ref="v1.5.0"           # install ref: the release named by the chain's
-                                                # upgrades.json, else its genesis tag's semver
-                                                # twin or peeled commit sha
+                       # upgrades.json, else its chain tag's semver
+                       # twin or peeled commit sha
 store="${XDG_CACHE_HOME:-$HOME/.cache}/gno-toolchains"
 [ -x "$store/$release/gno" ] ||
   GOBIN="$store/$release" go install "github.com/gnolang/gno/gnovm/cmd/gno@$ref"
 ```
 
-- **Prerequisite: a Go toolchain.** Check `go version` first; any modern Go works (`GOTOOLCHAIN=auto` fetches whatever the ref's `go.mod` requires). If missing, stop and explain: building a chain-matched `gno` requires Go (https://go.dev/dl/) — the releases ship no prebuilt binaries.
+The same store and ref install the matching `gnokey`, for a user who signs by hand against that chain:
+
+```sh
+[ -x "$store/$release/gnokey" ] ||
+  GOBIN="$store/$release" go install "github.com/gnolang/gno/gno.land/cmd/gnokey@$ref"
+```
+
+- **Prerequisite: a Go toolchain.** Check `go version` first; any modern Go works (`GOTOOLCHAIN=auto` fetches whatever the ref's `go.mod` requires). If missing, stop and explain: this recipe builds a chain-matched `gno` from source and requires Go (https://go.dev/dl/).
 - The binary's stdlibs live in the Go module cache copy of its source (pinned via `GNOROOT` in the run recipe below). If that ever goes missing — `go clean -modcache` prunes it — reinstall the same ref.
 
 ## Test against the target's on-chain deps

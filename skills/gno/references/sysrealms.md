@@ -26,14 +26,14 @@ behaves differently on local gnodev, on a public testnet, and on mainnet, by des
 
 **I3 · Controller architecture (names/users).** Name registration is layered. `r/sys/users` is the
 durable canonical store (name↔address + a confusable-collision index). Policy lives in *controller*
-realms (e.g. `r/sys/namereg/v1`) that enforce format/price/blacklist and then write through the store.
+realms (e.g. `r/sys/namereg/v0` on onyx and mainnet) that enforce format/price/blacklist and then write through the store.
 `r/sys/names` is a read-only verifier the chain consults to gate deploys (it reads the store). Policy
 is swappable and versioned; the store is durable; **GovDAO can bypass any controller.** Which
 controller (if any) is live, and what policy it enforces, is per-network — query it.
 
 **I4 · Single-writer gates + GovDAO trust root.** Privileged sys state is guarded by exactly one
-writer each: `r/sys/params` is the only realm allowed to set native chain params; `r/sys/validators/v3`
-is the only writer of the validator set; the committed valset record is chain-only. Above all of them,
+writer each: `r/sys/params` is the only realm allowed to set native chain params; the live
+`r/sys/validators/vN` (the version differs per chain) is the only writer of the validator set; the committed valset record is chain-only. Above all of them,
 **GovDAO is the trust root** — it can pause, override, or bypass. When you reason about "who can change
 this," the answer is the single privileged writer, then GovDAO.
 
@@ -90,8 +90,8 @@ deployed version which one answers.
 | `r/sys/params` | GovDAO-facing **writer** of native chain params (sole privileged caller of native `sys/params`); exposes getters for only a handful (`GetValoperRegisterFee()`, valset getters). **Not** the read surface for arbitrary params. | its own getters for the few it exposes; **raw param values live in the keeper, not this realm** — read them via the param path (see "Reading a chain param value" below) |
 | `sys/params` (native stdlib) | The Go-side params keeper `r/sys/params` writes through; frame-gated to that one realm. | Not a realm — observed indirectly via `r/sys/params` and the params query surface |
 | `r/sys/validators/vN` | Params-backed validator-set design (valoper operator/signing-key model with key rotation). The live set sits at `/v3` on pearl and `/v0` on onyx and mainnet. | `GetValidators()`, `GetValidator(a)`, `IsValidator(a)`, `RotateValoperSigningKey`, `NotifyValoperChanged` — the rotation knobs are NOT here: fee and period live on `r/sys/params` (`GetValoperRotationFee()`, `GetValoperRotationPeriodBlocks()`). **`qfuncs` the realm and report live values; `master` may have changed since this chain deployed** |
-| `r/sys/validators/v2` | PoA-based version. Deployed on both live chains and holding the set on neither — `GetValidators()` returns empty there. | `GetValidators()` on **every** deployed version; the one returning a non-empty set is the live one. Cross-check against the node's own `/validators`. |
-| `p/sys/validators` | Pure types/interface shared by the validator realms. No state. | — |
+| `r/sys/validators/v2` | PoA-based version. Deployed on every live chain and holding the set on none — `GetValidators()` returns empty there. | `GetValidators()` on **every** deployed version; the one returning a non-empty set is the live one. Cross-check against the node's own `/validators`. |
+| `p/sys/validators/v0` (`p/sys/validators` on pearl) | Pure types/interface shared by the validator realms. No state. | — |
 | `r/sys/cla` | Contributor License Agreement gate the chain consults before deploys. | `Render("")` (enabled? required hash? URL?), `HasValidSignature(addr)` |
 | `r/sys/txfees` | Reserved fee-bucket realm; a stub today — real fee collectors are `auth`/`vm` params, not this realm. | `Render(cur)` (its balance); don't infer fee routing from it |
 | `r/sys/rewards` | Reserved namespace for a future proof-of-contributions system; currently an empty stub. | `qfuncs` (expect ~no exports) — confirms it's still a placeholder |
@@ -105,10 +105,10 @@ assume**, and prefer checking both *before* deploying rather than reading it off
 1. **Namespace** (`r/sys/names`). Enforced when `IsEnabled()` is true. The signer must be authorized
    for the namespace segment of the path. Two ways to be authorized: deploy under your **own address**
    namespace (`r/<your-g1address>/*` is always authorized — no registration), or hold a registered name
-   whose current owner is you (register via the live controller, e.g. `r/sys/namereg/v1`, if it's
+   whose current owner is you (register via the live controller, e.g. `r/sys/namereg/v0` on onyx, if it's
    deployed). Check: `IsAuthorizedAddressForNamespace(addr, ns)`.
 2. **CLA** (`r/sys/cla`). Enforced when a required hash is set. As of the last check, CLA enforcement
-   is **off on both live chains** (no required hash — no `Sign` step needed to deploy) —
+   is **off on every live chain** (no required hash — no `Sign` step needed to deploy) —
    always confirm live via `gno_cla_info` or the render's `Required Hash` field. The signer must have
    signed the current agreement. Check: `HasValidSignature(addr)`. To clear it, **sign once from the same key**. With a Gno
    MCP connected, use its `gno_cla_info` / `gno_cla_sign` pair — info reports the required hash and the
@@ -184,5 +184,5 @@ came from querying onyx, not from this file.
 ## Source
 
 Distilled from `examples/gno.land/r/sys/*` + `gnovm/stdlibs/sys/params` in gnolang/gno, the gnolang/gno
-issue/PR roadmap, per-network genesis configs, and verified against live onyx, pearl and mainnet (ABCI `vm/qfuncs`/`qeval`/`qrender`).
+issue/PR roadmap, per-network genesis configs, and the live onyx, pearl and mainnet chains (ABCI `vm/qfuncs`/`qeval`/`qrender`).
 The design above is durable; concrete values are intentionally absent — query the live chain.

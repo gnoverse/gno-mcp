@@ -257,9 +257,9 @@ The GRC20 standard is the canonical example of *safe* `/p/`-declared data. It li
 | Authority transitions gated at the right boundary | Crossing entrypoints use their runtime-current first `cur`; non-crossing helper methods that accept `_ int, rlm realm` check `rlm.IsCurrent()` before resolving realm identity. |
 | Forgery defended by nominal type assertion | `IsCanonicalTeller(t)` checks `_, ok := t.(*fnTeller)`. Embedding wrappers fail this. |
 | `*PrivateLedger`'s unauthenticated mutators isolated by package privacy | `Mint`/`Burn`/etc. have no `cur` check. They're safe only because no realm exports the `*PrivateLedger` pointer. |
-| Frame-relative tellers confined to their home realm | The `CallerTeller()` write path checks that the invoking realm is the token's own, sub-realms included, so a teller a realm builds and then exports is inert anywhere else. Present on both live chains. |
+| Frame-relative tellers confined to their home realm | The `CallerTeller()` write path checks that the invoking realm is the token's own, sub-realms included, so a teller a realm builds and then exports is inert anywhere else. Present on every live chain. |
 
-**The receiver on `CallerTeller()` decides who can mint a teller.** Both live chains hang it off
+**The receiver on `CallerTeller()` decides who can mint a teller.** Every live chain hangs it off
 `(*PrivateLedger)`, which is what makes the argument above hold: only the creating realm reaches
 the constructor at all, and the home-realm check makes a leaked teller useless. An earlier GRC20
 hung it off `(*Token)`, where any holder of the published token could construct one and
