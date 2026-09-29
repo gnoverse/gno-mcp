@@ -96,8 +96,8 @@ Newer releases reject, at preprocess, every attempt to move a crossing function'
 value the runtime handed it: reassigning it, taking `&cur`, and range-assigning to it in non-DEFINE
 form. Passing `cur` unchanged into a non-crossing helper, writing `helper(cross(cur))`, and
 `for _, cur := range …` in DEFINE form all stay legal, as does a non-realm variable that happens to
-be named `cur`. Older chains accept the rejected forms, so a realm relying on one compiles on one
-live chain and not the other — `networks.md` § Cross-chain drift.
+be named `cur`. pearl, a retired testnet, accepted the rejected forms, so code written for it can
+fail here (`networks.md` § Porting code written for pearl).
 
 ### Realm values are ephemeral
 

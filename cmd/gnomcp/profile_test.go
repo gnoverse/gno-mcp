@@ -61,7 +61,7 @@ func TestParseProfileAddArgs_MissingName(t *testing.T) {
 func TestProfileRemove_userProfileShadowingABuiltinName(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profiles.toml")
 	require.NoError(t, profiles.WriteFile(path, map[string]profiles.Profile{
-		"mainnet": {RPCURL: "https://rpc.pearl.testnets.gno.land:443", ChainID: "pearl-1"},
+		"mainnet": {RPCURL: "https://rpc.onyx.testnets.gno.land:443", ChainID: "onyx-1"},
 	}), "seed")
 
 	require.NoError(t, profileRemove(path, "mainnet"), "remove must not refuse a name the user owns")
@@ -77,7 +77,7 @@ func TestProfileRemove_userProfileShadowingABuiltinName(t *testing.T) {
 func TestProfileRemove_absentNameReportsNotFound(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profiles.toml")
 	require.NoError(t, profiles.WriteFile(path, map[string]profiles.Profile{
-		"keeper": {RPCURL: "https://rpc.pearl.testnets.gno.land:443", ChainID: "pearl-1"},
+		"keeper": {RPCURL: "https://rpc.onyx.testnets.gno.land:443", ChainID: "onyx-1"},
 	}), "seed")
 
 	err := profileRemove(path, "mainnet")

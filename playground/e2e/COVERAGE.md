@@ -153,12 +153,12 @@ tree: a regression shows up here only after it ships.
 ## External tier (real testnet)
 
 Scenarios 11–12 (install from scratch, GitHub egress — above) plus 13 (the live
-agent-faucet) and 14 (the live deploy gates). Scenarios 13 and 14 drive the real onyx
+agent-faucet), 14 (the live deploy gates) and 15 (live session spend). Scenarios 13 to 15 drive the real onyx
 chain: they run the `l2-gnomcp` image (gnomcp + skill, no simnet `profiles.toml` override),
 so the built-in `testnet` profile (`internal/profiles/config.go`) resolves to the live
 network (chain-id `onyx-1`, RPC `https://rpc.onyx.testnets.gno.land:443`,
-faucet-service-url `https://faucet-agent.onyx.testnets.gno.land`). 15 drives the sunset
-`pearl` builtin instead, because onyx allowlists `MsgRun`. 13 validates the
+faucet-service-url `https://faucet-agent.onyx.testnets.gno.land`). 15 writes through
+session-signed calls, because onyx allowlists `MsgRun`. 13 validates the
 zero-config faucet default; 14 covers what only the live chain exercises — the namespace
 gate and, when the chain enforces it, the CLA gate; the simnet leaves both off. `blocked` is tolerated when the live faucet
 or chain is unreachable or rate-limits.
@@ -167,8 +167,8 @@ or chain is unreachable or rate-limits.
 |---|---|---|---|
 | external.faucet-live | gno_faucet_fund tier-2 against the LIVE onyx agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
 | external.testnet-key-cycle | built-in `testnet` profile end to end on the live network: generate agent key → faucet fund → balance | 13 | covered |
-| external.cla-sign | agent signs the live CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | **not currently exercisable** — CLA enforcement reads DISABLED on onyx, pearl and mainnet (2026-09-29), so 14 records this `blocked`. The tool pair itself stays covered by 12 on the `e2e-clagate` image |
-| external.session-spend | session flow against LIVE pearl gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, and the chain's spend_used tracks the right-sized fee | 15 | covered |
+| external.cla-sign | agent signs the live CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | **not currently exercisable** — CLA enforcement reads DISABLED on onyx and mainnet (2026-09-29), so 14 records this `blocked`. The tool pair itself stays covered by 12 on the `e2e-clagate` image |
+| external.session-spend | session flow against LIVE onyx gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, the chain's spend_used tracks the right-sized fee plus any storage deposit, and the budget gnomcp reports matches it | 15 | **gap** — after a session write that locks a storage deposit, gnomcp's in-process `spend_remaining` subtracts the fee alone, so it runs high until the next process re-reads the chain (2026-09-29 run) |
 
 ## Known harness constraints (not feature gaps)
 

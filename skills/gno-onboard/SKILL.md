@@ -47,7 +47,7 @@ their answers, not on the initial label.
 Run this flow on onyx (the `testnet` profile) or a local gnodev. The `mainnet` builtin ships read-only: it has no agent
 key and no faucet, so steps 2 to 4 fail there rather than degrading. Step 1 works on any chain.
 
-1. **Observe:** `gno_render` a live realm (`gno.land/r/gnoland/blog` is deployed on onyx, pearl
+1. **Observe:** `gno_render` a live realm (`gno.land/r/gnoland/blog` is deployed on onyx
    and mainnet; confirm with `gno_packages` rather than trusting this path), then
    `gno_read` it (the default outline shows every file's API surface) — "this is a contract,
    and you can read all of it". If the client elides resource previews, hand over the gnoweb

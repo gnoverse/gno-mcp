@@ -6,7 +6,7 @@
 
 A chain's `chain-id` determines what gnomcp may do with it:
 
-- **Write-capable** — `dev` (local), or a `chain-id` starting with a known testnet name (`test`, `pearl`, `onyx` — bare or hyphenated: `test5`, `pearl-1`, `onyx-1`). Codenamed testnets ended the numbered `test<N>` pattern, so recognition is a release-time name list (`testnetChainNames` in `internal/profiles/validate.go`), not a regex. These get an agent key path and appear in the write tools' profile enums.
+- **Write-capable** — `dev` (local), or a `chain-id` starting with a known testnet name (`test`, `onyx` — bare or hyphenated: `test5`, `onyx-1`). Codenamed testnets ended the numbered `test<N>` pattern, so recognition is a release-time name list (`testnetChainNames` in `internal/profiles/validate.go`), not a regex. These get an agent key path and appear in the write tools' profile enums.
 - **Read-only** — any other format-safe `chain-id`: mainnet `gnoland-1`, `staging`. Admitted so deployed source can be audited, but excluded from every write tool: no agent key, no faucet, no session, and both `master-address` and the faucet fields are refused at config time. Reads only.
 
 Mainnet's chain-id is `gnoland-1`, with the hyphen. `gnoland1` names a different, retired chain, and a profile carrying it connects to nothing; neither is writable, so the confusion cannot produce a write. `gno.land` names mainnet — read a chain-id rather than inferring one from a hostname, since that domain served another chain before mainnet launched.

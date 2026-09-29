@@ -48,7 +48,7 @@ Prefer `go run` over `go build` for ad-hoc runs — no stray binaries.
 
 ## Security invariants — never break
 
-- Chain-id allowlist — writable is `dev` plus the testnet name list (`testnetChainNames` in `internal/profiles/validate.go`: `test*`, `pearl-*`, `onyx-*`); no path may admit other chains as writable.
+- Chain-id allowlist — writable is `dev` plus the testnet name list (`testnetChainNames` in `internal/profiles/validate.go`: `test*`, `onyx-*`); no path may admit other chains as writable.
 - Every chain-derived text output goes through `budget.Wrapped` (untrusted envelope + budget). Structured numeric fields may stay raw.
 - The user's keys/mnemonics never enter the process; session/agent authorization happens via printed `gnokey` commands the user runs themselves.
 - Never log raw tool args — audit records use redacted summaries.

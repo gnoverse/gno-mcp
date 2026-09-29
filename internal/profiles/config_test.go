@@ -83,17 +83,6 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	assert.Empty(t, local.MasterAddress, "built-in local must be read-only (no master-address)")
 	assert.Empty(t, tn.MasterAddress, "built-in testnet must be read-only (no master-address)")
 
-	old, ok := cfg.Profiles["pearl"]
-	require.True(t, ok, "sunset predecessor testnet missing from builtins")
-	assert.Equal(t, "pearl-1", old.ChainID, "pearl chain-id")
-	assert.True(t, old.Sunset, "pearl must be marked sunset")
-	assert.True(t, old.IsTestnet(), "sunset builtin must stay a writable testnet")
-	assert.Equal(t, "https://rpc.pearl.testnets.gno.land:443", old.RPCURL, "pearl rpc-url")
-	assert.Equal(t, "https://pearl.testnets.gno.land", old.GnowebURL, "pearl gnoweb-url")
-	assert.Equal(t, "https://faucet-agent.pearl.testnets.gno.land", old.FaucetServiceURL, "pearl faucet (live) must be configured so deploys can fund")
-	assert.Equal(t, "https://indexer.pearl.testnets.gno.land/graphql/query", old.TxIndexerURL, "pearl indexer (live) must be configured")
-	assert.Empty(t, old.MasterAddress, "built-in pearl must carry no master-address")
-
 	// mainnet carries real value. It ships the read paths and nothing that
 	// could sign.
 	main, ok := cfg.Profiles["mainnet"]
@@ -110,9 +99,9 @@ func TestBuiltinProfiles_AllowlistAndShape(t *testing.T) {
 	assert.Empty(t, main.MasterAddress, "built-in mainnet must carry no master-address")
 
 	// A chain leaves the builtins when reaching it stops being useful: the
-	// hosts for betanet, sapphire, topaz and test13 no longer resolve, so a
-	// zero-config profile would offer a chain every call fails against.
-	for _, name := range []string{"betanet", "sapphire", "topaz", "test13"} {
+	// hosts for betanet, sapphire, topaz, pearl and test13 no longer resolve,
+	// so a zero-config profile would offer a chain every call fails against.
+	for _, name := range []string{"betanet", "sapphire", "topaz", "pearl", "test13"} {
 		_, ok = cfg.Profiles[name]
 		assert.False(t, ok, "%q must not ship as a builtin", name)
 	}
