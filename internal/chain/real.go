@@ -348,7 +348,7 @@ func (r *Real) QuerySession(_ context.Context, master, sessionAddr string) (Sess
 		AllowPaths:     realmPaths,
 		AllowRun:       allowRun,
 		SpendLimit:     acc.SpendLimit.String(),
-		SpendRemaining: spendRemaining(acc.SpendLimit, acc.SpendUsed).String(),
+		SpendRemaining: spendRemaining(acc.SpendLimit, acc.SpendUsed),
 		ExpiresAt:      acc.ExpiresAt,
 	}, nil
 }
@@ -753,8 +753,9 @@ func parseSendCoins(send string) (std.Coins, error) {
 	return coins, nil
 }
 
-// spendRemaining returns limit - used, dropping any zero/negative denoms.
-func spendRemaining(limit, used std.Coins) std.Coins {
+// spendRemaining formats limit - used, dropping any zero/negative denoms. A
+// spent limit reads "0<denom>": the empty string means no limit at all.
+func spendRemaining(limit, used std.Coins) string {
 	diff := limit.SubUnsafe(used)
 	out := make(std.Coins, 0, len(diff))
 	for _, c := range diff {
@@ -762,5 +763,8 @@ func spendRemaining(limit, used std.Coins) std.Coins {
 			out = append(out, c)
 		}
 	}
-	return out
+	if len(out) == 0 && len(limit) > 0 {
+		return "0" + limit[0].Denom
+	}
+	return out.String()
 }

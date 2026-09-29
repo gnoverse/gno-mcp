@@ -46,6 +46,17 @@ func TestSignTxForSession_signsForTheSessionAccount(t *testing.T) {
 	assert.True(t, ed25519.Verify(pub, signBytes, sig), "must verify over the session account's sign bytes")
 }
 
+// An empty remaining reads as "no limit", so an exhausted limit must report
+// zero rather than nothing.
+func TestSpendRemaining_exhaustedLimitIsZeroNotUnlimited(t *testing.T) {
+	limit := std.Coins{std.Coin{Denom: "ugnot", Amount: 1_000_000}}
+
+	assert.Equal(t, "400000ugnot", spendRemaining(limit, std.Coins{std.Coin{Denom: "ugnot", Amount: 600_000}}))
+	assert.Equal(t, "0ugnot", spendRemaining(limit, limit))
+	assert.Equal(t, "0ugnot", spendRemaining(limit, std.Coins{std.Coin{Denom: "ugnot", Amount: 1_200_000}}))
+	assert.Empty(t, spendRemaining(nil, nil), "a session with no limit stays unlimited")
+}
+
 // ---- Session spend pre-flight (mirrors the chain ante's Phase 2a)
 
 func preflightSession(limitUgnot, usedUgnot, reset, period int64) *gnoland.GnoSessionAccount {
