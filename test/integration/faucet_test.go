@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"math"
 	"net/http/httptest"
 	"testing"
 
@@ -59,4 +60,20 @@ func TestIntegration_faucetDispense(t *testing.T) {
 	// Second request, same address → per-address cooldown → service returns an error (429).
 	_, err = fac.Fund(context.Background(), recipient, "test5")
 	require.Error(t, err, "second fund of same address should be rate-limited")
+}
+
+// A grant the funding key cannot cover is one the node answers with a failed
+// tx, so the dispenser reports it not granted and the faucet may refund it.
+func TestIntegration_faucetDispenseTheNodeRefusesIsNotGranted(t *testing.T) {
+	_, addr := newNodeBackedRealAddr(t)
+	rpc, err := rpcclient.NewHTTPClient(addr)
+	require.NoError(t, err)
+	signer := test1Signer(t)
+	info, err := signer.Info()
+	require.NoError(t, err)
+	disp := faucet.NewGnoclientDispenser(&gnoclient.Client{RPCClient: rpc, Signer: signer}, info.GetAddress(), 10_000_000)
+
+	_, err = disp.Send(context.Background(), "g17ernafy6ctpcz6uepfsq2js8x2vz0wladh5yc3", math.MaxInt64/2)
+	require.ErrorIs(t, err, faucet.ErrNotGranted)
+	require.ErrorContains(t, err, "insufficient", "the node's refusal, not an earlier step, marks it")
 }

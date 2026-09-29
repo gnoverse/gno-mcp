@@ -150,11 +150,12 @@ func (l *Limiter) Allow(addr, ip string) (time.Time, error) {
 
 // Refund reverses the accounting of the Allow at grantedAt for addr/ip: it drops
 // their newest recorded hit and credits the grant back to the daily counter.
-// Called when a dispense fails after Allow succeeded so a chain error doesn't
-// consume the requester's cooldown or the global daily budget. The daily credit
-// is skipped if a day-rollover has reset daySpent since the grant — that reset
-// already discarded the grant's contribution, so crediting again would
-// under-count the new day and let the cap be exceeded.
+// Called when a grant provably did not land after Allow succeeded, so that
+// failure doesn't consume the requester's cooldown or the global daily
+// budget. The daily credit is skipped if a day-rollover has reset daySpent
+// since the grant — that reset already discarded the grant's contribution,
+// so crediting again would under-count the new day and let the cap be
+// exceeded.
 func (l *Limiter) Refund(addr, ip string, grantedAt time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

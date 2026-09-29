@@ -3,6 +3,7 @@ package faucet
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -132,8 +133,8 @@ func TestFaucet_refusesWhenFundingBalanceBelowFloor(t *testing.T) {
 	assert.Equal(t, 1, fd.calls)
 }
 
-func TestFaucet_refundsCooldownAndCapOnDispenseFailure(t *testing.T) {
-	fd := &fakeDispenser{err: errors.New("chain hiccup")}
+func TestFaucet_refundsCooldownAndCapWhenNotGranted(t *testing.T) {
+	fd := &fakeDispenser{err: fmt.Errorf("%w: chain hiccup", ErrNotGranted)}
 	f := New("test5", 1_000_000, fd, NewLimiter(LimiterCfg{
 		PerAddrMax: 1, PerIPMax: 100, DailyCapUgnot: 1_000_000, GrantUgnot: 1_000_000,
 	}))
@@ -145,6 +146,21 @@ func TestFaucet_refundsCooldownAndCapOnDispenseFailure(t *testing.T) {
 	fd.err = nil
 	_, err = f.Fund(context.Background(), validAddr, "1.1.1.1", "test5")
 	require.NoError(t, err, "a refunded failure must leave the address fundable and the cap unspent")
+}
+
+func TestFaucet_keepsTheGrantCountedWhenTheSendMayHaveLanded(t *testing.T) {
+	fd := &fakeDispenser{err: errors.New("broadcasting bytes: connection reset")}
+	f := New("test5", 1_000_000, fd, NewLimiter(LimiterCfg{
+		PerAddrMax: 1, PerIPMax: 100, DailyCapUgnot: 1_000_000_000, GrantUgnot: 1_000_000,
+	}))
+
+	_, err := f.Fund(context.Background(), validAddr, "1.1.1.1", "test5")
+	require.Error(t, err, "dispense failure should surface")
+
+	fd.err = nil
+	_, err = f.Fund(context.Background(), validAddr, "1.1.1.1", "test5")
+	require.ErrorIs(t, err, ErrCooldown, "a grant that may have landed must keep the address in cooldown")
+	assert.Equal(t, 1, fd.calls, "no second dispense to an address whose first grant may have landed")
 }
 
 func TestFaucet_Limits(t *testing.T) {
