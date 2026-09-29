@@ -20,7 +20,6 @@ import (
 	otelmetric "go.opentelemetry.io/otel/metric"
 
 	"github.com/gnoverse/gno-mcp/faucet"
-	"github.com/gnoverse/gno-mcp/txsign"
 )
 
 // version is overridden at release time via -ldflags "-X main.version=...";
@@ -78,7 +77,7 @@ func main() {
 		fatal("gas-wanted must be positive", "gas_wanted", *gasWanted)
 	}
 
-	signer, err := txsign.SignerFromBip39(*mnemonic, *chainID)
+	signer, err := gnoclient.SignerFromBip39(*mnemonic, *chainID, "", 0, 0)
 	if err != nil {
 		fatal("build signer", "err", err.Error())
 	}

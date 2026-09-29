@@ -27,7 +27,6 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/fsutil"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	secret "github.com/gnoverse/gno-mcp/internal/secret"
-	"github.com/gnoverse/gno-mcp/txsign"
 )
 
 // test1: canonical local dev account gnodev always funds. Source:
@@ -106,7 +105,7 @@ func New(rootDir, passphrase string, maxKeys int) *Keystore {
 // deriveSigner builds an in-memory signer from a mnemonic for the given chain,
 // using account 0 / index 0 with no BIP39 passphrase.
 func deriveSigner(mnemonic, chainID string) (gnoclient.Signer, error) {
-	return txsign.SignerFromBip39(mnemonic, chainID)
+	return gnoclient.SignerFromBip39(mnemonic, chainID, "", 0, 0)
 }
 
 // requireValidProfileName rejects a profile name that is not a safe path

@@ -25,10 +25,9 @@ func (s ed25519SessionSigner) Sign(payload []byte) ([]byte, error) {
 	return ed25519.Sign(s.priv, payload), nil
 }
 
-// Chains predating gno v1.5.0 verify only the legacy payload; v1.5.0 chains
-// verify either, so a session-signed write must use the legacy one to land on
-// every writable chain.
-func TestSignTxForSession_signsLegacyPayload(t *testing.T) {
+// The chain verifies a session signature against the session account's own
+// number and sequence, not the master's.
+func TestSignTxForSession_signsForTheSessionAccount(t *testing.T) {
 	_, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	r := &Real{chainID: "test-chain"}
@@ -42,12 +41,9 @@ func TestSignTxForSession_signsLegacyPayload(t *testing.T) {
 	sig := signed.Signatures[0].Signature
 	pub := priv.Public().(ed25519.PublicKey)
 
-	legacy, err := tx.GetSignBytesLegacy("test-chain", 5, 7)
+	signBytes, err := tx.GetSignBytes("test-chain", 5, 7)
 	require.NoError(t, err)
-	assert.True(t, ed25519.Verify(pub, legacy, sig), "must verify over the legacy payload")
-	current, err := tx.GetSignBytes("test-chain", 5, 7)
-	require.NoError(t, err)
-	assert.False(t, ed25519.Verify(pub, current, sig), "signed over the v1.5.0 payload, which older chains reject")
+	assert.True(t, ed25519.Verify(pub, signBytes, sig), "must verify over the session account's sign bytes")
 }
 
 // ---- Session spend pre-flight (mirrors the chain ante's Phase 2a)

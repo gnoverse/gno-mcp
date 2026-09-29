@@ -110,16 +110,10 @@ func TestKeypair_GnoclientSigner_signsTxWithSessionPubkey(t *testing.T) {
 	assert.True(t, sig.SessionAddr.IsZero(),
 		"Signature.SessionAddr should be zero (caller fills it); got %s", sig.SessionAddr)
 
-	// Chains predating gno v1.5.0 verify only the legacy payload; v1.5.0 chains
-	// verify either, so the legacy one is the payload every writable chain takes.
-	legacyBytes, err := tx.GetSignBytesLegacy(chainID, accNum, seq)
+	signBytes, err := tx.GetSignBytes(chainID, accNum, seq)
 	require.NoError(t, err)
-	require.True(t, ed25519.Verify(ed25519.PublicKey(kp.Pub), legacyBytes, sig.Signature),
-		"session-signed tx must verify over the legacy payload")
-	newBytes, err := tx.GetSignBytes(chainID, accNum, seq)
-	require.NoError(t, err)
-	assert.False(t, ed25519.Verify(ed25519.PublicKey(kp.Pub), newBytes, sig.Signature),
-		"signed over the v1.5.0 payload, which older chains reject")
+	require.True(t, ed25519.Verify(ed25519.PublicKey(kp.Pub), signBytes, sig.Signature),
+		"ed25519.Verify returned false for session-signed tx")
 }
 
 // TestKeypair_GnoclientSigner_Info exposes the session pubkey via the

@@ -36,9 +36,7 @@ func TestGenerateForProfile_sunsetAllowed(t *testing.T) {
 	require.NotEmpty(t, addr)
 }
 
-// Agent keys write to every writable chain, and chains predating gno v1.5.0
-// verify only the legacy signature payload.
-func TestSignerForProfile_signsLegacyPayload(t *testing.T) {
+func TestSignerForProfile_signsForTheProfileChain(t *testing.T) {
 	ks := New(t.TempDir(), "", testCap)
 	_, err := ks.GenerateForProfile("tnet", "", testnet9999Profile())
 	require.NoError(t, err)
@@ -61,12 +59,9 @@ func TestSignerForProfile_signsLegacyPayload(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, signed.Signatures, 1)
 			sig := signed.Signatures[0]
-			legacy, err := tx.GetSignBytesLegacy(p.ChainID, 0, 0)
+			signBytes, err := tx.GetSignBytes(p.ChainID, 0, 0)
 			require.NoError(t, err)
-			require.True(t, sig.PubKey.VerifyBytes(legacy, sig.Signature), "must verify over the legacy payload")
-			current, err := tx.GetSignBytes(p.ChainID, 0, 0)
-			require.NoError(t, err)
-			require.False(t, sig.PubKey.VerifyBytes(current, sig.Signature), "signed over the v1.5.0 payload, which older chains reject")
+			require.True(t, sig.PubKey.VerifyBytes(signBytes, sig.Signature), "must verify over the profile chain's sign bytes")
 		})
 	}
 }
