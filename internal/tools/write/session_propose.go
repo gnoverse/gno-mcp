@@ -12,6 +12,12 @@ import (
 	"github.com/gnoverse/gno-mcp/internal/session"
 )
 
+// writesBudgetNote qualifies the light-write count, which prices the gas fee
+// alone.
+const writesBudgetNote = "That count is an upper bound: writes heavy enough to size above the floor gas limit cost " +
+	"proportionally more, and a write that stores new state also draws the storage deposit it locks from the limit. " +
+	"Every write is re-checked against the remaining limit before broadcast."
+
 // RegisterSessionPropose registers the gno_session_propose tool.
 // sessionMgr holds pending session state; it is shared with the write
 // tools so they can pick up activated sessions on the next call. resolver
@@ -177,8 +183,8 @@ func sessionProposeHandler(
 	fmt.Fprintf(&b, "  - session_address: %s\n", kp.Address())
 	if writes, ok := scope.WritesAtFee(feeUgnot); ok {
 		fmt.Fprintf(&b,
-			"\nSpend math: each write consumes its full offered gas fee — currently %dugnot per light write at this chain's live gas price — from the spend limit, so %s covers ~%d light write(s). Writes heavy enough to size above the floor gas limit cost proportionally more; every write is re-checked against the remaining limit before broadcast.\n",
-			feeUgnot, scope.SpendLimit, writes,
+			"\nSpend math: each write consumes its full offered gas fee — currently %dugnot per light write at this chain's live gas price — from the spend limit, so %s covers ~%d light write(s). %s\n",
+			feeUgnot, scope.SpendLimit, writes, writesBudgetNote,
 		)
 	}
 	if len(warnings) > 0 {
@@ -213,6 +219,7 @@ func sessionProposeHandler(
 	}
 	if writes, ok := scope.WritesAtFee(feeUgnot); ok {
 		sc["writes_budget"] = writes
+		sc["writes_budget_note"] = writesBudgetNote
 	}
 
 	return server.Result{

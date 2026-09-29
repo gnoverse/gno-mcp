@@ -168,7 +168,7 @@ or chain is unreachable or rate-limits.
 | external.faucet-live | gno_faucet_fund tier-2 against the LIVE onyx agent-faucet (validates the built-in faucet-service-url default) | 13 | covered |
 | external.testnet-key-cycle | built-in `testnet` profile end to end on the live network: generate agent key → faucet fund → balance | 13 | covered |
 | external.cla-sign | agent signs the live CLA from its own key to clear the deploy gate — preferably via gno_cla_info + gno_cla_sign (with user confirmation), gno_call Sign accepted as fallback | 14 | **not currently exercisable** — CLA enforcement reads DISABLED on onyx and mainnet (2026-09-29), so 14 records this `blocked`. The tool pair itself stays covered by 12 on the `e2e-clagate` image |
-| external.session-spend | session flow against LIVE onyx gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, the chain's spend_used tracks the right-sized fee plus any storage deposit, and the budget gnomcp reports matches it | 15 | **gap** — after a session write that locks a storage deposit, gnomcp's in-process `spend_remaining` subtracts the fee alone, so it runs high until the next process re-reads the chain (2026-09-29 run) |
+| external.session-spend | session flow against LIVE onyx gas prices: a modest spend limit (1000000ugnot) proposes cleanly, funds several session-signed writes, the chain's spend_used tracks the right-sized fee plus any storage deposit, and the budget gnomcp reports matches it | 15 | covered |
 
 ## Known harness constraints (not feature gaps)
 

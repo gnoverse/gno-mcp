@@ -498,6 +498,71 @@ func TestCall_sessionSpendUsesQueriedFee(t *testing.T) {
 	assert.Equal(t, wantRemaining, meta.SpendRemaining, "deduct the queried GasFee, not the floor")
 }
 
+// A write that stores new state also bills the session the storage deposit it
+// locks, which the fee cannot predict: after the write the chain's record of
+// the session is the budget left.
+func TestCall_sessionSpendFollowsTheChainRecordAfterTheWrite(t *testing.T) {
+	s := newBaseTestServer(t)
+	alog := audit.NewLog(&bytes.Buffer{})
+
+	fake := chain.NewFake()
+	fake.SetCallAsUser("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{TxHash: "0xdef", Result: "ok"})
+
+	var sessionAddr string
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
+	})
+	// Fee 20000 plus a 108200 deposit for the state the call created.
+	fake.SetSession("g1master", sessionAddr, chain.SessionStatus{
+		Active: true, AllowPaths: []string{"gno.land/r/test/counter"},
+		SpendLimit: "1000000ugnot", SpendRemaining: "871800ugnot",
+	})
+
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"identity": "session",
+	})
+	require.NoError(t, err, "Call")
+
+	meta := mgr.Get("testnet5", sessionAddr)
+	require.NotNil(t, meta, "session not found after call")
+	assert.Equal(t, "871800ugnot", meta.SpendRemaining)
+}
+
+// When the chain cannot report the session after the write, the fee the tx
+// offered is the best local estimate.
+func TestCall_sessionSpendFallsBackToTheFeeWhenTheChainCannotSay(t *testing.T) {
+	s := newBaseTestServer(t)
+	alog := audit.NewLog(&bytes.Buffer{})
+
+	fake := chain.NewFake()
+	fake.SetCallAsUser("gno.land/r/test/counter", "Increment", []string{}, chain.CallResult{TxHash: "0xdef", Result: "ok"})
+
+	var sessionAddr string
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		sessionAddr = seedActiveSession(t, m, "testnet5", []string{"gno.land/r/test/counter"}, "1000000ugnot")
+	})
+	fake.SetSessionError("g1master", sessionAddr, errors.New("rpc down"))
+
+	RegisterCall(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile":  "testnet5",
+		"realm":    "gno.land/r/test/counter",
+		"func":     "Increment",
+		"identity": "session",
+	})
+	require.NoError(t, err, "Call")
+
+	meta := mgr.Get("testnet5", sessionAddr)
+	require.NotNil(t, meta, "session not found after call")
+	assert.Equal(t, fmt.Sprintf("%dugnot", 1_000_000-chain.DefaultGasFeeUgnot), meta.SpendRemaining)
+}
+
 func TestCall_writesAuditEntry(t *testing.T) {
 	s := newBaseTestServer(t)
 	var auditBuf bytes.Buffer

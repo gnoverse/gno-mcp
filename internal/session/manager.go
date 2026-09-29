@@ -326,6 +326,42 @@ func (m *Manager) UpdateSpend(profile, sessionAddr string, gasUsed int64) error 
 	return nil
 }
 
+// SettleSpend records a broadcast write on the session. The chain's record is
+// the budget left: it also bills the storage deposit a write locks, which the
+// fee cannot predict. When the chain cannot report an active session, feeUgnot
+// is subtracted locally instead (see UpdateSpend).
+func (m *Manager) SettleSpend(ctx context.Context, c chain.Client, profile, sessionAddr string, feeUgnot int64) error {
+	m.mu.RLock()
+	var master string
+	if ss := m.getStateLocked(profile, sessionAddr); ss != nil {
+		master = ss.meta.MasterAddress
+	}
+	m.mu.RUnlock()
+
+	if master != "" {
+		if st, err := c.QuerySession(ctx, master, sessionAddr); err == nil && st.Active && st.SpendRemaining != "" {
+			return m.setSpendRemaining(profile, sessionAddr, st.SpendRemaining)
+		}
+	}
+	return m.UpdateSpend(profile, sessionAddr, feeUgnot)
+}
+
+// setSpendRemaining overwrites the session's SpendRemaining and persists it.
+func (m *Manager) setSpendRemaining(profile, sessionAddr, remaining string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ss := m.getStateLocked(profile, sessionAddr)
+	if ss == nil {
+		return fmt.Errorf("session/manager: SettleSpend: session %q not found for profile %q", sessionAddr, profile)
+	}
+	ss.meta.SpendRemaining = remaining
+	if err := m.store.Write(profile, ss.meta); err != nil {
+		return fmt.Errorf("session/manager: SettleSpend: persist: %w", err)
+	}
+	return nil
+}
+
 // ---- ListForProfile
 
 // ListForProfile returns a copy of the metadata for all sessions tracked for

@@ -139,10 +139,10 @@ func dispatchWriteTx(ctx context.Context, identityArg string, d writeTxDispatch)
 		}
 
 		// Update spend (simulate skips it). The chain bills the session the full
-		// GasFee per tx, not GasUsed, so deduct the fee the tx actually offered to
-		// keep local SpendRemaining in sync with the chain.
+		// GasFee per tx, not GasUsed, plus any storage deposit the write locked;
+		// the fee is the fallback when the chain cannot report the session.
 		if !d.simulate {
-			_ = d.sessionMgr.UpdateSpend(d.profileName, *d.sessionAddr, feeUgnot)
+			_ = d.sessionMgr.SettleSpend(ctx, d.c, d.profileName, *d.sessionAddr, feeUgnot)
 		}
 
 	default:
