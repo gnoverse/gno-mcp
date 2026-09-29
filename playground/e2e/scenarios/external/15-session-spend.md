@@ -17,8 +17,9 @@ This scenario pins the fee/spend decoupling on a real network: a **1000000ugnot*
 far too small for a fee priced off a flat 200M gas ceiling, ample for fees priced off the gas a
 light write actually reserves — must fund several session-signed writes. The chain bills the
 session each write's full gas fee plus any storage deposit the write locks: the first `Bio` write
-creates the field and locks a deposit (about 108,200 ugnot on 2026-09-29), an update of the same
-field locks none. The budget the AUT reports must match the chain's record, deposit included.
+creates the field and locks a deposit (207,800 ugnot on 2026-09-29), an update of the same
+field locks little or none (0 and 500 ugnot in two runs that day). The budget the AUT reports must
+match the chain's record, deposit included.
 
 Preflight (driver, before turn 1):
 - Create a throwaway master key in a scratch gnokey home (`gnokey add`), fund it via the live
@@ -69,9 +70,9 @@ Approved and confirmed on-chain. Now, acting as me through the session, set my p
 ### Instruct
 Do one more — set my Bio to again-$RUN_ID — and confirm what's left of the budget after that.
 ### Expect
-- correctness: succeeds again; an update of an existing field locks no new deposit, so the reported remaining drops by exactly one `FEE` and equals 1000000ugnot minus the chain's `spend_used`.
+- correctness: succeeds again; the reported remaining equals 1000000ugnot minus the chain's `spend_used`. An update locks little or no new deposit, so it drops by about one `FEE`.
 ### Verify
-- Chain (driver RPC): `sequence` is "2" and `spend_used` grew by exactly one `FEE` since step 2; the AUT's reported remaining equals `1000000 - spend_used`.
+- Chain (driver RPC): `sequence` is "2" and `spend_used` grew by at least one `FEE` since step 2, and by less than step 2's deposit; the AUT's reported remaining equals `1000000 - spend_used`.
 - Chain (driver RPC): `GetStringField("$MASTER_ADDR", "Bio", "")` returns `again-$RUN_ID`.
 
 ## Debrief
