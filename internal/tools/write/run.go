@@ -198,7 +198,8 @@ func requireRunSubmitter(ctx context.Context, c chain.Client, caller string) err
 	if err != nil {
 		return fmt.Errorf("gno_run: read the chain's run_submitters param (nothing signed): %w", err)
 	}
-	if len(allowed) == 0 || slices.Contains(allowed, caller) {
+	// bech32 addresses compare case-insensitively.
+	if len(allowed) == 0 || slices.ContainsFunc(allowed, func(a string) bool { return strings.EqualFold(a, caller) }) {
 		return nil
 	}
 	return &server.ToolError{

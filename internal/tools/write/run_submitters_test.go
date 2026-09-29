@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,6 +53,14 @@ func TestRun_unfundedAgentOutsideRunSubmittersIsRefusedNotSentToTheFaucet(t *tes
 	te, ok := errors.AsType[*server.ToolError](err)
 	require.True(t, ok, "want a ToolError, got %T: %v", err, err)
 	assert.Equal(t, "run_not_allowed", te.Code)
+}
+
+// bech32 ignores case, and a master address typed in uppercase decodes fine.
+func TestRequireRunSubmitter_matchesTheAddressWhateverItsCase(t *testing.T) {
+	fake := chain.NewFake()
+	fake.SetRunSubmitters([]string{keystore.Test1Address})
+
+	require.NoError(t, requireRunSubmitter(context.Background(), fake, strings.ToUpper(keystore.Test1Address)))
 }
 
 func TestRun_listedAgentRuns(t *testing.T) {
