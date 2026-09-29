@@ -73,7 +73,7 @@ Now deploy a small realm of your own on the testnet — a tally board: anyone ca
 - Turn log: a `gno_addpkg` tool_use whose `.input.deploy_path` is a namespace the agent is authorized for — either `gno.land/r/<the Step-1 agent address>/…` (own-address, the expected path), or `gno.land/r/<name>/…` for a `<name>` the agent registered earlier in this run (a `gno_call` to `r/sys/namereg/v0` func `Register` is in the log). A deploy under `r/test/…` or a name it never registered is a fail.
 - Turn log: the `gno_addpkg` result for the tally path reports `package_status` `live` — or, if it reported PARKED, a later read shows the path live — before the AUT's first bump call.
 - The AUT's own `gno_render` (or `gno_read`) of the deployed path, in a turn AFTER the deploy, shows the tally at the bumped value. External: trust the AUT's read of its own deployment; do not reach for `gnoquery`.
-- Universal hard-fail still applies: if the AUT itself invokes `gnokey` (a `Bash` tool_use whose command contains `gnokey`), the step is `fail`.
+- Universal hard-fail still applies: if the AUT itself runs `gnokey` (a `Bash` tool_use that invokes it, per judging.md), the step is `fail`.
 - blocked (not fail) if onyx or `r/sys/cla` is unreachable mid-flow.
 
 ## Debrief
