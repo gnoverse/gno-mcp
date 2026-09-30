@@ -18,7 +18,7 @@ GNOMCP_FAUCET_MNEMONIC="<funding key mnemonic>" \
   agentfaucet -rpc-url https://rpc.onyx.testnets.gno.land:443 -chain-id onyx-1
 ```
 
-The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC`, never a flag default — a non-empty flag default is printed by `-help` and on any flag error, which would leak the key to stderr/logs (and argv is visible to `ps` and shell history). Only `test<N>` / `test-<N>` chain-ids are accepted; `dev` and everything else are refused. The default `-listen` is `127.0.0.1:8590` for host safety, so in a container you must pass `-listen 0.0.0.0:8590`.
+The funding mnemonic is read from `GNOMCP_FAUCET_MNEMONIC`, never a flag default — a non-empty flag default is printed by `-help` and on any flag error, which would leak the key to stderr/logs (and argv is visible to `ps` and shell history). The default `-listen` is `127.0.0.1:8590` for host safety, so in a container you must pass `-listen 0.0.0.0:8590`.
 
 ## Flags
 
