@@ -35,8 +35,8 @@ Upstream taxonomy from `gno-security.md`. Code comments in the gno repo referenc
 
 | Class | Name | Mechanism |
 |---|---|---|
-| **1a** | cur-disclosure / impersonate-self | Hostile interface implementation captures `cur.Address()` / `cur.PkgPath()` from a `cur realm` parameter and later acts AS the realm that handed it the cur. |
-| **1b** | cur-disclosure / impersonate-caller | Hostile implementation captures `cur.Previous()` and acts AS that realm's caller. |
+| **1a** | cur-disclosure / impersonate-self | Hostile code receives a realm's live `cur` (through an interface method or a plain function that takes a `realm`) and acts AS that realm until the realm's crossing function returns. |
+| **1b** | cur-disclosure / impersonate-caller | Hostile code reads `cur.Previous()` and hands it, or its address, to an API that trusts it without `IsCurrent()` (Class 2). `cross()` and `NewBanker` refuse it. |
 | **2** | designation-forgery | Public method takes `(caller address, ...)` or `(pkgPath string, ...)`; any attacker calls it with the victim's identity. Also: non-crossing helpers that accept a secondary `realm` value and skip `rlm.IsCurrent()` before trusting it — a stale or previous realm value's `.Address()` still resolves but no longer refers to the live caller. |
 | **3** | impl-substitution | Public function accepts an open interface; attacker supplies an implementation that lies on read (DoS or silent escalation). **Fires even when the interface has no realm-typed methods** — it's a read/behavior-integrity class, not a cur-leak class. |
 | **4** | closed-over-authority | A canonical-typed value's constructor (or post-construction setter) takes attacker-controllable callback/data; the value passes an `IsCanonicalX` type check but carries hostile state. When Class 3 and Class 4 both apply, file as Class 4 — the allowlist passed; residual harm is captured-state. |
@@ -109,17 +109,23 @@ func F(cur realm) {
     thirdParty.Hook(cur)   // forwarding cur to untrusted code
 }
 
-// thirdParty (attacker), declared as:
+// thirdParty (attacker), declared as either:
 type Hooker interface { Hook(cur realm) }
+func Hook(note string, rlm realm)   // plain function: its realm parameter is not the first
 ```
 
-**Why wrong**: `cur realm` is a capability token for the immediately-preceding crossing into `/r/V`. Forwarding it to attacker code lets the attacker capture `cur.Address()` (1a) or `cur.Previous()` (1b) and later impersonate `/r/V` or its caller.
+**Why wrong**: `cur realm` is a capability token for the immediately-preceding crossing into `/r/V`. A forwarded `cur` stays current inside the attacker's code, so until `F` returns the attacker holds `/r/V`'s authority (1a):
 
-**Detection**: interface methods declared with `cur realm` parameters; functions that pass `cur` (not `cross(cur)`) to subsequent cross-realm calls. The interface-with-`cur realm` shape is the primary tell.
+- `target.G(cross(rlm))` crosses as `/r/V`: `G` reads `/r/V` from its `cur.Previous()` and grants whatever it grants `/r/V`.
+- `banker.NewBanker(banker.BankerTypeRealmSend, rlm)` passes the banker's `IsCurrent()` check, so the attacker can send `/r/V`'s coins anywhere.
 
-**Fix**: never declare an interface method that takes `cur realm`. Take `caller address` instead, and let the crossing call site derive the address from its runtime-current `cur.Previous().Address()`.
+The token cannot outlive `F`, because a stored realm value panics (`interrealm.md` § Realm values are ephemeral). `rlm.Previous()` is not current, so `cross` refuses it (`cross: rlm is not the current cur`) and so does `NewBanker`. All 1b gives the attacker is a realm value it can read the caller's address from, which harms only an API that trusts an address or an unchecked realm value (Class 2).
 
-**Status**: ACTIVE class (defensive lint). The compiler today rejects most expressions; the lint catches the cases it doesn't.
+**Detection**: interface methods declared with `cur realm` parameters; functions that pass `cur` (not `cross(cur)`) to a function declared in another realm, including a plain function whose `realm` parameter is not the first.
+
+**Fix**: never declare an interface method that takes `cur realm`. Take `caller address` instead, and let the crossing call site derive the address from its runtime-current `cur.Previous().Address()`. To call another realm, call its crossing function with `cross(cur)`, which gives it a `cur` of its own. Pass `cur` itself only to code you control or have audited.
+
+**Status**: ACTIVE. The VM refuses `other.F(cur)` when `F` is a crossing function of another realm (`cannot cur-call to external realm function`). It accepts `cur` passed as a later argument, and `gno lint` does not flag it.
 
 ### Class 2 — designation-forgery
 

@@ -114,14 +114,16 @@ Each event is recorded in the ABCI results of the block; off-chain services cons
 
 ## `chain/banker` — coin handling
 
-The Banker handles balance changes of native coins: issuance, transfers, burning. It exposes four subtypes via `NewBanker()`:
+The Banker handles balance changes of native coins: issuance, transfers, burning. It has four subtypes:
 
 | Subtype | What it grants |
 |---|---|
-| `BankerTypeReadonly` | Read-only access to coin balances |
+| `BankerTypeReadonly` | Read-only access to coin balances, through `NewReadonlyBanker()`; `NewBanker` panics on this type |
 | `BankerTypeOriginSend` | Full access to coins sent with the transaction that called the banker |
 | `BankerTypeRealmSend` | Full access to coins the realm itself owns (including those sent with the tx) |
 | `BankerTypeRealmIssue` | Can issue new coins |
+
+`NewBanker(bt, rlm realm)` builds the other three for `rlm.Address()` and panics unless `rlm.IsCurrent()`. A crossing function's `cur` passes, and so does a `cur` forwarded into a non-crossing call, so code that receives your `cur` can spend your realm's coins (`security.md` Class 1a/1b). `cur.Previous()` does not pass.
 
 Security-relevant primitives:
 
