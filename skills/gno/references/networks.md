@@ -2,7 +2,7 @@
 
 **onyx** (chain-id `onyx-1`) is the testnet gnomcp writes to by default, through the built-in
 `testnet` profile. **mainnet** (`gnoland-1`) is read-only: reads and audits work, no code path signs
-anything there. Every value below is as of **2026-09-29**; re-query anything load-bearing
+anything there. Every value below is as of **2026-10-14**; re-query anything load-bearing
 (`gno_status`, `auth/gasprice`, a realm's render, whether a package resolves) before relying on it.
 
 **Run `gno_status` before quoting anything here.** This file covers exactly two chain-ids,
@@ -26,7 +26,7 @@ this file is only the per-chain snapshot.
 | writes through gnomcp | deploys (parked until approved), calls, sessions, faucet; **`gno_run` refused** (`MsgRun` allowlist) | **none**, read tools only |
 | RPC | `rpc.onyx.testnets.gno.land:443` | `rpc.gno.land:443` |
 | gnoweb | `onyx.testnets.gno.land` | `gno.land` |
-| release (`/status` `build_version`) | `v1.5.0`, commit `e75fef82c`: the release mainnet runs | `heads/chain/mainnet.<depth>+e75fef82c` |
+| release (`/status` `build_version`) | `v1.5.1-rc.1`, commit `07e44776c`: the release mainnet runs | `v1.5.1`, same commit |
 | upgrade ledger | `misc/deployments/onyx.gno.land/upgrades.json` | `misc/deployments/mainnet.gno.land/upgrades.json` |
 | gas price (`auth/gasprice`) | `1ugnot/1000gas` | same |
 | block max gas | 3,000,000,000 | same |
@@ -40,7 +40,7 @@ this file is only the per-chain snapshot.
 | validator set | `r/sys/validators/v0` holds it (`/v2` also deployed, empty) | same |
 | faucet | present: read the grant size and per-address cap from `gno_status`'s `faucet` block, never from this row | none: mainnet ships without one |
 | tx indexer | `indexer.onyx.testnets.gno.land/graphql/query` | `indexer.gno.land/graphql/query`; same query root, `getSupply` on both |
-| toolchain install ref | tag `v1.5.0` | the ledger's newest entry; `chain/mainnet` (`9c8eb132`, semver twin `v1.2.0`) names genesis only |
+| toolchain install ref | tag `v1.5.1-rc.1` | tag `v1.5.1`; `chain/mainnet` (`9c8eb132`, semver twin `v1.2.0`) names genesis only |
 | sub-package path scheme | version at the **leaf** (`p/nt/avl/rotree/v0`) | same |
 
 The minimum fee for a 10M-gas write is 10,000 ugnot (0.01 GNOT) on both chains; gnomcp offers ×2
@@ -50,30 +50,30 @@ gnomcp simply never signs one.
 Toolchain tags use the short chain **name**, never the chain-id (`chain/onyx`, not `chain/onyx-1`;
 `chain/mainnet`, not `chain/gnoland-1`). Globbing a chain-id finds nothing. A tag can also lag its
 branch: `heads/chain/mainnet` carries commits pushed after launch, and onyx has no branch at all.
-Neither tag is automatically the ref to install: read the chain's `upgrades.json` first and fall
-back to the tag only when it has no entry (`toolchain.md`). `chain/onyx` tags the commit that added
-onyx's deployment config, not the binary it runs: the ledger names `v1.5.0`, and that tag is the
-install ref.
+Neither tag is automatically the ref to install: read the node's `build_version` first, then the
+chain's `upgrades.json`, and fall back to the tag only when neither names a release
+(`toolchain.md`). `chain/onyx` tags the commit that added onyx's deployment config, not the binary
+it runs: the node reports `v1.5.1-rc.1`, and that tag is the install ref.
 
 **A chain tag names a launch commit, not what the chain runs today.** `chain/mainnet` is mainnet's
 `v1.2.0` genesis; the chain has since been halted and restarted on newer binaries by governance.
 
-**Two places say what a chain runs, and they agree.** `/status` carries a `build_version` naming
-the running binary: a bare release tag on onyx, a branch with commit depth and short sha on
-mainnet. On both it resolves to the same commit as the newest entry in the chain's
-`upgrades.json`, the ledger of those restarts. Ask the node for what it is running and the ledger
-for what was agreed; a disagreement is worth chasing rather than averaging. Do not read
+**Two places say what a chain runs.** `/status` carries a `build_version` naming the running
+binary, a bare release tag on both chains. The chain's `upgrades.json` is the ledger of agreed
+releases, and it can trail the node: on the date above both chains run the `v1.5.1` commit, a
+patch release, and both ledgers still end at `v1.5.0`. The node names what is running; any other
+disagreement is worth chasing rather than averaging. Do not read
 `node_info.version` for this. It is `v1.0.0-rc.0` with an empty `software` on both chains and
 identifies nothing.
 
 ## onyx: `onyx-1`
 
 onyx runs mainnet's release line and takes each mainnet upgrade first, as its rehearsal. As of the
-date above both run commit `e75fef82c`, so the VM that type-checks and runs code on onyx is the one
+date above both run commit `07e44776c`, so the VM that type-checks and runs code on onyx is the one
 mainnet runs; chain params such as the package approvers and the `MsgRun` allowlist are each chain's own. That
 holds only while both `build_version`s resolve to the same commit. The strings never match: onyx
-reports the tag `v1.5.0`, which peels to `e75fef82c`, and mainnet reports
-`heads/chain/mainnet.<depth>+e75fef82c`. Compare the commits. During an upgrade onyx runs the new
+reports the candidate tag `v1.5.1-rc.1` and mainnet the final tag `v1.5.1`, and both peel to
+`07e44776c`. Compare the commits. During an upgrade onyx runs the new
 release before mainnet does, and the two differ until mainnet follows.
 
 Its genesis deploys mainnet's genesis package set. Of the packages these references build on, three
