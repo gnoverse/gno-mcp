@@ -2,7 +2,7 @@
 
 **onyx** (chain-id `onyx-1`) is the testnet gnomcp writes to by default, through the built-in
 `testnet` profile. **mainnet** (`gnoland-1`) is read-only: reads and audits work, no code path signs
-anything there. Every value below is as of **2026-10-14**; re-query anything load-bearing
+anything there. Every value below is as of **2026-10-15**; re-query anything load-bearing
 (`gno_status`, `auth/gasprice`, a realm's render, whether a package resolves) before relying on it.
 
 **Run `gno_status` before quoting anything here.** This file covers exactly two chain-ids,
@@ -26,7 +26,7 @@ this file is only the per-chain snapshot.
 | writes through gnomcp | deploys (parked until approved), calls, sessions, faucet; **`gno_run` refused** (`MsgRun` allowlist) | **none**, read tools only |
 | RPC | `rpc.onyx.testnets.gno.land:443` | `rpc.gno.land:443` |
 | gnoweb | `onyx.testnets.gno.land` | `gno.land` |
-| release (`/status` `build_version`) | `v1.5.1-rc.1`, commit `07e44776c`: the release mainnet runs | `v1.5.1`, same commit |
+| release (`/status` `build_version`) | `v1.5.1-rc.1`, commit `07e44776c`: the commit mainnet runs | `v1.5.1`, same commit |
 | upgrade ledger | `misc/deployments/onyx.gno.land/upgrades.json` | `misc/deployments/mainnet.gno.land/upgrades.json` |
 | gas price (`auth/gasprice`) | `1ugnot/1000gas` | same |
 | block max gas | 3,000,000,000 | same |
@@ -60,9 +60,10 @@ it runs: the node reports `v1.5.1-rc.1`, and that tag is the install ref.
 
 **Two places say what a chain runs.** `/status` carries a `build_version` naming the running
 binary, a bare release tag on both chains. The chain's `upgrades.json` is the ledger of agreed
-releases, and it can trail the node: on the date above both chains run the `v1.5.1` commit, a
-patch release, and both ledgers still end at `v1.5.0`. The node names what is running; any other
-disagreement is worth chasing rather than averaging. Do not read
+releases; on the date above its newest entry is a `rolling` row for commit `07e44776c`,
+`v1.5.1-rc.1` on onyx and `v1.5.1` on mainnet. A ledger row can land after the node runs the
+release, so a ledger that has not yet recorded the node's release is expected, and the node names
+what is running. Any other disagreement is worth chasing rather than averaging. Do not read
 `node_info.version` for this. It is `v1.0.0-rc.0` with an empty `software` on both chains and
 identifies nothing.
 
@@ -71,7 +72,7 @@ identifies nothing.
 onyx runs mainnet's release line and takes each mainnet upgrade first, as its rehearsal. As of the
 date above both run commit `07e44776c`, so the VM that type-checks and runs code on onyx is the one
 mainnet runs; chain params such as the package approvers and the `MsgRun` allowlist are each chain's own. That
-holds only while both `build_version`s resolve to the same commit. The strings never match: onyx
+holds only while both `build_version`s resolve to the same commit. The strings need not match: onyx
 reports the candidate tag `v1.5.1-rc.1` and mainnet the final tag `v1.5.1`, and both peel to
 `07e44776c`. Compare the commits. During an upgrade onyx runs the new
 release before mainnet does, and the two differ until mainnet follows.

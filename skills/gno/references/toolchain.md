@@ -21,7 +21,7 @@ Scope: live chain targets. For a **local gnodev** target, use the `gno` already 
    - **Commit-only** — tags containing `/` are not valid `go install @` refs, so use the commit sha. In `ls-remote` output that is the tag's `^{}` (peeled) line when one exists, else the tag's own line.
    - Resolve the chain tag's sha first, then look for a `v*` tag listing that same sha before falling back to the raw sha.
    - A tag can lag its branch, so compare it against `refs/heads/chain/<name>` before pinning, when the chain has a branch. `chain/mainnet` sits behind one carrying post-launch commits; retired `chain/topaz` sits behind its own. onyx has no branch, and `chain/onyx` tags the commit that added onyx's deployment config, not the binary it runs: the node reports `v1.5.1-rc.1`.
-5. No ledger entry and no matching chain tag (unreleased or dev chain): ask the chain's operator which ref is deployed; if the user runs the node themselves, their local `gno` is the answer. Say in your answer which ref you built against.
+5. No `build_version`, no ledger entry and no matching chain tag (unreleased or dev chain): ask the chain's operator which ref is deployed; if the user runs the node themselves, their local `gno` is the answer. Say in your answer which ref you built against.
 
 ## Install into the store
 
