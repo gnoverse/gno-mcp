@@ -37,7 +37,7 @@ Patterns to check against the realm source (see `security.md` Audit signals tabl
 - Helper/secondary `rlm.Previous()` / `rlm.Address()` without prior `rlm.IsCurrent()` check → Class 2 designation-forgery. Do not flag the first `cur realm` of a crossing function solely for lacking `cur.IsCurrent()`; the runtime guarantees it is current. If `docs/resources/gno-interrealm-v2.md` appears broader, use it as a triage prompt and confirm the exact shape against `gnovm/adr/interrealm_v2.md`.
 - Public method takes `caller address` / `pkgPath string` as identity parameter → Class 2 designation-forgery
 - `unsafe.PreviousRealm()` inside a non-crossing function used as caller identity → Class 2 (stack-walker doesn't identify immediate caller)
-- `interface { ... }` declared with `cur realm` parameter → Class 1a/1b cur-disclosure surface
+- Interface method or function type with a `realm` parameter after the first, or `cur` passed (not `cross(cur)`) as a later argument to another realm's code → Class 1a/1b cur-disclosure surface
 - `interface { ... }` accepted as parameter and methods invoked without canonical-type assert → Class 3 impl-substitution
 - `func(...)` parameters or function-typed state fields used in permission-gated paths → Class 4 closed-over-authority
 - Embedded `/p/`-type with `Iterate(cb func(*T))` / `Apply(fn func(*T))` on `/r/`-data → (B) violation, no-anchor laundering surface
