@@ -315,6 +315,38 @@ func ChangeOwner(cur realm, newOwner address) {
 
 The ABCI block envelope carries event type, the emitting `pkg_path`, the emitting `func`, and the key/value attrs — all indexable. Be generous; emit for any externally-observable state change.
 
+## Structured reads: return values, let the node encode JSON
+
+Read structured data with the `vm/qeval_json` query. The node evaluates an expression read-only and encodes the results as Amino JSON in Go, outside the VM. Do not build JSON inside a realm, with `p/onbloc/json/v0` or by concatenating strings, and do not serve it from `Render`:
+
+- **Gas.** Encoding in the realm runs in the metered VM. On a gno v1.5.0 node, for a getter over 20 small structs, building the string by hand costs about 4 times the gas of returning a copy, and `p/onbloc/json/v0` about 25 times: roughly 5 million and 38 million gas more per call. A query runs under a 3,000,000,000 gas ceiling, and a transaction that calls the function pays for it.
+- **Correctness.** A hand-built string must escape every user-supplied value for JSON, which `strconv.Quote` does not: it writes a control byte as `\a` or `\x00`, and JSON parsers reject both. The result reaches the client as one untyped string that the client parses back.
+
+Expose a getter that returns the data, built during the call:
+
+```go
+type Item struct {
+    ID    int
+    Name  string
+    Score int
+}
+
+// Items returns a copy, so vm/qeval_json returns the elements inline.
+func Items() []Item {
+    out := make([]Item, len(items))
+    copy(out, items)
+    return out
+}
+```
+
+```sh
+gnokey query vm/qeval_json -data 'gno.land/r/acme/shop.Items()' -remote <rpc>
+```
+
+The response is `{"results":[...]}`, one Amino `TypedValue` per return value, plus `"@error"` with the message when the last result is a non-nil `error`. A stored object comes back as a `RefValue` whose `ObjectID` the client fetches with `vm/qobject_json`, at any depth: `return items`, `return items[i]` and `return *p` on a stored pointer each return one, and so does a slice, map or pointer field inside a copied element, because `copy` is shallow. To return a stored element inline, assign it to a local first (`it := items[i]; return it`) and copy its slice, map and pointer fields. `docs/builders/query-state-api.md` in gnolang/gno documents the format, the traversal of stored objects and the decoding libraries; its `vm/qeval_json` example omits the `results` wrapper.
+
+gnomcp's `gno_eval` returns the `vm/qeval` text form. A program reads `vm/qeval_json`.
+
 ## Access control idioms
 
 Four common shapes:
@@ -594,6 +626,7 @@ func Buy(cur realm) { ... }
 - **Pick one routing pattern and stick with it** within a realm. Mixing mux and `realmpath.Parse` is confusing.
 - **Return a useful 404** on unknown paths — `> [!WARNING]\n> Path not found` or similar, not panic.
 - **Pre-render expensive paths into events** if the same view will be requested often.
+- **Markdown only.** Serve machine-readable data through a getter read with `vm/qeval_json` (§ Structured reads), never as a JSON `Render` path.
 
 See `render.md` for the markdown extension surface and `chain/markdown` sanitization.
 
@@ -619,6 +652,7 @@ Not security bugs, but audit-worthy patterns that should block deployment until 
 - **Silent type-assertion fallbacks.** `n, _ := current.(int)` swallows assertion failure; future state-shape changes corrupt the read silently. Panic on failure, or use a typed wrapper.
 - **Over-typed state for single-key use.** Single-key `avl.Tree` is over-engineered — collapse to a scalar or expose multi-key API.
 - **Unbounded admin inputs.** `Stock(cur realm, qty int)` accepting negative `qty` is an admin footgun. Bound at the function boundary.
+- **JSON encoded in the realm.** Output built with `p/onbloc/json/v0` builders, string concatenation or a JSON `Render` path spends VM gas on what `vm/qeval_json` encodes natively. Parsing JSON input with `p/onbloc/json/v0` is a different case. Return values from a getter instead (§ Structured reads).
 
 ## `gno fmt`
 

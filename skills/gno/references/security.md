@@ -384,6 +384,7 @@ Not Gno-language bug classes, but real audit signals an auditor should catch alo
 | `math.MinInt` / `math.MaxInt` / `unsafe.Sizeof` / architecture-dependent ints | RED | Platform-dependent values; nodes on different architectures diverge. Use explicit-width types (`int64`, `uint32`). |
 | `append` whose growth capacity is observed (`cap(s)` checked after append) | YELLOW | Go's append capacity-growth is version-dependent; code branching on `cap()` can diverge across Go versions. |
 | Floating-point arithmetic in deterministic paths | YELLOW | Float formatting has platform edge cases. Prefer integer math; if floats are necessary, format with explicit precision. |
+| Realm encodes its output as JSON for clients: `p/onbloc/json/v0` builders, string concatenation, a JSON `Render` path. Parsing JSON input with `p/onbloc/json/v0` is not this signal | YELLOW | Encoding runs in the metered VM, and a hand-built string must escape every user-supplied value. Return values from a getter and let clients read them with `vm/qeval_json` (`patterns.md` § Structured reads). |
 | Delete-and-recreate the same object identity within a tx | YELLOW | Realm finalization assigns object IDs by reachability. Refcount accounting can produce "unexpected object with id" / "unexpected zero object id" runtime errors. |
 
 ## Severity calibration
