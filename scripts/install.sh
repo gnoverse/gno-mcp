@@ -99,7 +99,7 @@ if sums="$(sha256_of "${tmp}/${asset}")"; then
   [ "$got" = "$want" ] || die "checksum mismatch for ${asset} (got ${got}, want ${want})"
   info "Checksum OK."
 else
-  warn "could not compute sha256 (no sha256sum/shasum, or the tool failed) — skipping checksum verification"
+  die "cannot verify checksum: no sha256sum or shasum on this system — install one and re-run"
 fi
 
 # goreleaser archives carry the binary at archive root
