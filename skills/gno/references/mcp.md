@@ -16,14 +16,14 @@ fallbacks below — never block on the MCP.
 
 | Task | If a Gno MCP is connected | Fallback (no MCP) |
 |---|---|---|
-| Survey a package — files, API surface, structure | `gno_read` (default = per-file outline: signatures + docs + byte counts, bodies elided) | gnoweb source view |
+| Survey a package — files, API surface, structure | `gno_read` (default = per-file outline: signatures + docs + byte counts, bodies elided) | gnoweb source view; from gnoweb v1.6.0, `<path>$help&json` lists callable functions with signatures and docs |
 | Read specific functions/declarations + what they depend on | `gno_read` with `symbols=["Transfer", "Counter.Inc"]` — verbatim bodies + a `// deps:` header for follow-up batch fetches | read the source |
 | Read one whole file verbatim (audit-grade) | `gno_read` with `file` + `full=true` (gets the larger budget) | local `.gno` files, gnoweb source view |
-| Read a whole package raw (realm **or** pure) | `gno_read` with `full=true` — small packages only; big ones overflow the budget, use the per-file path | same |
+| Read a whole package raw (realm **or** pure) | `gno_read` with `full=true` — small packages only; big ones overflow the budget, use the per-file path | from gnoweb v1.6.0, `<path>$download` returns every file as one plain-text document |
 | Discover packages under a namespace/path | `gno_packages` (prefix `gno.land/r/x/` or `@namespace`) | gnoweb, `gno` CLI |
 | Tell a *parked* package from one that does not exist (chains running the `inert` code-submission policy) | after a deploy, `gno_addpkg` reports `package_status` (`live` \| `inert` \| `redeploy_parked` \| `unknown`); afterwards `gno_render`, `gno_eval`, `gno_read` and `gno_call` fail with `package_parked` on a parked path, and with the chain's plain error on an absent one | `gnokey query vm/qpkgmeta_json -data "<pkgpath>"` → `status: live \| inert \| absent`; `gnokey query "vm/qinertpaths?limit=100" -data "<prefix>"` lists what awaits approval (`networks.md`) |
 | Enumerate deployed packages under a namespace | `gno_packages` (path prefix or `@namespace`; paths only, no tags or categories — those are not indexed on-chain) | gnoweb |
-| See rendered `Render()` output | `gno_render` | gnoweb |
+| See rendered `Render()` output | `gno_render` | gnoweb; from gnoweb v1.6.0, `Accept: text/markdown` returns the raw markdown |
 | Read on-chain state / evaluate an expression | `gno_eval` | — |
 | Check an address's balance / sequence (nonce) | `gno_account` (`exists:false` = never funded, not an error) | gnoweb |
 | Verify which chain a profile points at / node freshness | `gno_status` (flags chain-id mismatch) | — |

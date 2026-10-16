@@ -26,7 +26,7 @@ The two diverge whenever a borrow is active. They re-align on the next cross-cal
 | `fn(cross(cur), ...)` into same realm | shifts† | unchanged | yes | yes |
 | `fn(cross(cur), ...)` into different realm | shifts | shifts | yes | yes |
 | `fn(cur, ...)` non-crossing call (same realm) | unchanged | unchanged | no | no |
-| Non-crossing call of `/r/X`-declared callable from `/r/Y` | unchanged | shifts to `/r/X` (borrow #1) | yes | yes |
+| Non-crossing call of an `/r/X`- or `/e/`-declared callable from `/r/Y` (`/e/` top-level functions and methods from v1.6.0) | unchanged | shifts to the declaring realm (borrow #1) | yes | yes |
 | Stdlib/`/p/` method on real foreign-stamped receiver | unchanged | shifts to receiver's stamp (borrow #2) | yes | yes |
 | Stdlib/`/p/` method on primitive/nil/unstamped receiver | unchanged | unchanged (no-anchor) | no | no |
 | Stdlib/`/p/` top-level function | unchanged | unchanged | no | no |
@@ -124,9 +124,9 @@ The two APIs differ only in shape: `unsafe.*` returns a struct (`runtime.Realm`)
 
 On every function or method call, the VM applies at most one implicit borrow rule. These determine the storage-context (`m.Realm`) for the call's body.
 
-### Borrow rule #1 — Declaring-realm borrow (`/r/`-declared callables)
+### Borrow rule #1 — Declaring-realm borrow (`/r/`- and `/e/`-declared callables)
 
-Any function, method, or closure **declared in** a realm package `/r/X` runs its body with `m.Realm = /r/X`. Symmetric and unforgeable: calling attacker-declared code from victim's frame runs that code under attacker's authority. Direct field writes to victim-owned state inside the attacker's body fail the readonly check.
+Any function, method, or closure **declared in** a realm package `/r/X`, or in the ephemeral `/e/` package of a `MsgRun` script, runs its body with `m.Realm` set to its declaring realm. Symmetric and unforgeable: calling attacker-declared code from victim's frame runs that code under attacker's authority. Direct field writes to victim-owned state inside the attacker's body fail the readonly check. For a script's top-level functions and methods this holds since v1.6.0; earlier releases ran them under the calling realm's authority.
 
 ### Borrow rule #2 — Storage-realm borrow (stdlib / `/p/` methods)
 
@@ -145,7 +145,7 @@ A closure created by code in `/p/` (or in any package with no realm of its own) 
 
 **"Closure = capability"**: a closure carries its creator's authority and nothing can give it more. Attacker `/r/M` cannot build a closure that writes `/r/V`'s data, even if `/r/V` accepts and runs it.
 
-If the closure's source file lives in `/r/X`, rule #1 has already borrowed to `/r/X` and rule #3 is a no-op.
+If the closure's source file lives in `/r/X` or in an `/e/` script, rule #1 has already borrowed to that realm and rule #3 is a no-op.
 
 ## Storage = Authority (PkgID stamped at allocation)
 
@@ -160,7 +160,7 @@ Two practical consequences:
    cannot allocate gno.land/r/v.UserT in realm gno.land/r/a
    ```
 
-   Authority cannot be forged by constructing impostor instances. Construction must go through a constructor declared in the type's home realm.
+   From v1.6.0 another realm cannot build a populated instance: construction goes through a constructor declared in the type's home realm, and conversion is refused too (§ Conversion guards). A zero value is still allowed. `var t v.UserT` runs in `/r/a`, `t` carries `/r/v`'s PkgID so `/r/a` cannot write its fields, and `&t` can be passed to `/r/v`. Holding a `v.UserT`, or a non-nil `*v.UserT`, is therefore not authority: identify the caller through `cur.Previous()`.
 
 ## Readonly taint
 
@@ -180,9 +180,9 @@ Two cross-realm invariants enforced at `doOpConvert`:
 
 1. **Refuse foreign-readonly source.** Converting a tainted value to a type the current realm doesn't declare panics with `illegal conversion of readonly or externally stored value`. Without this, an attacker could declare a parallel `/p/`-type with the same struct layout plus a mutator method, convert the victim's pointer to the parallel type, and invoke the mutator under victim authority via borrow rule #2.
 
-2. **Refuse conversion to foreign `/r/`-declared type.** A realm cannot forge values of `/r/`-declared types it doesn't declare. Combined with the construction-time check, this ensures every real instance of a `/r/`-declared type traces back to its home realm's allocator.
+2. **Refuse conversion to foreign `/r/`-declared type.** Converting to a type another `/r/` realm declares panics with `illegal conversion to external realm type`, both as a value (`v.T(local)`) and through one pointer level (`(*v.T)(&local)`, refused since v1.6.0). A nil pointer converts, since it points at nothing. A type whose underlying type is a primitive, func or chan type converts freely: any realm can produce `v.Token("admin")`. Combined with the construction-time check, this stops another realm, from v1.6.0, from producing a populated instance of any other `/r/V`-declared type. It does not stop a zero value (§ Storage = Authority).
 
-**Implementation note**: case 1 uses a raw Go `panic(...)` rather than `m.Panic(...)`, which means it is **not catchable** by Gno `defer { recover() }`. This is asymmetric with the write-time readonly panic (catchable). Realm code cannot recover from conversion panics.
+**Implementation note**: both cases use a raw Go `panic(...)` rather than `m.Panic(...)`, so neither is **catchable** by Gno `defer { recover() }`. The write-time readonly panic is catchable. Realm code cannot recover from conversion panics.
 
 ## Realm boundaries and finalization
 
@@ -258,9 +258,11 @@ Inside the called function: `unsafe.PreviousRealm()` is the origin user (pkgpath
 
 ### `MsgRun`
 
-Deploys an ephemeral `/e/g1<user>/run` package and invokes its `main()`. Inside `main`, the user is both the previous-realm (at the chain root) and shares the address with the ephemeral realm. The ephemeral can `realmA.PublicCrossing(cross)` to enter `realmA` properly.
+Deploys an ephemeral `/e/g1<user>/run` package and invokes its `main()`. Inside `main`, the user is both the previous-realm (at the chain root) and shares the address with the ephemeral realm. A script declares `func main(cur realm)` and enters `realmA` with `realmA.PublicCrossing(cross(cur))`.
 
 The address derivation makes coins sent to the ephemeral flow back to the user. The ephemeral can also consume `unsafe.OriginSend()` and forward control — which is why `IsUser()` (broad) is unsafe for payment guards.
+
+From v1.6.0 a script cannot borrow a realm's authority through a callback. When a realm calls back a function, method or closure the script declared (a `func(*Account)` argument, an interface value), that code runs under the run realm by borrow rule #1, so writing the realm's objects panics with `cannot directly modify readonly tainted object`. Reading them, and writing the script's own globals, still works. On v1.5.x only closures are refused: a top-level function or method the script declared runs under the calling realm and can write its objects. To change a realm's state, call its crossing functions.
 
 ### `MsgAddPackage`
 
