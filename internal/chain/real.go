@@ -509,7 +509,7 @@ const DefaultGasFeeUgnot int64 = DefaultGasWanted / minGasPriceDivisor
 
 // DefaultMaxDepositUgnot caps the storage deposit for an agent AddPackage. Sufficient
 // for typical realms; a deploy rejected for an insufficient deposit is the signal to raise it.
-const DefaultMaxDepositUgnot int64 = 10_000_000
+const DefaultMaxDepositUgnot int64 = 50_000_000
 
 // agentClient returns a gnoclient.Client bound to the agent signer for a
 // standard (non-session) tx, reusing Real's RPC connection.

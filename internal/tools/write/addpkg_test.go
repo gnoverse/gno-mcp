@@ -66,6 +66,7 @@ func TestAddPkg_happyPath(t *testing.T) {
 	assert.Contains(t, gk, "gnokey maketx addpkg", "addpkg must wire its own subcommand")
 	assert.Contains(t, gk, "-pkgpath gno.land/r/test/foo")
 	assert.Contains(t, gk, "-pkgdir", "addpkg shows the source-dir placeholder")
+	assert.Contains(t, gk, "-max-deposit 50000000ugnot", "addpkg caps the storage deposit at 50 GNOT")
 
 	// gnomod.toml must have been injected and files must be sorted.
 	files := fake.LastAddPackageFiles("gno.land/r/test/foo")
