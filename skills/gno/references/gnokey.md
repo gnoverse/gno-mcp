@@ -114,7 +114,7 @@ the tx lock**, not an amount spent. Key facts:
   far more than you expect if the realm is large. Query the param; GovDAO can move it.
 - The deposit is **refundable**: when a realm frees storage (state deleted), the proportional locked
   amount is returned. It's a deposit, not a fee.
-- gnomcp pins `DefaultMaxDepositUgnot = 10_000_000` (10 GNOT) on **`gno_addpkg` only**; `gno_call`
+- gnomcp pins `DefaultMaxDepositUgnot = 50_000_000` (50 GNOT) on **`gno_addpkg` only**; `gno_call`
   and `gno_run` leave it unset (the `default_deposit` param cap applies). A deploy rejected for
   `not enough deposit` is the signal to raise the cap.
 - This is distinct from the gas fee and goes to a **different collector** (`vm:p:storage_fee_collector`,
@@ -155,7 +155,7 @@ keep margins small). This is exactly what gnomcp's write pipeline does automatic
 | `--gas-wanted` | execution ceiling (gas units); required, no default | measured × 1.5, floored at `10_000_000` |
 | `--gas-fee` | flat total fee offered (e.g. `10000ugnot`); required | live price × 2 for the offered gas-wanted, floored at `10_000ugnot` |
 | `--send` | coins attached to the msg (→ realm as `OriginSend`), separate from the fee | user-supplied (`send` arg) |
-| `--max-deposit` | cap on storage deposit locked (empty → `default_deposit` param) | pinned `10_000_000` on addpkg only |
+| `--max-deposit` | cap on storage deposit locked (empty → `default_deposit` param) | pinned `50_000_000` on addpkg only |
 | `--memo` | free text in the signed tx (≤ 64 KB; costs gas by size) | not set |
 | `--pkgpath` `--func` `--args` (call) · `--pkgdir` (addpkg) · `--to` (send) | the message payload | the tool's own params |
 
