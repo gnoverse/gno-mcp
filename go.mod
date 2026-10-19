@@ -4,7 +4,7 @@ go 1.26.9
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/gnolang/gno v1.5.0
+	github.com/gnolang/gno v1.6.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/prometheus/client_golang v1.25.0

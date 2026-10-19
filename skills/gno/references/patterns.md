@@ -610,7 +610,7 @@ func Render(_ string) string {
 
 Exported names are part of the **on-chain ABI**. Renaming `func Buy` to `func Purchase` breaks every existing caller — same severity as a breaking API change. Pin names before deploy.
 
-**Godoc is user-facing documentation**, not internal commentary. The gnoweb `:help` view and agent introspection both read godoc. Treat it as the API doc.
+**Godoc is user-facing documentation**, not internal commentary. The gnoweb `$help` view, its `$help&json` form, and agent introspection all read godoc. Treat it as the API doc.
 
 ```go
 // Buy purchases one widget for `price` ugnot.

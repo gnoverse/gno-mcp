@@ -12,7 +12,7 @@ Catalog of bug classes with concrete code shapes, grep signals, and fix patterns
 A **victim** realm `/r/V` holds state and exposes APIs. An **attacker** is any actor — end user, another realm `/r/A`, or a pure package `/p/A` — that can call into `/r/V`'s exposed surface. The attacker's goal is **write authority laundering**: causing a write to `/r/V`-stamped data while `m.Realm` is `/r/V` and the writing code path is attacker-controlled.
 
 Assumptions:
-- Attacker can deploy `/r/A` or `/p/A` and import `/r/V`.
+- Attacker can deploy `/r/A` or `/p/A` and import `/r/V`, or submit a `MsgRun` script that imports it where the chain accepts the signer's `MsgRun`.
 - Attacker can call any exported function or method `/r/V` exposes and hold any pointer it returns.
 - Attacker cannot use `reflect`, `unsafe`, goroutines, or any other escape hatch — these do not exist in Gno.
 - Attacker cannot read `/r/V`'s unexported fields (Go's package-scoped identifier rule applies).
@@ -47,7 +47,7 @@ The VM provides four independent defenses. A realm becomes exploitable when an A
 
 | # | Defense | One-line summary |
 |---|---|---|
-| D1 | **Declaration-site rule** (borrow #1) | `/r/`-declared callables run with `m.Realm` borrowed to declaring `/r/`. Attacker code never gets victim authority just by being called by victim. |
+| D1 | **Declaration-site rule** (borrow #1) | Callables declared in `/r/`, or in a `MsgRun` script's `/e/` package (top-level functions and methods from v1.6.0), run with `m.Realm` borrowed to the declaring realm. Attacker code never gets victim authority just by being called by victim. |
 | D2 | **Storage-site rule** (borrow #2) | `/p/` or stdlib methods on a real foreign-stamped receiver borrow `m.Realm` to the receiver's storage realm. Generic library helpers mutate caller-owned state only. |
 | D3 | **Closure-capability rule** (borrow #3) | A closure carries the authority of its creator-realm forever. Cannot gain authority by changing hands. |
 | D4 | **Readonly taint** | Foreign-realm reads are tainted; the taint propagates through copy, conversion, indexing. Mutations panic. No write path bypasses the check. |
@@ -341,11 +341,15 @@ Reading a foreign struct value into a local variable preserves the readonly bit.
 
 ### Conversion-time panic is not Gno-recoverable
 
-`doOpConvert` Case 1 (foreign-readonly source conversion refused) uses raw Go `panic(...)`, **not** catchable by Gno `defer { recover() }`. The write-time readonly check is catchable. This is an implementation inconsistency, not a bug.
+Both `doOpConvert` guards, Case 1 (foreign-readonly source refused) and Case 2 (conversion to a foreign `/r/`-declared type, pointer form included), use raw Go `panic(...)`, **not** catchable by Gno `defer { recover() }`. The write-time readonly check is catchable. This is an implementation inconsistency, not a bug.
 
 ### Storage-construction-time check
 
-Allocating a foreign `/r/`-declared type with a composite literal, `new()`, or `make()` panics: `cannot allocate <type> in realm <m.Realm>`. Attackers cannot fabricate impostor instances. Construction must go through constructors declared in the type's home realm.
+Allocating a foreign `/r/`-declared type with a composite literal, `new()`, or `make()` panics: `cannot allocate <type> in realm <m.Realm>`. Converting to one panics with `illegal conversion to external realm type`: as a value on every release, and through one pointer level (`(*v.User)(&Fake{...})`) from v1.6.0. On v1.5.x the pointer form succeeds, so another realm can hand you a `*v.User` whose fields it chose. Nil pointers convert, and so do types whose underlying type is a primitive, func or chan type. From v1.6.0 attackers cannot populate impostor instances. Construction must go through constructors declared in the type's home realm.
+
+**A realm-typed value is not authority.** Another realm can still declare `var u v.User`, a zero value that carries `/r/V`'s PkgID and that its holder cannot write, and pass `&u` to a `/r/V` API. A check like `if u == nil { deny }` admits that caller. Authenticate the caller through `cur.Previous()`. A pointer that matches one in your own state proves only where it came from, not who is calling.
+
+**State written before v1.6.0**: earlier releases accepted the pointer conversion, so a realm that stored a caller-supplied `*T` may hold a forged one. It points at an object the forging realm owns, and that realm can still change its fields.
 
 ## Audit signals (Phase-1 triage)
 
@@ -385,6 +389,7 @@ Not Gno-language bug classes, but real audit signals an auditor should catch alo
 | `append` whose growth capacity is observed (`cap(s)` checked after append) | YELLOW | Go's append capacity-growth is version-dependent; code branching on `cap()` can diverge across Go versions. |
 | Floating-point arithmetic in deterministic paths | YELLOW | Float formatting has platform edge cases. Prefer integer math; if floats are necessary, format with explicit precision. |
 | Realm encodes its output as JSON for clients: `p/onbloc/json/v0` builders, string concatenation, a JSON `Render` path. Parsing JSON input with `p/onbloc/json/v0` is not this signal | YELLOW | Encoding runs in the metered VM, and a hand-built string must escape every user-supplied value. Return values from a getter and let clients read them with `vm/qeval_json` (`patterns.md` § Structured reads). |
+| `defer runtime.AssertOriginCall()` as an origin guard | RED on chains before v1.6.0 | Before v1.6.0 a deferred external native call is skipped, so the guard never runs and the function is open to scripts and other realms. Call `runtime.AssertOriginCall()` directly at the top of the function. |
 | Delete-and-recreate the same object identity within a tx | YELLOW | Realm finalization assigns object IDs by reachability. Refcount accounting can produce "unexpected object with id" / "unexpected zero object id" runtime errors. |
 
 ## Severity calibration
@@ -424,6 +429,7 @@ Before deploying a realm, verify:
 - [ ] Every interface parameter from external callers is gated with a canonical-type assert before invoking methods.
 - [ ] No method takes a `func(*MyPType)` callback (where `MyPType` is `/p/`-declared) and invokes it from within. If yes, retype the callback to use your own `/r/V`-typed parameter.
 - [ ] No exported field is a `/p/`-pointer or embedded `/p/`-type with concretely-typed callback methods.
+- [ ] No function treats a non-nil pointer to, or a value of, one of this realm's types as proof of authorization (§ Storage-construction-time check).
 - [ ] Payment-guarded entry points use `cur.Previous().IsUserCall()`, not `IsUser()`.
 - [ ] No `realm`-typed value is stored in package state, struct fields, maps, slices, or closure captures.
 - [ ] Not imported `gno.land/r/tests/vm/test20` (deliberately insecure test fixture).

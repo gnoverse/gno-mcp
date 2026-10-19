@@ -2,7 +2,7 @@
 
 **onyx** (chain-id `onyx-1`) is the testnet gnomcp writes to by default, through the built-in
 `testnet` profile. **mainnet** (`gnoland-1`) is read-only: reads and audits work, no code path signs
-anything there. Every value below is as of **2026-10-15**; re-query anything load-bearing
+anything there. Every value below is as of **2026-10-16**; re-query anything load-bearing
 (`gno_status`, `auth/gasprice`, a realm's render, whether a package resolves) before relying on it.
 
 **Run `gno_status` before quoting anything here.** This file covers exactly two chain-ids,
@@ -26,8 +26,8 @@ this file is only the per-chain snapshot.
 | writes through gnomcp | deploys (parked until approved), calls, sessions, faucet; **`gno_run` refused** (`MsgRun` allowlist) | **none**, read tools only |
 | RPC | `rpc.onyx.testnets.gno.land:443` | `rpc.gno.land:443` |
 | gnoweb | `onyx.testnets.gno.land` | `gno.land` |
-| release (`/status` `build_version`) | `v1.5.1-rc.1`, commit `07e44776c`: the commit mainnet runs | `v1.5.1`, same commit |
-| upgrade ledger | `misc/deployments/onyx.gno.land/upgrades.json` | `misc/deployments/mainnet.gno.land/upgrades.json` |
+| release (`/status` `build_version`) | `v1.6.0-rc.1`, commit `c868ccab1`, one release ahead of mainnet | `v1.5.1`, commit `07e44776c` |
+| upgrade ledger (branch `chain/mainnet`) | `misc/deployments/onyx.gno.land/upgrades.json` | `misc/deployments/mainnet.gno.land/upgrades.json` |
 | gas price (`auth/gasprice`) | `1ugnot/1000gas` | same |
 | block max gas | 3,000,000,000 | same |
 | storage deposit (`params/vm:p:storage_price`) | 100 ugnot | same |
@@ -40,7 +40,7 @@ this file is only the per-chain snapshot.
 | validator set | `r/sys/validators/v0` holds it (`/v2` also deployed, empty) | same |
 | faucet | present: read the grant size and per-address cap from `gno_status`'s `faucet` block, never from this row | none: mainnet ships without one |
 | tx indexer | `indexer.onyx.testnets.gno.land/graphql/query` | `indexer.gno.land/graphql/query`; same query root, `getSupply` on both |
-| toolchain install ref | tag `v1.5.1-rc.1` | tag `v1.5.1`; `chain/mainnet` (`9c8eb132`, semver twin `v1.2.0`) names genesis only |
+| toolchain install ref | tag `v1.6.0-rc.1` | tag `v1.5.1`; `chain/mainnet` (`9c8eb132`, semver twin `v1.2.0`) names genesis only |
 | sub-package path scheme | version at the **leaf** (`p/nt/avl/rotree/v0`) | same |
 
 The minimum fee for a 10M-gas write is 10,000 ugnot (0.01 GNOT) on both chains; gnomcp offers ×2
@@ -53,29 +53,34 @@ branch: `heads/chain/mainnet` carries commits pushed after launch, and onyx has 
 Neither tag is automatically the ref to install: read the node's `build_version` first, then the
 chain's `upgrades.json`, and fall back to the tag only when neither names a release
 (`toolchain.md`). `chain/onyx` tags the commit that added onyx's deployment config, not the binary
-it runs: the node reports `v1.5.1-rc.1`, and that tag is the install ref.
+it runs: the node reports `v1.6.0-rc.1`, and that tag is the install ref.
 
 **A chain tag names a launch commit, not what the chain runs today.** `chain/mainnet` is mainnet's
 `v1.2.0` genesis; the chain has since been halted and restarted on newer binaries by governance.
 
 **Two places say what a chain runs.** `/status` carries a `build_version` naming the running
-binary, a bare release tag on both chains. The chain's `upgrades.json` is the ledger of agreed
-releases; on the date above its newest entry is a `rolling` row for commit `07e44776c`,
-`v1.5.1-rc.1` on onyx and `v1.5.1` on mainnet. A ledger row can land after the node runs the
-release, so a ledger that has not yet recorded the node's release is expected, and the node names
-what is running. Any other disagreement is worth chasing rather than averaging. Do not read
+binary, a bare release tag on both chains. The chain's `upgrades.json` on the `chain/mainnet`
+branch is the ledger of agreed releases; `master` gets its rows later, and the `UPGRADES.md` beside
+it is a table generated from it. A row is written before its release is cut, so the newest row can
+name an upgrade the chain has not made yet, a postponed upgrade's row can be removed until its
+halt height is set, and a row's `halt_time` stays `null` for a while even after the halt. A release
+candidate can also run before its row lands. On the date above onyx's newest row is the `upgrade`
+to commit `c868ccab1`, which it runs as `v1.6.0-rc.1`; mainnet's newest row is the `rolling`
+`v1.5.1` on `07e44776c`, the release it runs. The node names what is running, and its release should appear as a row resolving to the same commit;
+any other disagreement is worth chasing rather than averaging. Do not read
 `node_info.version` for this. It is `v1.0.0-rc.0` with an empty `software` on both chains and
 identifies nothing.
 
 ## onyx: `onyx-1`
 
-onyx runs mainnet's release line and takes each mainnet upgrade first, as its rehearsal. As of the
-date above both run commit `07e44776c`, so the VM that type-checks and runs code on onyx is the one
-mainnet runs; chain params such as the package approvers and the `MsgRun` allowlist are each chain's own. That
-holds only while both `build_version`s resolve to the same commit. The strings need not match: onyx
-reports the candidate tag `v1.5.1-rc.1` and mainnet the final tag `v1.5.1`, and both peel to
-`07e44776c`. Compare the commits. During an upgrade onyx runs the new
-release before mainnet does, and the two differ until mainnet follows.
+onyx runs mainnet's release line and takes each mainnet upgrade first, as its rehearsal. While both
+`build_version`s resolve to the same commit, the VM that type-checks and runs code on onyx is the
+one mainnet runs; chain params such as the package approvers and the `MsgRun` allowlist are each
+chain's own. The strings need not match: onyx reports a candidate tag and mainnet the final tag on
+the same commit (`v1.6.0-rc.1` and `v1.6.0` both peel to `c868ccab1`). Compare the commits. During
+an upgrade onyx runs the new release before mainnet does, and the two differ until mainnet follows.
+As of the date above they differ: onyx runs `c868ccab1` and mainnet `07e44776c`, so a package can
+behave differently on the two until mainnet follows.
 
 Its genesis deploys mainnet's genesis package set. Of the packages these references build on, three
 differ from mainnet's copies, only in doc comments: GRC20, GRC721 and `r/sys/params`. It is a fresh
@@ -267,6 +272,10 @@ file does not cover.
    | `inert` | parked, not callable | still parked a minute after the deploy: lint it, check the deploying key can pay the storage deposit, then redeploy to the same path with the same key |
    | `redeploy_parked` | the previous version keeps serving reads and calls until the new one is enabled | as for `inert`, if it stays parked |
    | `unknown` | the chain gave no usable answer | read the path before calling it |
+
+   Once live, a package outside gnoweb's trusted namespaces, an own-address deploy included, shows a
+   "Community realm" notice on its onyx gnoweb page (`render.md` § What gnoweb shows around a page).
+   The notice says who vouches for the code; it is not a deploy status.
 8. **Scripts.** On onyx `gno_run` returns `run_not_allowed`: deploy the logic as a realm and
    `gno_call` it, or run the script on a local gnodev.
 9. **Transaction history.** `gno_activity`/`gno_history` work on both chains. To enumerate what is
