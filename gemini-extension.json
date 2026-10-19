@@ -1,6 +1,6 @@
 {
   "name": "gnomcp",
   "description": "Gno smart-contract skill + MCP server for gno.land: interrealm semantics, security auditing, Render() authoring, idiomatic patterns, and on-chain tools (read, deploy, call, sessions).",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "contextFileName": "GEMINI.md"
 }
