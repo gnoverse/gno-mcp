@@ -109,6 +109,7 @@ func TestAddPkg_inertReportsParkedWhenNotEnabledInTime(t *testing.T) {
 	// A client may hand the model the structured content alone, so the
 	// recovery cannot live only in the text.
 	assert.Contains(t, res.StructuredContent["next_steps"], parked.NextSteps)
+	assert.Contains(t, res.StructuredContent["next_steps"], parked.ParkedImportSteps)
 	assert.Equal(t, "parked", entries[0].Result)
 }
 
@@ -146,6 +147,8 @@ func TestAddPkg_inertRedeployParkedOverLiveKeepsThePreviousVersion(t *testing.T)
 	assert.Equal(t, packageStatusRedeployParked, res.StructuredContent["package_status"])
 	assert.Contains(t, res.StructuredContent["next_steps"], "previous version")
 	assert.Contains(t, res.StructuredContent["next_steps"], parked.NextSteps)
+	assert.NotContains(t, res.StructuredContent["next_steps"], parked.ParkedImportSteps,
+		"gpao never verifies a redeploy parked over a live package again, so only a redeploy recovers it")
 	assert.Equal(t, "parked", entries[0].Result)
 }
 

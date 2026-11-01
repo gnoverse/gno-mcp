@@ -2,7 +2,7 @@
 
 **onyx** (chain-id `onyx-1`) is the testnet gnomcp writes to by default, through the built-in
 `testnet` profile. **mainnet** (`gnoland-1`) is read-only: reads and audits work, no code path signs
-anything there. Every value below is as of **2026-10-16**; re-query anything load-bearing
+anything there. Every value below is as of **2026-11-01**; re-query anything load-bearing
 (`gno_status`, `auth/gasprice`, a realm's render, whether a package resolves) before relying on it.
 
 **Run `gno_status` before quoting anything here.** This file covers exactly two chain-ids,
@@ -26,13 +26,13 @@ this file is only the per-chain snapshot.
 | writes through gnomcp | deploys (parked until approved), calls, sessions, faucet; **`gno_run` refused** (`MsgRun` allowlist) | **none**, read tools only |
 | RPC | `rpc.onyx.testnets.gno.land:443` | `rpc.gno.land:443` |
 | gnoweb | `onyx.testnets.gno.land` | `gno.land` |
-| release (`/status` `build_version`) | `v1.6.0-rc.1`, commit `c868ccab1`, one release ahead of mainnet | `v1.5.1`, commit `07e44776c` |
+| release (`/status` `build_version`) | `v1.7.0-rc.1`, commit `e4c2e7d9f` | `v1.7.0`, same commit |
 | upgrade ledger (branch `chain/mainnet`) | `misc/deployments/onyx.gno.land/upgrades.json` | `misc/deployments/mainnet.gno.land/upgrades.json` |
 | gas price (`auth/gasprice`) | `1ugnot/1000gas` | same |
 | block max gas | 3,000,000,000 | same |
 | storage deposit (`params/vm:p:storage_price`) | 100 ugnot | same |
 | deposit cap (`params/vm:p:default_deposit`) | 100 GNOT | same |
-| code submission (`params/vm:p:code_submission_policy`) | **`inert`**, approved automatically | **`inert`** |
+| code submission (`params/vm:p:code_submission_policy`) | **`inert`**, approved automatically | same |
 | `MsgRun` (`params/vm:p:run_submitters`) | **allowlisted** | **allowlisted** |
 | CLA deploy gate (`r/sys/cla`) | **OFF** | **OFF** |
 | namespace gate (`r/sys/names.IsEnabled`) | `true`; personal-address path free | `true` |
@@ -40,7 +40,7 @@ this file is only the per-chain snapshot.
 | validator set | `r/sys/validators/v0` holds it (`/v2` also deployed, empty) | same |
 | faucet | present: read the grant size and per-address cap from `gno_status`'s `faucet` block, never from this row | none: mainnet ships without one |
 | tx indexer | `indexer.onyx.testnets.gno.land/graphql/query` | `indexer.gno.land/graphql/query`; same query root, `getSupply` on both |
-| toolchain install ref | tag `v1.6.0-rc.1` | tag `v1.5.1`; `chain/mainnet` (`9c8eb132`, semver twin `v1.2.0`) names genesis only |
+| toolchain install ref | tag `v1.7.0-rc.1` | tag `v1.7.0`; `chain/mainnet` (`9c8eb132`, semver twin `v1.2.0`) names genesis only |
 | sub-package path scheme | version at the **leaf** (`p/nt/avl/rotree/v0`) | same |
 
 The minimum fee for a 10M-gas write is 10,000 ugnot (0.01 GNOT) on both chains; gnomcp offers ×2
@@ -53,20 +53,20 @@ branch: `heads/chain/mainnet` carries commits pushed after launch, and onyx has 
 Neither tag is automatically the ref to install: read the node's `build_version` first, then the
 chain's `upgrades.json`, and fall back to the tag only when neither names a release
 (`toolchain.md`). `chain/onyx` tags the commit that added onyx's deployment config, not the binary
-it runs: the node reports `v1.6.0-rc.1`, and that tag is the install ref.
+it runs: the node reports `v1.7.0-rc.1`, and that tag is the install ref.
 
 **A chain tag names a launch commit, not what the chain runs today.** `chain/mainnet` is mainnet's
 `v1.2.0` genesis; the chain has since been halted and restarted on newer binaries by governance.
 
 **Two places say what a chain runs.** `/status` carries a `build_version` naming the running
 binary, a bare release tag on both chains. The chain's `upgrades.json` on the `chain/mainnet`
-branch is the ledger of agreed releases; `master` gets its rows later, and the `UPGRADES.md` beside
-it is a table generated from it. A row is written before its release is cut, so the newest row can
-name an upgrade the chain has not made yet, a postponed upgrade's row can be removed until its
-halt height is set, and a row's `halt_time` stays `null` for a while even after the halt. A release
-candidate can also run before its row lands. On the date above onyx's newest row is the `upgrade`
-to commit `c868ccab1`, which it runs as `v1.6.0-rc.1`; mainnet's newest row is the `rolling`
-`v1.5.1` on `07e44776c`, the release it runs. The node names what is running, and its release should appear as a row resolving to the same commit;
+branch is the ledger of releases the chain has run; `master` gets its rows later, and the
+`UPGRADES.md` beside it is a table generated from it. A row is written once the chain runs its
+release (`gno.land/adr/pr6381_ledger_entry_after_upgrade.md` in the monorepo), so a chain can run a
+release for a while before its row lands, and a scheduled upgrade has no row: its halt height is on
+the release page and in the GovDAO proposal that set it. On the date above both chains' newest row
+is the `upgrade` to commit `e4c2e7d9f`, which onyx runs as `v1.7.0-rc.1` and mainnet as `v1.7.0`.
+The node names what is running, and its release should appear as a row resolving to the same commit;
 any other disagreement is worth chasing rather than averaging. Do not read
 `node_info.version` for this. It is `v1.0.0-rc.0` with an empty `software` on both chains and
 identifies nothing.
@@ -77,10 +77,10 @@ onyx runs mainnet's release line and takes each mainnet upgrade first, as its re
 `build_version`s resolve to the same commit, the VM that type-checks and runs code on onyx is the
 one mainnet runs; chain params such as the package approvers and the `MsgRun` allowlist are each
 chain's own. The strings need not match: onyx reports a candidate tag and mainnet the final tag on
-the same commit (`v1.6.0-rc.1` and `v1.6.0` both peel to `c868ccab1`). Compare the commits. During
+the same commit (`v1.7.0-rc.1` and `v1.7.0` both peel to `e4c2e7d9f`). Compare the commits. During
 an upgrade onyx runs the new release before mainnet does, and the two differ until mainnet follows.
-As of the date above they differ: onyx runs `c868ccab1` and mainnet `07e44776c`, so a package can
-behave differently on the two until mainnet follows.
+As of the date above both run `e4c2e7d9f`. Mainnet went from `v1.5.1` straight to `v1.7.0`, which
+carries `v1.6.0`'s changes: it never ran `v1.6.0`, so its ledger has no row for it.
 
 Its genesis deploys mainnet's genesis package set. Of the packages these references build on, three
 differ from mainnet's copies, only in doc comments: GRC20, GRC721 and `r/sys/params`. It is a fresh
@@ -103,11 +103,19 @@ submission with `MsgRejectPackage`; nothing expires one. The monorepo specifies 
 `gno.land/adr/pr5888_phase2_inert_packages.md`, and the `MsgRun` gate and the deposit charged at
 enable in `gno.land/adr/pr6088_msgrun_allowlist_and_inert_charging.md`.
 
-**onyx's approver is automatic.** It is an oracle (`contribs/gpao` in the monorepo) that watches
-each block, type-checks and preprocesses every submission (the same checks `MsgEnablePackage`
-re-runs) and enables the ones that pass. A good package goes live a few seconds after its deploy
-commits. A package that fails those checks is never enabled: it stays parked indefinitely, and the
-chain reports it exactly like one still waiting for approval.
+**The approver is automatic on both chains.** It is an oracle (`contribs/gpao` in the monorepo)
+that watches each block, type-checks and preprocesses every submission (the same checks
+`MsgEnablePackage` re-runs) and enables the ones that pass. A good package goes live a few seconds
+after its deploy commits. A package that fails those checks is never enabled: it stays parked
+indefinitely, and the chain reports it exactly like one still waiting for approval.
+
+**A package waiting on a parked import goes live without a redeploy.** gpao leaves it pending, and
+every 10 minutes checks again each package it left pending
+(`gno.land/adr/pr6402_gpao_reoffer_stranded.md`): one held back by a parked import is checked once
+that import goes live, whoever enabled it, so it goes live within about 10 minutes of its import.
+Each package is checked again at most 3 times. gpao keeps that list in memory, so a restart
+forgets it, and it never checks again a redeploy parked over a live package. A package still parked
+well after its imports went live needs a redeploy.
 
 **Simulation does not type-check on an inert chain.** Parking skips the type check, so a dry run of
 an ill-typed package reports success. Lint the package locally against the chain's release
@@ -269,8 +277,8 @@ file does not cover.
    | `package_status` | Meaning | Next |
    |---|---|---|
    | `live` | callable | call it |
-   | `inert` | parked, not callable | still parked a minute after the deploy: lint it, check the deploying key can pay the storage deposit, then redeploy to the same path with the same key |
-   | `redeploy_parked` | the previous version keeps serving reads and calls until the new one is enabled | as for `inert`, if it stays parked |
+   | `inert` | parked, not callable | still parked a minute after the deploy: if an import is itself parked (`gno_read` on it answers `package_parked`), wait for it, since the approver enables this one within about 10 minutes of the import going live; otherwise lint it, check the deploying key can pay the storage deposit, then redeploy to the same path with the same key |
+   | `redeploy_parked` | the previous version keeps serving reads and calls until the new one is enabled | still parked a minute after the deploy: lint it, check the deploying key can pay the storage deposit, then redeploy; the approver never checks a parked redeploy again, even one waiting on a parked import |
    | `unknown` | the chain gave no usable answer | read the path before calling it |
 
    Once live, a package outside gnoweb's trusted namespaces, an own-address deploy included, shows a
