@@ -35,6 +35,19 @@ func TestExplain_parkedPathBecomesPackageParked(t *testing.T) {
 	assert.Equal(t, "waiting for a package approver to enable it", te.Extra["reason"])
 }
 
+// gpao verifies a package held back by a parked import again once that import
+// goes live, so its deployer has nothing to redeploy.
+func TestExplain_tellsTheDeployerAParkedImportNeedsNoRedeploy(t *testing.T) {
+	f := chain.NewFake()
+	f.SetPackageMetaSequence(path, chain.PackageMeta{Status: chain.PackageInert, Pending: true})
+
+	err := Explain(context.Background(), f, path, readErr)
+
+	te, ok := errors.AsType[*server.ToolError](err)
+	require.True(t, ok, "want a ToolError, got %T: %v", err, err)
+	assert.Contains(t, te.Message, ParkedImportSteps)
+}
+
 func TestExplain_leavesOtherErrorsAlone(t *testing.T) {
 	cases := map[string]func(f *chain.Fake){
 		"absent":       func(*chain.Fake) {},

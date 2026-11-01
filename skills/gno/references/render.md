@@ -169,10 +169,10 @@ Wrap markdown you did not author, such as another realm's `Render` output, with 
 
 Two layers decide whether an image shows:
 
-1. **Renderer**: gnoweb drops every `data:` image except `data:image/svg+xml`. Any other source passes through unchanged.
-2. **Browser CSP** (`img-src` response header): the browser loads an image only from gnoweb's own origin, a `data:` URI, or a host in `cspImgHost` in `gno.land/cmd/gnoweb/main.go` (GitHub, imgur, IPFS gateways and a few gno project hosts). Read that list in the release the target runs; it changes between releases.
+1. **Renderer**: gnoweb drops every `data:` image except `data:image/svg+xml`. From gnoweb v1.7.0 it also moves IPFS sources onto the operator's gateway (`-ipfs-gateway`, default `https://ipfs.filebase.io`; empty turns this off): `ipfs://<cid>/…` and `ipns://<name>/…` URLs, and URLs on the public gateways that stopped serving hotlinks (`ipfs.io`, `dweb.link`, `cloudflare-ipfs.com` and the others in `ipfsRewrittenGateways`, `gno.land/pkg/gnoweb/markdown/ext_ipfs.go`), in images and links alike. Any other source passes through unchanged.
+2. **Browser CSP** (`img-src` response header): the browser loads an image only from gnoweb's own origin, a `data:` URI, a host in `cspImgHost` in `gno.land/cmd/gnoweb/main.go` (GitHub, imgur and a few gno project hosts), or, from v1.7.0, the IPFS gateway. Read that list in the release the target runs; it changes between releases.
 
-**Authoring guidance**: use an SVG data URI (`data:image/svg+xml;base64,…`) or a listed host.
+**Authoring guidance**: use an SVG data URI (`data:image/svg+xml;base64,…`), a listed host, or an `ipfs://<cid>` URL on a gnoweb from v1.7.0.
 
 **Footgun**: `![alt](https://cdn.example/img.png)` renders an `<img>` the browser refuses to load. The realm gets no error.
 
