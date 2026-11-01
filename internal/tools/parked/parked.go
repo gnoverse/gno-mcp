@@ -23,6 +23,11 @@ const NextSteps = "If it is still parked a minute after its deploy, the chain's 
 	"check the deploying key can pay the storage deposit, " +
 	"then redeploy it to the same path with the same key."
 
+// ParkedImportSteps is the exception to NextSteps for a first deploy; a
+// redeploy parked over a live package is never retried.
+const ParkedImportSteps = "If a package it imports is itself parked, no redeploy is needed: " +
+	"an approver that retries, such as gpao, enables this one within about 10 minutes of that import going live."
+
 // Explain returns a package_parked ToolError when err came from an operation on
 // path and the chain holds a parked submission there, and err unchanged in every
 // other case — including when the chain cannot say. A typed ToolError passes
@@ -42,8 +47,8 @@ func Explain(ctx context.Context, c chain.Client, path string, err error) error 
 		Code: Code,
 		Message: fmt.Sprintf("%s is parked, not live: the chain accepted its deploy and has not enabled it ([untrusted chain reason] %s). "+
 			"Until it is enabled, every read and call answers it like a package that was never deployed.\n\n"+
-			"For its deployer: %s\n\nOriginal error: %v",
-			path, meta.Reason, NextSteps, err),
+			"For its deployer: %s %s\n\nOriginal error: %v",
+			path, meta.Reason, NextSteps, ParkedImportSteps, err),
 		Extra: map[string]any{"path": path, "reason": meta.Reason},
 	}
 }
