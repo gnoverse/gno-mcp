@@ -380,7 +380,7 @@ Not Gno-language bug classes, but real audit signals an auditor should catch alo
 |---|---|---|
 | `unsafe.OriginSend()` consumed with no `SendCoins` / `Withdraw` / auto-forward elsewhere in the realm | RED | Funds lock in realm address. Either implement guarded withdraw, auto-forward to a treasury, or document burn-on-receipt intent. |
 | Hardcoded `admin address` with no `TransferAdmin(cur realm, ...)` | YELLOW | Key loss = permanent loss of privileged ops. Ship rotation or document trade-off. |
-| `_ := someAvl.Get(k)` / `n, _ := v.(int)` swallowing the second return | YELLOW | Silent fallback on missing key or wrong type. Future state-shape change corrupts the read invisibly. |
+| `n, _ := tree.Get(k).(int)` discarding the assertion's `ok`, or a `tree.Get(k)` result used without a nil check | YELLOW | `avl.Tree.Get` returns one value, nil for an absent key, so a missing key or a wrong type turns into a silent zero value. Future state-shape change corrupts the read invisibly. Check `ok`, and use `tree.Has(k)` where a key stored with nil must differ from an absent one. |
 | `avl.Tree` storing only a single statically-named key | YELLOW | Over-typed; collapse to a scalar or expose multi-key API. Don't ship the middle. |
 | Admin/privileged inputs with no bound check (negative `qty`, oversized strings) | YELLOW | Admin footgun; bound at the function boundary. |
 | Exported `ErrXxx` declared but never returned anywhere in the package | YELLOW | Intent inconsistent with behavior — either wire the error or remove it. |
