@@ -28,6 +28,7 @@ type fakeRPC struct {
 	accountErr  error
 	broadcast   func() (*ctypes.ResultBroadcastTxCommit, error)
 	broadcasted int
+	lastTx      types.Tx
 }
 
 func (f *fakeRPC) ABCIQueryWithOptions(context.Context, string, []byte, rpcclient.ABCIQueryOptions) (*ctypes.ResultABCIQuery, error) {
@@ -44,8 +45,9 @@ func (f *fakeRPC) ABCIQuery(context.Context, string, []byte) (*ctypes.ResultABCI
 	}}, nil
 }
 
-func (f *fakeRPC) BroadcastTxCommit(context.Context, types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
+func (f *fakeRPC) BroadcastTxCommit(_ context.Context, tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
 	f.broadcasted++
+	f.lastTx = tx
 	return f.broadcast()
 }
 
@@ -111,4 +113,19 @@ func TestGnoclientDispenser_returnsTheTxHash(t *testing.T) {
 	tx, err := newFakeRPCDispenser(t, rpc).Send(context.Background(), validAddr, 1_000_000)
 	require.NoError(t, err)
 	assert.Equal(t, "abcd", tx)
+}
+
+// From gno v1.8.0 a node refuses a tx whose bytes are not the canonical amino
+// encoding of what they decode to (gnolang/gno#6406), so every drip depends on
+// the linked encoder writing canonical bytes.
+func TestGnoclientDispenser_broadcastsCanonicalTx(t *testing.T) {
+	rpc := &fakeRPC{broadcast: func() (*ctypes.ResultBroadcastTxCommit, error) {
+		return &ctypes.ResultBroadcastTxCommit{Hash: []byte{0xab}}, nil
+	}}
+	_, err := newFakeRPCDispenser(t, rpc).Send(context.Background(), validAddr, 1_000_000)
+	require.NoError(t, err)
+
+	var tx std.Tx
+	require.NoError(t, amino.UnmarshalCanonical(rpc.lastTx, &tx))
+	require.Len(t, tx.Signatures, 1)
 }
