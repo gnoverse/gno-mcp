@@ -10,6 +10,7 @@ package write
 import (
 	"fmt"
 
+	"github.com/gnoverse/gno-mcp/internal/chain"
 	"github.com/gnoverse/gno-mcp/internal/profiles"
 	"github.com/gnoverse/gno-mcp/internal/server"
 )
@@ -49,6 +50,26 @@ func addOptionalKeyArg(props map[string]any) {
 // resolves it).
 func keyArg(args map[string]any) (string, error) {
 	return server.StringArg(args, "key")
+}
+
+// coinsArg reads the optional coin amount arg name (e.g. "5000000ugnot") in the
+// chain's canonical form, "" for none, and refuses a malformed one with an
+// invalid_<name> ToolError before signing.
+func coinsArg(args map[string]any, name string) (string, error) {
+	amount, err := server.StringArg(args, name)
+	if err != nil {
+		return "", err
+	}
+
+	canonical, err := chain.CanonicalCoins(amount)
+	if err != nil {
+		return "", &server.ToolError{
+			Code:    "invalid_" + name,
+			Message: fmt.Sprintf("%s %q is not a valid coin amount — use an amount like \"5000000ugnot\"", name, amount),
+			Extra:   map[string]any{name: amount},
+		}
+	}
+	return canonical, nil
 }
 
 // profileSessionEligible reports whether a chain-bound session can exist for p:

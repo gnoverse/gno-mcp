@@ -528,3 +528,114 @@ func TestRun_bogusIdentity(t *testing.T) {
 	assert.True(t, strings.Contains(err.Error(), "agent") && strings.Contains(err.Error(), "session"),
 		"expected error mentioning agent and session, got: %v", err)
 }
+
+// From gno v1.8.0 a MsgRun may send out of the caller's account only up to its
+// MaxSend. The max_send arg must reach the chain on both signing paths.
+func TestRun_forwardsMaxSend_agent(t *testing.T) {
+	s := newLocalTestServer(t)
+	alog := audit.NewLog(&bytes.Buffer{})
+
+	fake := chain.NewFake()
+	fake.SetRun(testCode, chain.RunResult{TxHash: "0xpay", Height: 5})
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), noSessionMgr(t), constChainResolver(fake), alog)
+
+	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "local",
+		"code":     testCode,
+		"max_send": "5000000ugnot",
+	})
+	require.NoError(t, err, "Run (agent) with max_send")
+	assert.Equal(t, "5000000ugnot", fake.LastMaxSend(), "max_send must reach the chain Run")
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "-max-send 5000000ugnot")
+}
+
+func TestRun_forwardsMaxSend_session(t *testing.T) {
+	s := newBaseTestServer(t)
+	alog := audit.NewLog(&bytes.Buffer{})
+
+	fake := chain.NewFake()
+	fake.SetRunAsUser(testCode, chain.RunResult{TxHash: "0xpay", Height: 5})
+	mgr := constSessionMgr(t, func(m *session.Manager) {
+		seedActiveSessionWithRun(t, m, "testnet5", nil, "100000000ugnot", true)
+	})
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), mgr, constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "testnet5",
+		"code":     testCode,
+		"identity": "session",
+		"max_send": "5000000ugnot",
+	})
+	require.NoError(t, err, "Run (session) with max_send")
+	assert.Equal(t, "5000000ugnot", fake.LastMaxSend(), "max_send must reach the chain RunAsUser")
+}
+
+// A malformed max_send must be refused at the tool boundary with an actionable
+// ToolError, before anything is signed.
+func TestRun_rejectsMalformedMaxSend(t *testing.T) {
+	s := newLocalTestServer(t)
+	alog := audit.NewLog(&bytes.Buffer{})
+
+	fake := chain.NewFake()
+	fake.SetRun(testCode, chain.RunResult{TxHash: "0xmust-not-run"})
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), noSessionMgr(t), constChainResolver(fake), alog)
+
+	_, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "local",
+		"code":     testCode,
+		"max_send": "not-a-coin",
+	})
+	require.Error(t, err, "malformed max_send must be rejected")
+	var te *server.ToolError
+	require.ErrorAs(t, err, &te)
+	assert.Equal(t, "invalid_max_send", te.Code)
+	assert.Empty(t, fake.LastMaxSend(), "nothing may reach the chain")
+}
+
+// std.ParseCoins trims and sorts "5000000ugnot, 1foo", so the echoed command
+// and the audit summary must name the coins the chain got, not the raw arg.
+func TestRun_echoesCanonicalMaxSend(t *testing.T) {
+	s := newLocalTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+
+	fake := chain.NewFake()
+	fake.SetRun(testCode, chain.RunResult{TxHash: "0xpay", Height: 5})
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), noSessionMgr(t), constChainResolver(fake), alog)
+
+	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "local",
+		"code":     testCode,
+		"max_send": "5000000ugnot, 1foo",
+	})
+	require.NoError(t, err, "Run with a spaced max_send")
+
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "-max-send 1foo,5000000ugnot ")
+
+	entries := parseAuditEntries(t, &auditBuf)
+	require.Len(t, entries, 1)
+	assert.Contains(t, entries[0].ArgsSummary, "max_send=1foo,5000000ugnot")
+}
+
+// A blank max_send sets no cap, so the echoed command must carry no -max-send
+// flag for the shell to pair with the next flag.
+func TestRun_blankMaxSendEchoesNoFlag(t *testing.T) {
+	s := newLocalTestServer(t)
+	alog := audit.NewLog(&bytes.Buffer{})
+
+	fake := chain.NewFake()
+	fake.SetRun(testCode, chain.RunResult{TxHash: "0xrun", Height: 5})
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), noSessionMgr(t), constChainResolver(fake), alog)
+
+	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "local",
+		"code":     testCode,
+		"max_send": "   ",
+	})
+	require.NoError(t, err, "Run with a blank max_send")
+
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.NotContains(t, gk, "-max-send")
+}

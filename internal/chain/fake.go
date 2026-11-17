@@ -39,6 +39,7 @@ type Fake struct {
 	addPkgBcasts    map[string]int            // key: deployPath; count of broadcast (simulate=false) calls
 	lastAddPkgFiles map[string][]*std.MemFile // key: deployPath; set on every AddPackage call
 	lastSend        string                    // send arg of the most recent Call/CallAsUser
+	lastMaxSend     string                    // maxSend arg of the most recent Run/RunAsUser
 	lastAsUserMstr  string                    // master arg of the most recent CallAsUser/RunAsUser
 	bankSends       []SendRecord              // every bank/MsgSend via Send, in order
 	sendErr         error                     // when set, Send returns it
@@ -216,8 +217,9 @@ func (f *Fake) CallAsUser(_ context.Context, _ Signer, master, realm, fn string,
 }
 
 // RunAsUser records the master; the result map is keyed by code only.
-func (f *Fake) RunAsUser(_ context.Context, _ Signer, master, code string, simulate bool) (RunResult, error) {
+func (f *Fake) RunAsUser(_ context.Context, _ Signer, master, code, maxSend string, simulate bool) (RunResult, error) {
 	f.lastAsUserMstr = master
+	f.lastMaxSend = maxSend
 	if err, ok := f.runErrors[code]; ok {
 		return RunResult{}, err
 	}
@@ -294,7 +296,8 @@ func (f *Fake) Call(_ context.Context, _ gnoclient.Signer, realm, fn string, arg
 }
 
 // Run returns the seeded result for the given code, ignoring signer.
-func (f *Fake) Run(_ context.Context, _ gnoclient.Signer, code string, simulate bool) (RunResult, error) {
+func (f *Fake) Run(_ context.Context, _ gnoclient.Signer, code, maxSend string, simulate bool) (RunResult, error) {
+	f.lastMaxSend = maxSend
 	r, ok := f.agentRuns[code]
 	if !ok {
 		return RunResult{}, fmt.Errorf("fake: no run for code (%d chars)", len(code))
@@ -354,6 +357,10 @@ func (f *Fake) SetCallError(realm, fn string, err error) {
 // LastSend returns the send arg of the most recent Call/CallAsUser, for
 // asserting that the tool plumbed attached coins through to the chain.
 func (f *Fake) LastSend() string { return f.lastSend }
+
+// LastMaxSend returns the maxSend arg of the most recent Run/RunAsUser, for
+// asserting that the tool plumbed the run's send cap through to the chain.
+func (f *Fake) LastMaxSend() string { return f.lastMaxSend }
 
 // LastAsUserMaster returns the master arg of the most recent CallAsUser/RunAsUser,
 // for asserting it is sourced from the session record, not the profile.

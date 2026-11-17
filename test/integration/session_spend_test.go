@@ -22,6 +22,13 @@ import (
 // (test1) address.
 func createSessionOnChain(t *testing.T, remoteAddr string, kp *session.Keypair, spendLimitUgnot int64) crypto.Address {
 	t.Helper()
+	return createScopedSessionOnChain(t, remoteAddr, kp, spendLimitUgnot, []string{"vm/exec:" + counterRealm})
+}
+
+// createScopedSessionOnChain is createSessionOnChain with the session's chain
+// permission tokens (e.g. "vm/run") given explicitly.
+func createScopedSessionOnChain(t *testing.T, remoteAddr string, kp *session.Keypair, spendLimitUgnot int64, allowPaths []string) crypto.Address {
+	t.Helper()
 	signer := test1Signer(t)
 	info, err := signer.Info()
 	require.NoError(t, err)
@@ -35,7 +42,7 @@ func createSessionOnChain(t *testing.T, remoteAddr string, kp *session.Keypair, 
 		Creator:    master,
 		SessionKey: kp.TMPubKey(),
 		ExpiresAt:  0, // valid until revoked
-		AllowPaths: []string{"vm/exec:" + counterRealm},
+		AllowPaths: allowPaths,
 		SpendLimit: std.Coins{std.Coin{Denom: "ugnot", Amount: spendLimitUgnot}},
 	}
 	_, err = cli.CreateSession(gnoclient.BaseTxCfg{GasFee: "1000000ugnot", GasWanted: 5_000_000}, msg)

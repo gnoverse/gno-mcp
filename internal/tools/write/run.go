@@ -31,8 +31,9 @@ func RegisterRun(s *server.Server, ks *keystore.Keystore, sessionMgr *session.Ma
 			"Pass identity=session to act as the user instead — that requires an active gnomcp session with allow_run=true (use gno_session_propose with allow_run=true). " +
 			"A chain may accept MsgRun only from the addresses in its run_submitters param; a caller not on the list " +
 			"(the agent key, or a session's master) is refused with run_not_allowed before anything is signed. " +
-			"Pass simulate=true to dry-run without spending gas. Required args: " +
-			"profile, code. Optional: simulate (bool), identity (\"agent\" or \"session\"). " +
+			"Pass simulate=true to dry-run without spending gas. " +
+			"A script that sends coins out of the signer's account needs max_send (e.g. \"5000000ugnot\"): without it, gno v1.8.0+ refuses every such transfer. " +
+			"Required args: profile, code. Optional: simulate (bool), identity (\"agent\" or \"session\"), max_send (coins). " +
 			"The result reports which identity signed (tell the user which account performed the write) and an " +
 			"equivalent gnokey command for transparency — illustrative only, since gnomcp already signed and broadcast the tx.",
 		InputSchema: runInputSchema(s),
@@ -107,6 +108,11 @@ func runHandler(
 		return server.Result{}, err
 	}
 
+	maxSend, err := coinsArg(args, "max_send")
+	if err != nil {
+		return server.Result{}, err
+	}
+
 	// ---- Resolve chain client
 
 	c := resolver(profileName)
@@ -117,6 +123,9 @@ func runHandler(
 	// ---- Build args summary for audit
 
 	argsSummary = fmt.Sprintf("code_len=%d", len(code))
+	if maxSend != "" {
+		argsSummary += " max_send=" + maxSend
+	}
 
 	// ---- Dispatch by identity
 
@@ -162,12 +171,12 @@ func runHandler(
 		},
 		agentOp: func(ctx context.Context, signer gnoclient.Signer) error {
 			var opErr error
-			rr, opErr = c.Run(ctx, signer, code, simulate)
+			rr, opErr = c.Run(ctx, signer, code, maxSend, simulate)
 			return opErr
 		},
 		sessionOp: func(ctx context.Context, signer chain.Signer, master string) (int64, error) {
 			var opErr error
-			rr, opErr = c.RunAsUser(ctx, signer, master, code, simulate)
+			rr, opErr = c.RunAsUser(ctx, signer, master, code, maxSend, simulate)
 			return rr.GasFeeUgnot, opErr
 		},
 		precheck: func(ctx context.Context, caller string) error {
@@ -182,7 +191,7 @@ func runHandler(
 
 	gkCmd := chain.GnokeyCmd{
 		Sub: "run", RPC: profile.RPCURL, ChainID: profile.ChainID,
-		Signer: signerAddr, Master: master, Simulate: simulate,
+		Signer: signerAddr, Master: master, Simulate: simulate, MaxSend: maxSend,
 		GasFeeUgnot: rr.GasFeeUgnot, GasWanted: rr.GasWanted,
 	}.String()
 	return attachGnokeyCmd(
@@ -251,6 +260,13 @@ func runInputSchema(s *server.Server) map[string]any {
 			"type":        "boolean",
 			"description": "When true, dry-run the execution without broadcasting or spending gas. The acting identity still signs (agent key or session), but nothing is broadcast.",
 			"default":     false,
+		},
+		"max_send": map[string]any{
+			"type": "string",
+			"description": "Cap on the coins the script may send out of the signer's account (the agent's, or the session master's), e.g. \"5000000ugnot\". " +
+				"Optional; omit or \"\" and the script can send no coins: on gno v1.8.0+ a banker transfer out of the caller then fails with " +
+				"\"run sends more coins than its max send allows\". A chain before v1.8.0 has no such cap and refuses a tx that sets it. " +
+				"A session-signed run still counts every transfer against the session's spend limit.",
 		},
 		"identity": map[string]any{
 			"type":        "string",

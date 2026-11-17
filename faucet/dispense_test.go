@@ -12,6 +12,7 @@ import (
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
 	ctypes "github.com/gnolang/gno/tm2/pkg/bft/rpc/core/types"
 	"github.com/gnolang/gno/tm2/pkg/bft/types"
+	"github.com/gnolang/gno/tm2/pkg/crypto"
 	"github.com/gnolang/gno/tm2/pkg/std"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,7 @@ type fakeRPC struct {
 	accountErr  error
 	broadcast   func() (*ctypes.ResultBroadcastTxCommit, error)
 	broadcasted int
+	lastTx      types.Tx
 }
 
 func (f *fakeRPC) ABCIQueryWithOptions(context.Context, string, []byte, rpcclient.ABCIQueryOptions) (*ctypes.ResultABCIQuery, error) {
@@ -44,8 +46,9 @@ func (f *fakeRPC) ABCIQuery(context.Context, string, []byte) (*ctypes.ResultABCI
 	}}, nil
 }
 
-func (f *fakeRPC) BroadcastTxCommit(context.Context, types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
+func (f *fakeRPC) BroadcastTxCommit(_ context.Context, tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
 	f.broadcasted++
+	f.lastTx = tx
 	return f.broadcast()
 }
 
@@ -111,4 +114,25 @@ func TestGnoclientDispenser_returnsTheTxHash(t *testing.T) {
 	tx, err := newFakeRPCDispenser(t, rpc).Send(context.Background(), validAddr, 1_000_000)
 	require.NoError(t, err)
 	assert.Equal(t, "abcd", tx)
+}
+
+// From gno v1.8.0 a node refuses a tx whose bytes are not the canonical amino
+// encoding of what they decode to (gnolang/gno#6406). The canonical encoding
+// leaves a zero signature SessionAddr out; encoders before gno v1.7.1 write it
+// as the zero address's bech32 string. UnmarshalCanonical alone cannot catch
+// that: it re-encodes with the codec that wrote the bytes, so the raw bytes are
+// checked for the zero address too.
+func TestGnoclientDispenser_broadcastsCanonicalTx(t *testing.T) {
+	rpc := &fakeRPC{broadcast: func() (*ctypes.ResultBroadcastTxCommit, error) {
+		return &ctypes.ResultBroadcastTxCommit{Hash: []byte{0xab}}, nil
+	}}
+	_, err := newFakeRPCDispenser(t, rpc).Send(context.Background(), validAddr, 1_000_000)
+	require.NoError(t, err)
+
+	var tx std.Tx
+	require.NoError(t, amino.UnmarshalCanonical(rpc.lastTx, &tx))
+	require.Len(t, tx.Signatures, 1)
+	assert.True(t, tx.Signatures[0].SessionAddr.IsZero())
+	assert.NotContains(t, string(rpc.lastTx), crypto.Address{}.String(),
+		"a zero SessionAddr must be left out of the encoding")
 }

@@ -260,7 +260,7 @@ func (r *Real) asUserTx(signer Signer, master, errPrefix string, buildTx func(ma
 // session's pubkey and SessionAddr so the chain's ante handler verifies against
 // the session record at auth/accounts/<master>/session/<sessionAddr>.
 func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn string, args []string, send string, simulate bool) (CallResult, error) {
-	sendCoins, err := parseSendCoins(send)
+	sendCoins, err := parseCoinsArg("send", send)
 	if err != nil {
 		return CallResult{}, err
 	}
@@ -290,10 +290,15 @@ func (r *Real) CallAsUser(_ context.Context, signer Signer, master, realm, fn st
 
 // RunAsUser broadcasts (or simulates) a session-signed vm/MsgRun. The code is
 // wrapped in a single-file MemPackage with package name "main".
-func (r *Real) RunAsUser(_ context.Context, signer Signer, master, code string, simulate bool) (RunResult, error) {
+func (r *Real) RunAsUser(_ context.Context, signer Signer, master, code, maxSend string, simulate bool) (RunResult, error) {
+	maxSendCoins, err := parseCoinsArg("max_send", maxSend)
+	if err != nil {
+		return RunResult{}, err
+	}
 	out, err := r.asUserTx(signer, master, "run as user", func(masterAddr crypto.Address, cfg gnoclient.BaseTxCfg) (*std.Tx, error) {
 		files := []*std.MemFile{{Name: "main.gno", Body: code}}
 		msg := vm.NewMsgRun(masterAddr, nil, files)
+		msg.MaxSend = maxSendCoins
 		return gnoclient.NewRunTx(cfg, msg)
 	}, simulate)
 	if err != nil {
@@ -590,7 +595,7 @@ func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string
 	if err != nil {
 		return CallResult{}, err
 	}
-	sendCoins, err := parseSendCoins(send)
+	sendCoins, err := parseCoinsArg("send", send)
 	if err != nil {
 		return CallResult{}, err
 	}
@@ -614,13 +619,18 @@ func (r *Real) Call(_ context.Context, signer gnoclient.Signer, realm, fn string
 
 // Run broadcasts (or simulates) a STANDARD vm/MsgRun signed by the agent key.
 // The code is wrapped in a single-file MemPackage with package name "main".
-func (r *Real) Run(_ context.Context, signer gnoclient.Signer, code string, simulate bool) (RunResult, error) {
+func (r *Real) Run(_ context.Context, signer gnoclient.Signer, code, maxSend string, simulate bool) (RunResult, error) {
+	maxSendCoins, err := parseCoinsArg("max_send", maxSend)
+	if err != nil {
+		return RunResult{}, err
+	}
 	caller, cli, err := r.agentTxSetup(signer, "run")
 	if err != nil {
 		return RunResult{}, err
 	}
 	files := []*std.MemFile{{Name: "main.gno", Body: code}}
 	msg := vm.NewMsgRun(caller, nil, files)
+	msg.MaxSend = maxSendCoins
 
 	out, err := r.agentMeasure(cli, "run", func(cfg gnoclient.BaseTxCfg) (*std.Tx, error) {
 		return gnoclient.NewRunTx(cfg, msg)
@@ -730,24 +740,28 @@ func (r *Real) Account(_ context.Context, bech32 string) (AccountInfo, error) {
 	}, nil
 }
 
-// ValidateSendCoins reports whether send is a coin amount Call/CallAsUser will
-// accept ("" attaches nothing, so it is valid). It lets the tool layer reject a
-// malformed amount with an actionable error before dispatch.
-func ValidateSendCoins(send string) error {
-	_, err := parseSendCoins(send)
-	return err
+// CanonicalCoins returns amount, a coin arg the write methods accept (Call's
+// send, Run's maxSend), in the form the chain stores it: trimmed, sorted by
+// denom, comma-joined. A blank amount means none and returns "". It lets the
+// tool layer reject a malformed amount before dispatch.
+func CanonicalCoins(amount string) (string, error) {
+	coins, err := parseCoinsArg("coins", amount)
+	if err != nil {
+		return "", err
+	}
+	return coins.String(), nil
 }
 
-// parseSendCoins converts a tool-supplied send string (e.g. "1000000ugnot")
-// into the MsgCall.Send coins. An empty string attaches nothing; a malformed
-// amount is a hard error naming the offending value.
-func parseSendCoins(send string) (std.Coins, error) {
-	if send == "" {
+// parseCoinsArg converts a tool-supplied coin amount (e.g. "1000000ugnot")
+// into std.Coins. An empty string means no coins; a malformed amount is a hard
+// error naming the arg and the offending value.
+func parseCoinsArg(name, amount string) (std.Coins, error) {
+	if amount == "" {
 		return nil, nil
 	}
-	coins, err := std.ParseCoins(send)
+	coins, err := std.ParseCoins(amount)
 	if err != nil {
-		return nil, fmt.Errorf("parse send %q: %w", send, err)
+		return nil, fmt.Errorf("parse %s %q: %w", name, amount, err)
 	}
 	return coins, nil
 }

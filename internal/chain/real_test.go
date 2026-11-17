@@ -194,7 +194,7 @@ func TestNewReal_emptyChainID(t *testing.T) {
 func TestReal_Run_simulateRequiresSigner(t *testing.T) {
 	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
-	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", true)
+	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", "", true)
 	require.Error(t, err, "expected error for nil signer (even with simulate=true)")
 	assert.True(t, strings.Contains(err.Error(), "signer"), "error should mention signer, got: %v", err)
 }
@@ -202,7 +202,7 @@ func TestReal_Run_simulateRequiresSigner(t *testing.T) {
 func TestReal_Run_broadcastRequiresSigner(t *testing.T) {
 	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
-	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", false)
+	_, err = r.RunAsUser(context.Background(), nil, "g1master", "package main\nfunc main() {}", "", false)
 	require.Error(t, err, "expected error for nil signer in broadcast mode")
 	assert.True(t, strings.Contains(err.Error(), "signer"), "error should mention signer, got: %v", err)
 }
@@ -211,7 +211,7 @@ func TestReal_Run_emptyMaster(t *testing.T) {
 	r, err := NewReal("https://rpc.test13.testnets.gno.land:443", "test-13")
 	require.NoError(t, err, "NewReal")
 	stub := &minimalSigner{addr: "g1notreal"}
-	_, err = r.RunAsUser(context.Background(), stub, "", "package main\nfunc main() {}", false)
+	_, err = r.RunAsUser(context.Background(), stub, "", "package main\nfunc main() {}", "", false)
 	require.Error(t, err, "expected error for empty master")
 	assert.True(t, strings.Contains(err.Error(), "master"), "error should mention master, got: %v", err)
 }

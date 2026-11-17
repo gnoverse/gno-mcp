@@ -1042,6 +1042,40 @@ func TestCall_rejectsMalformedSend(t *testing.T) {
 	assert.Equal(t, "invalid_send", te.Code)
 }
 
+// std.ParseCoins trims and sorts "5000000ugnot, 1foo", so the echoed command
+// and the audit summary must name the coins the chain got, not the raw arg.
+func TestCall_echoesCanonicalSend(t *testing.T) {
+	s := newTestnetTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+	ks := keystore.New(t.TempDir(), "", 5)
+
+	agentAddr, err := ks.GenerateForProfile("testnet9999", "", testnet9999Profile())
+	require.NoError(t, err, "GenerateForProfile")
+
+	fake := chain.NewFake()
+	fake.SetBalance(agentAddr, 10_000_000)
+	fake.SetCall("gno.land/r/test/auction", "Bid", []string{}, chain.CallResult{
+		TxHash: "0xbid", Height: 1, GasUsed: 3000,
+	})
+	RegisterCall(s, ks, noSessionMgr(t), constChainResolver(fake), alog)
+
+	res, err := s.Registry().Call(context.Background(), "gno_call", map[string]any{
+		"profile": "testnet9999",
+		"realm":   "gno.land/r/test/auction",
+		"func":    "Bid",
+		"send":    "5000000ugnot, 1foo",
+	})
+	require.NoError(t, err, "Bid with a spaced send")
+
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "-send 1foo,5000000ugnot ")
+
+	entries := parseAuditEntries(t, &auditBuf)
+	require.Len(t, entries, 1)
+	assert.Contains(t, entries[0].ArgsSummary, "send=1foo,5000000ugnot")
+}
+
 // TestCall_agentTestnet_simulate_skipsBalanceCheck verifies that simulate=true
 // bypasses the balance pre-check (dry-runs should not require funds).
 func TestCall_agentTestnet_simulate_skipsBalanceCheck(t *testing.T) {

@@ -1,8 +1,8 @@
 # chain package — verified gnoclient API references
 
 Captured against `github.com/gnolang/gno v1.1.0`, except the session-lookup
-section, which is verified against the currently pinned
-`v0.0.0-20260520050230-64c945f1b117` (`go.mod`).
+section, which is verified against the currently pinned `v1.8.0-rc.1`
+(`go.mod`).
 Update this file if gno dependencies change.
 
 The chain Client exposes two write paths: **session** (`CallAsUser`/`RunAsUser` — act as the user,
@@ -105,9 +105,8 @@ Both segments are bech32 (`g1...`) addresses. The chain returns the
   chain's `vm/exec:<realm>` and `vm/run` permission tokens, plus `SpendLimit`,
   `SpendRemaining`, and `ExpiresAt`
 
-This route exists in the pinned gno commit
-(`v0.0.0-20260520050230-64c945f1b117`); the v1.1.0 surface the rest of this
-file was captured against had no session sub-path.
+This route exists in the pinned gno release (`v1.8.0-rc.1`); the v1.1.0
+surface the rest of this file was captured against had no session sub-path.
 
 ## gnoclient.Signer adapter
 
