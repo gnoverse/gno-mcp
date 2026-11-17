@@ -12,6 +12,7 @@ import (
 	rpcclient "github.com/gnolang/gno/tm2/pkg/bft/rpc/client"
 	ctypes "github.com/gnolang/gno/tm2/pkg/bft/rpc/core/types"
 	"github.com/gnolang/gno/tm2/pkg/bft/types"
+	"github.com/gnolang/gno/tm2/pkg/crypto"
 	"github.com/gnolang/gno/tm2/pkg/std"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,8 +117,11 @@ func TestGnoclientDispenser_returnsTheTxHash(t *testing.T) {
 }
 
 // From gno v1.8.0 a node refuses a tx whose bytes are not the canonical amino
-// encoding of what they decode to (gnolang/gno#6406), so every drip depends on
-// the linked encoder writing canonical bytes.
+// encoding of what they decode to (gnolang/gno#6406). The canonical encoding
+// leaves a zero signature SessionAddr out; encoders before gno v1.7.1 write it
+// as the zero address's bech32 string. UnmarshalCanonical alone cannot catch
+// that: it re-encodes with the codec that wrote the bytes, so the raw bytes are
+// checked for the zero address too.
 func TestGnoclientDispenser_broadcastsCanonicalTx(t *testing.T) {
 	rpc := &fakeRPC{broadcast: func() (*ctypes.ResultBroadcastTxCommit, error) {
 		return &ctypes.ResultBroadcastTxCommit{Hash: []byte{0xab}}, nil
@@ -128,4 +132,7 @@ func TestGnoclientDispenser_broadcastsCanonicalTx(t *testing.T) {
 	var tx std.Tx
 	require.NoError(t, amino.UnmarshalCanonical(rpc.lastTx, &tx))
 	require.Len(t, tx.Signatures, 1)
+	assert.True(t, tx.Signatures[0].SessionAddr.IsZero())
+	assert.NotContains(t, string(rpc.lastTx), crypto.Address{}.String(),
+		"a zero SessionAddr must be left out of the encoding")
 }
