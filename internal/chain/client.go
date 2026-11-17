@@ -153,7 +153,8 @@ type Client interface {
 	// ad-hoc gno code execution. master is the bech32 master address the
 	// session is registered under. signer must be non-nil when simulate is false.
 	// maxSend caps the coins the script may send out of master's account (e.g.
-	// "5000000ugnot"); "" lets it send nothing.
+	// "5000000ugnot"); from gno v1.8.0, "" lets it send nothing. A chain before
+	// v1.8.0 has no cap and refuses a tx that sets one.
 	RunAsUser(ctx context.Context, signer Signer, master, code, maxSend string, simulate bool) (RunResult, error)
 
 	// QuerySession returns the chain-side state for the session at
@@ -171,7 +172,8 @@ type Client interface {
 
 	// Run broadcasts (or simulates) a STANDARD vm/MsgRun signed by the agent key.
 	// maxSend caps the coins the script may send out of the agent's account;
-	// "" lets it send nothing.
+	// from gno v1.8.0, "" lets it send nothing. A chain before v1.8.0 has no
+	// cap and refuses a tx that sets one.
 	Run(ctx context.Context, signer gnoclient.Signer, code, maxSend string, simulate bool) (RunResult, error)
 
 	// AddPackage broadcasts (or simulates) a vm/MsgAddPackage signed by the agent key.
