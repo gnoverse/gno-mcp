@@ -740,13 +740,16 @@ func (r *Real) Account(_ context.Context, bech32 string) (AccountInfo, error) {
 	}, nil
 }
 
-// ValidateSendCoins reports whether amount is a coin amount the write methods
-// accept for a coin arg (Call's send, Run's maxSend; "" means none, so it is
-// valid). It lets the tool layer reject a malformed amount with an actionable
-// error before dispatch.
-func ValidateSendCoins(amount string) error {
-	_, err := parseCoinsArg("coins", amount)
-	return err
+// CanonicalCoins returns amount, a coin arg the write methods accept (Call's
+// send, Run's maxSend), in the form the chain stores it: trimmed, sorted by
+// denom, comma-joined. A blank amount means none and returns "". It lets the
+// tool layer reject a malformed amount before dispatch.
+func CanonicalCoins(amount string) (string, error) {
+	coins, err := parseCoinsArg("coins", amount)
+	if err != nil {
+		return "", err
+	}
+	return coins.String(), nil
 }
 
 // parseCoinsArg converts a tool-supplied coin amount (e.g. "1000000ugnot")

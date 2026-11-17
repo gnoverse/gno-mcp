@@ -592,3 +592,50 @@ func TestRun_rejectsMalformedMaxSend(t *testing.T) {
 	assert.Equal(t, "invalid_max_send", te.Code)
 	assert.Empty(t, fake.LastMaxSend(), "nothing may reach the chain")
 }
+
+// std.ParseCoins trims and sorts "5000000ugnot, 1foo", so the echoed command
+// and the audit summary must name the coins the chain got, not the raw arg.
+func TestRun_echoesCanonicalMaxSend(t *testing.T) {
+	s := newLocalTestServer(t)
+	var auditBuf bytes.Buffer
+	alog := audit.NewLog(&auditBuf)
+
+	fake := chain.NewFake()
+	fake.SetRun(testCode, chain.RunResult{TxHash: "0xpay", Height: 5})
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), noSessionMgr(t), constChainResolver(fake), alog)
+
+	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "local",
+		"code":     testCode,
+		"max_send": "5000000ugnot, 1foo",
+	})
+	require.NoError(t, err, "Run with a spaced max_send")
+
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.Contains(t, gk, "-max-send 1foo,5000000ugnot ")
+
+	entries := parseAuditEntries(t, &auditBuf)
+	require.Len(t, entries, 1)
+	assert.Contains(t, entries[0].ArgsSummary, "max_send=1foo,5000000ugnot")
+}
+
+// A blank max_send sets no cap, so the echoed command must carry no -max-send
+// flag for the shell to pair with the next flag.
+func TestRun_blankMaxSendEchoesNoFlag(t *testing.T) {
+	s := newLocalTestServer(t)
+	alog := audit.NewLog(&bytes.Buffer{})
+
+	fake := chain.NewFake()
+	fake.SetRun(testCode, chain.RunResult{TxHash: "0xrun", Height: 5})
+	RegisterRun(s, keystore.New(t.TempDir(), "", 5), noSessionMgr(t), constChainResolver(fake), alog)
+
+	res, err := s.Registry().Call(context.Background(), "gno_run", map[string]any{
+		"profile":  "local",
+		"code":     testCode,
+		"max_send": "   ",
+	})
+	require.NoError(t, err, "Run with a blank max_send")
+
+	gk, _ := res.StructuredContent["gnokey_command"].(string)
+	assert.NotContains(t, gk, "-max-send")
+}

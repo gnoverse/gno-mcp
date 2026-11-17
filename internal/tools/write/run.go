@@ -108,16 +108,9 @@ func runHandler(
 		return server.Result{}, err
 	}
 
-	maxSend, err := server.StringArg(args, "max_send")
+	maxSend, err := coinsArg(args, "max_send")
 	if err != nil {
 		return server.Result{}, err
-	}
-	if err := chain.ValidateSendCoins(maxSend); err != nil {
-		return server.Result{}, &server.ToolError{
-			Code:    "invalid_max_send",
-			Message: fmt.Sprintf("max_send %q is not a valid coin amount — use an amount like \"5000000ugnot\"", maxSend),
-			Extra:   map[string]any{"max_send": maxSend},
-		}
 	}
 
 	// ---- Resolve chain client

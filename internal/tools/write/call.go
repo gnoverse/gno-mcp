@@ -121,16 +121,9 @@ func callHandler(
 		return server.Result{}, err
 	}
 
-	send, err := server.StringArg(args, "send")
+	send, err := coinsArg(args, "send")
 	if err != nil {
 		return server.Result{}, err
-	}
-	if err := chain.ValidateSendCoins(send); err != nil {
-		return server.Result{}, &server.ToolError{
-			Code:    "invalid_send",
-			Message: fmt.Sprintf("send %q is not a valid coin amount — use an amount like \"5000000ugnot\"", send),
-			Extra:   map[string]any{"send": send},
-		}
 	}
 
 	// ---- Resolve chain client
