@@ -15,11 +15,13 @@ RUN go build -trimpath -o /out/gnoquery ./playground/e2e/cmd/gnoquery
 # gnodev from the gno commit pinned in go.mod. contribs/gnodev is a NESTED module
 # (own go.mod with `replace => ../../`), so it is excluded from the parent module zip
 # and `go install …@version` rejects it — clone the repo at the pinned commit instead.
+# A pseudo-version (…-yyyymmddhhmmss-<12-hex sha>) names its commit by its last
+# segment; a tag (v1.8.0, v1.8.0-rc.1) is checked out as itself.
 RUN set -eux; \
     GNO_VER="$(go list -m -f '{{.Version}}' github.com/gnolang/gno)"; \
-    GNO_COMMIT="${GNO_VER##*-}"; \
+    if echo "$GNO_VER" | grep -Eq '[.-][0-9]{14}-[0-9a-f]{12}$'; then GNO_REF="${GNO_VER##*-}"; else GNO_REF="$GNO_VER"; fi; \
     git clone --filter=blob:none https://github.com/gnolang/gno /build/gno; \
-    git -C /build/gno checkout "$GNO_COMMIT"; \
+    git -C /build/gno checkout "$GNO_REF"; \
     (cd /build/gno/contribs/gnodev && go build -trimpath -o /out/gnodev .); \
     (cd /build/gno && go build -trimpath -o /out/gno ./gnovm/cmd/gno); \
     (cd /build/gno && go build -trimpath -o /out/gnokey ./gno.land/cmd/gnokey); \
