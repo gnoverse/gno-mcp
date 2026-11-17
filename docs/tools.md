@@ -124,9 +124,10 @@ A profile can hold several named agent keys (up to `GNOMCP_AGENT_MAX_KEYS`, defa
 
 ### `gno_run`
 
-- **Args:** `profile` (required), `code` (required), `simulate?`, `identity?`, `key?`
+- **Args:** `profile` (required), `code` (required), `max_send?`, `simulate?`, `identity?`, `key?`
 - **Returns:** broadcast (or `simulate`) result, prefixed with the signing identity.
 - Default identity: **agent**; pass `identity=session` to act as the user.
+- `max_send` caps the coins the script may send out of the signer's account (the agent's, or the session master's), e.g. `"5000000ugnot"`. From gno v1.8.0 a run without it can send none: a banker transfer out of the caller fails with `run sends more coins than its max send allows`. A chain before v1.8.0 has no such cap and refuses a tx that sets it. Under a session, the chain still counts every transfer against the session spend limit. A malformed amount fails with `invalid_max_send` before anything is signed.
 - A chain may accept `MsgRun` only from the addresses in its `run_submitters` param (onyx does). gnomcp reads the param first and refuses a caller not on the list — the agent key, or a session's master — with `run_not_allowed`, before anything is signed.
 
 ### `gno_addpkg`

@@ -152,7 +152,9 @@ type Client interface {
 	// RunAsUser broadcasts (or simulates) a session-signed vm/MsgRun for
 	// ad-hoc gno code execution. master is the bech32 master address the
 	// session is registered under. signer must be non-nil when simulate is false.
-	RunAsUser(ctx context.Context, signer Signer, master, code string, simulate bool) (RunResult, error)
+	// maxSend caps the coins the script may send out of master's account (e.g.
+	// "5000000ugnot"); "" lets it send nothing.
+	RunAsUser(ctx context.Context, signer Signer, master, code, maxSend string, simulate bool) (RunResult, error)
 
 	// QuerySession returns the chain-side state for the session at
 	// auth/accounts/<master>/session/<sessionAddr>. Both arguments are bech32
@@ -168,7 +170,9 @@ type Client interface {
 	Call(ctx context.Context, signer gnoclient.Signer, realm, fn string, args []string, send string, simulate bool) (CallResult, error)
 
 	// Run broadcasts (or simulates) a STANDARD vm/MsgRun signed by the agent key.
-	Run(ctx context.Context, signer gnoclient.Signer, code string, simulate bool) (RunResult, error)
+	// maxSend caps the coins the script may send out of the agent's account;
+	// "" lets it send nothing.
+	Run(ctx context.Context, signer gnoclient.Signer, code, maxSend string, simulate bool) (RunResult, error)
 
 	// AddPackage broadcasts (or simulates) a vm/MsgAddPackage signed by the agent key.
 	AddPackage(ctx context.Context, signer gnoclient.Signer, deployPath string, files []*std.MemFile, simulate bool) (AddPackageResult, error)

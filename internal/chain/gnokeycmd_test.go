@@ -134,6 +134,14 @@ func TestGnokeyCommand_run(t *testing.T) {
 	}
 }
 
+// A run's send cap shows as gnokey's -max-send (gno v1.8.0+).
+func TestGnokeyCommand_runMaxSend(t *testing.T) {
+	got := GnokeyCmd{Sub: "run", MaxSend: "5000000ugnot", RPC: "rpc", ChainID: "dev", Signer: "g1alice"}.String()
+	if !strings.Contains(got, "-max-send 5000000ugnot") {
+		t.Errorf("run command missing -max-send\ngot: %s", got)
+	}
+}
+
 // A session-signed write names the master account (-master) and signs with the
 // session address — both real gnokey maketx surface (verified against source).
 func TestGnokeyCommand_sessionMaster(t *testing.T) {

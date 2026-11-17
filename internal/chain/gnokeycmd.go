@@ -27,6 +27,7 @@ type GnokeyCmd struct {
 	Send       string   // call/run/addpkg: attached coins; send: the amount (the -send value)
 	PkgDir     string   // addpkg: local source dir (placeholder — gnomcp uploads inline)
 	MaxDeposit string   // addpkg (and call/run when set)
+	MaxSend    string   // run: cap on the coins the script may send out of the caller's account
 	RPC        string   // -remote
 	ChainID    string   // -chainid
 	Signer     string   // the signing address — the trailing key positional (agent addr, or session addr)
@@ -69,6 +70,9 @@ func (g GnokeyCmd) String() string {
 	}
 	if g.MaxDeposit != "" {
 		parts = append(parts, "-max-deposit", g.MaxDeposit)
+	}
+	if g.MaxSend != "" {
+		parts = append(parts, "-max-send", g.MaxSend)
 	}
 
 	gasFee := g.GasFeeUgnot

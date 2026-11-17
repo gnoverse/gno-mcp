@@ -125,7 +125,7 @@ func TestFake_Run_returnsSeededResult(t *testing.T) {
 	f := NewFake()
 	f.SetRunAsUser("package main\nfunc main() {}", RunResult{TxHash: "0xdef", Output: "hello"})
 
-	got, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", false)
+	got, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", "", false)
 	require.NoError(t, err, "RunAsUser")
 	// A broadcast result carries the offered fee (the Fake's configured gas fee).
 	want := RunResult{TxHash: "0xdef", Output: "hello", GasFeeUgnot: DefaultGasFeeUgnot}
@@ -134,7 +134,7 @@ func TestFake_Run_returnsSeededResult(t *testing.T) {
 
 func TestFake_Run_unseededReturnsError(t *testing.T) {
 	f := NewFake()
-	_, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", false)
+	_, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", "package main\nfunc main() {}", "", false)
 	require.Error(t, err, "expected error for unseeded run")
 	assert.True(t, strings.Contains(err.Error(), "fake: no run"), "error should mention 'fake: no run', got: %v", err)
 }
@@ -145,7 +145,7 @@ func TestFake_Run_setRunErrorTakesPriority(t *testing.T) {
 	f.SetRunAsUser(code, RunResult{Output: "ok"})
 	f.SetRunAsUserError(code, ErrSimulateUnsupported)
 
-	_, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", code, true)
+	_, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", code, "", true)
 	require.Error(t, err, "expected error from SetRunAsUserError")
 	assert.True(t, errors.Is(err, ErrSimulateUnsupported), "error = %v, want ErrSimulateUnsupported", err)
 }
@@ -155,7 +155,7 @@ func TestFake_Run_simulateSetSimulatedTrue(t *testing.T) {
 	code := "package main\nfunc main() {}"
 	f.SetRunAsUser(code, RunResult{Output: "hi", Simulated: false})
 
-	got, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", code, true)
+	got, err := f.RunAsUser(context.Background(), fakeSignerStub{}, "", code, "", true)
 	require.NoError(t, err, "RunAsUser")
 	assert.True(t, got.Simulated, "expected Simulated=true when simulate=true")
 }

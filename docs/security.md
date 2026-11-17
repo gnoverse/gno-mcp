@@ -92,5 +92,6 @@ Errors are JSON-encoded payloads with `code`, `message`, and (where useful) extr
 | `cla_unsigned` | A deploy was rejected by the chain's CLA gate; clear it with `gno_cla_info` + `gno_cla_sign` (the hint carries the steps) |
 | `package_parked` | A read or call hit a package that is deployed but parked on an inert chain, awaiting its package approver; carries the chain's reason and the recovery |
 | `run_not_allowed` | `gno_run` on a chain whose `run_submitters` param does not list the caller (the agent key, or a session's master); refused before signing |
+| `invalid_max_send` | `gno_run`'s `max_send` is not a coin amount (e.g. `"5000000ugnot"`); refused before signing |
 | `hash_required` | `gno_cla_sign` was called without a `hash` — fetch it first with `gno_cla_info` |
 | `cla_hash_not_found` | `gno_cla_info` could not extract the required hash from the `r/sys/cla` render (realm format changed?) |
