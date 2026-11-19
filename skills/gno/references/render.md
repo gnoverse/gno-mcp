@@ -38,7 +38,7 @@ The escaping runs in `chain/markdown`, a native the node binary carries, so it f
 
 ## Pipeline behavior an author needs to know
 
-1. `vm/qrender` invokes the realm's `Render(path)`. Output is markdown.
+1. `vm/qrender` invokes the realm's `Render(path)`. Output is markdown. From v1.7.1 an answer over 1 MiB is refused (`export size limit exceeded`), so page a large render by its path.
 2. Gnoweb passes that markdown through goldmark with a fixed extension set (listed below).
 3. Extensions transform the markdown into HTML; gnoweb wraps the result and serves.
 

@@ -262,6 +262,8 @@ Deploys an ephemeral `/e/g1<user>/run` package and invokes its `main()`. Inside 
 
 The address derivation makes coins sent to the ephemeral flow back to the user. The ephemeral can also consume `unsafe.OriginSend()` and forward control — which is why `IsUser()` (broad) is unsafe for payment guards.
 
+From v1.8.0 the script's banker may send out of the user's account only up to the tx's `MaxSend` (gnokey `-max-send`), counted per denom over the whole run; with none set, a send to another address panics with `run sends more coins than its max send allows`.
+
 From v1.6.0 a script cannot borrow a realm's authority through a callback. When a realm calls back a function, method or closure the script declared (a `func(*Account)` argument, an interface value), that code runs under the run realm by borrow rule #1, so writing the realm's objects panics with `cannot directly modify readonly tainted object`. Reading them, and writing the script's own globals, still works. On v1.5.x only closures are refused: a top-level function or method the script declared runs under the calling realm and can write its objects. To change a realm's state, call its crossing functions.
 
 ### `MsgAddPackage`

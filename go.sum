@@ -86,8 +86,8 @@ github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S
 github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/getsentry/sentry-go v0.47.0 h1:AnSMSyrYA5qZCIN/2xpgAAwv63sVULV+vBq37ajouc8=
 github.com/getsentry/sentry-go v0.47.0/go.mod h1:h+b4VHpKnK7aUXB5wc+KDnPgp9ZtfliRD4eV85FbiSA=
-github.com/gnolang/gno v1.8.0-rc.1 h1:6IyFOdnri4/vKHUrxcpU38MzOVAJPFSyQrvZrtJi5xE=
-github.com/gnolang/gno v1.8.0-rc.1/go.mod h1:zTdgOa6hCjBVHILFxsZ3O/FEv1IzcUEYh8gohNkLX0E=
+github.com/gnolang/gno v1.8.0 h1:5x7vUQz+cFBdk0pFa6sbe04sMUmNlLEPD7U0IWw5PmE=
+github.com/gnolang/gno v1.8.0/go.mod h1:zTdgOa6hCjBVHILFxsZ3O/FEv1IzcUEYh8gohNkLX0E=
 github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=
 github.com/go-errors/errors v1.4.2/go.mod h1:sIVyrIiJhuEF+Pj9Ebtd6P/rEYROXFi3BopGUQ5a5Og=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
