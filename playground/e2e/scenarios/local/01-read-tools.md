@@ -31,7 +31,7 @@ Show me the full source of that counter realm — the whole package, not just on
 What functions can I call on it, and what is Total() right now?
 ### Expect
 - correctness: lists Increment and Total; reports Total() = 0.
-- tool-selection: gnomcp gno_read (default outline gives the API surface) and gno_eval calls in the turn log.
+- tool-selection: the API surface from a gnomcp gno_read this turn or earlier in the session (step 2's whole-package read counts: same-session reuse is correct behavior, not a miss), and a gno_eval call for Total() in this turn's log.
 ### Verify
 - `gnoquery render gno.land/r/test/counter` — still Total: 0 (reads must not mutate).
 
