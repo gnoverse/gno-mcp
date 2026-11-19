@@ -349,7 +349,7 @@ Allocating a foreign `/r/`-declared type with a composite literal, `new()`, or `
 
 **A realm-typed value is not authority.** Another realm can still declare `var u v.User`, a zero value that carries `/r/V`'s PkgID and that its holder cannot write, and pass `&u` to a `/r/V` API. A check like `if u == nil { deny }` admits that caller. Authenticate the caller through `cur.Previous()`. A pointer that matches one in your own state proves only where it came from, not who is calling.
 
-**State written before v1.6.0**: earlier releases accepted the pointer conversion, so a realm that stored a caller-supplied `*T` may hold a forged one. It points at an object the forging realm owns, and that realm can still change its fields.
+**State written before v1.6.0**: earlier releases accepted the pointer conversion, so a realm that stored a caller-supplied `*T` may hold a forged one. It points at an object the forging realm owns, and that realm can still change its fields. A chain's first ledger row at v1.6.0 or later marks the cut (`networks.md`): mainnet skipped v1.6.0, so there it is the halt to v1.7.0.
 
 ## Audit signals (Phase-1 triage)
 

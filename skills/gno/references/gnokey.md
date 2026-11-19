@@ -156,6 +156,7 @@ keep margins small). This is exactly what gnomcp's write pipeline does automatic
 | `--gas-fee` | flat total fee offered (e.g. `10000ugnot`); required | live price × 2 for the offered gas-wanted, floored at `10_000ugnot` |
 | `--send` | coins attached to the msg (→ realm as `OriginSend`), separate from the fee | user-supplied (`send` arg) |
 | `--max-deposit` | cap on storage deposit locked (empty → `default_deposit` param) | pinned `50_000_000` on addpkg only |
+| `--max-send` (run) | cap on the coins the script may send out of the caller's account; from gno `v1.8.0` an empty cap lets it send none | user-supplied (`max_send` arg) |
 | `--memo` | free text in the signed tx (≤ 64 KB; costs gas by size) | not set |
 | `--pkgpath` `--func` `--args` (call) · `--pkgdir` (addpkg) · `--to` (send) | the message payload | the tool's own params |
 
@@ -220,7 +221,7 @@ gnokey maketx call \
 ```
 
 Template: `gnokey maketx <call|addpkg|run|send> <msg flags> -gas-wanted <GasWanted> -gas-fee
-<GasFee>ugnot [-send <amt>] [-max-deposit <amt>] -remote <rpc> -chainid <id> -broadcast <key>`.
+<GasFee>ugnot [-send <amt>] [-max-deposit <amt>] [-max-send <amt>] -remote <rpc> -chainid <id> -broadcast <key>`.
 Show it as *equivalent*, not as something to run instead — the agent already did the write via gnomcp.
 
 If the gnomcp write result already carries a `gnokey_command` field (some servers emit it), that is

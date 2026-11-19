@@ -303,7 +303,8 @@ func addpkgHandler(
 	case chain.PackageInert:
 		fmt.Fprintf(&b, "Package: parked. The chain accepted the deploy and had not enabled it after %s.\n", wait.timeout)
 		writeReason(&b, meta.Reason, deployPath)
-		nextSteps = parked.NextSteps + " Until it is enabled, every read and call answers it like a package that was never deployed; " +
+		nextSteps = parked.NextSteps + " " + parked.ParkedImportSteps +
+			" Until it is enabled, every read and call answers it like a package that was never deployed; " +
 			"gno_read on the path reports package_parked while it waits."
 		fmt.Fprintln(&b, nextSteps)
 	case packageStatusRedeployParked:
