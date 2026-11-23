@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with: { go-version: '1.26.11' }
       - run: go test -short -race ./...
       - run: go vet ./...
@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with: { go-version: '1.26.11' }
       # vulncheck.sh wraps govulncheck with an advisory ignore list — see the
       # script for the rationale on each ignored entry.
@@ -48,7 +48,7 @@ jobs:
       # install.sh is the upgrade path, not just the first-install path — the
       # test drives it three times against stubbed harnesses and a new release.
       - run: ./scripts/install_test.sh
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with: { go-version: '1.26.11' }
       # QEMU + buildx so the snapshot can build the arm64 image layer on this
       # amd64 runner (the Dockerfiles only COPY a prebuilt binary — no compile).
