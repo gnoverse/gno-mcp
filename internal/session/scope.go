@@ -14,11 +14,10 @@ import (
 
 // Scope is the resolved, clamped set of constraints for a session.
 type Scope struct {
-	SpendLimit  string
-	SpendPeriod time.Duration
-	ExpiresIn   time.Duration
-	AllowPaths  []string
-	AllowRun    bool
+	SpendLimit string
+	ExpiresIn  time.Duration
+	AllowPaths []string
+	AllowRun   bool
 }
 
 // ScopeArgs carries the agent-supplied values from gno_session_propose.
@@ -89,11 +88,10 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile, feeUgnot int64) (Sc
 	}
 
 	scope := Scope{
-		SpendLimit:  spendLimit,
-		SpendPeriod: expiresIn,
-		ExpiresIn:   expiresIn,
-		AllowPaths:  args.AllowPaths,
-		AllowRun:    args.AllowRun,
+		SpendLimit: spendLimit,
+		ExpiresIn:  expiresIn,
+		AllowPaths: args.AllowPaths,
+		AllowRun:   args.AllowRun,
 	}
 
 	if profile.BypassHardLimits {
@@ -126,7 +124,6 @@ func ResolveScope(args ScopeArgs, profile *profiles.Profile, feeUgnot int64) (Sc
 			scope.ExpiresIn, profile.Kind(), limits.MaxExpiresIn, limits.MaxExpiresIn,
 		))
 		scope.ExpiresIn = limits.MaxExpiresIn
-		scope.SpendPeriod = limits.MaxExpiresIn
 	}
 
 	if limits.MaxAllowPathsCount > 0 && len(scope.AllowPaths) > limits.MaxAllowPathsCount {
