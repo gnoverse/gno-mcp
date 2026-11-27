@@ -183,7 +183,6 @@ func TestResolveScope_clampsExpiresIn(t *testing.T) {
 	scope, warns, err := ResolveScope(args, p, testFee)
 	require.NoError(t, err)
 	assert.Equal(t, 7*24*time.Hour, scope.ExpiresIn, "ExpiresIn should be clamped")
-	assert.Equal(t, 7*24*time.Hour, scope.SpendPeriod, "SpendPeriod should be clamped")
 	require.NotEmpty(t, warns, "expected a warning for clamped expires_in")
 	assert.Contains(t, warns[0], "expires_in")
 }

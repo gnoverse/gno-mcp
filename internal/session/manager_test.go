@@ -46,10 +46,9 @@ func TestManager_addPendingPersists(t *testing.T) {
 	require.NoError(t, err, "NewKeypair")
 
 	scope := Scope{
-		SpendLimit:  "500000ugnot",
-		SpendPeriod: time.Hour,
-		ExpiresIn:   time.Hour,
-		AllowPaths:  []string{"gno.land/r/test/blog"},
+		SpendLimit: "500000ugnot",
+		ExpiresIn:  time.Hour,
+		AllowPaths: []string{"gno.land/r/test/blog"},
 	}
 	meta, err := m.AddPending("testnet", kp, scope, "g1master")
 	require.NoError(t, err, "AddPending")
